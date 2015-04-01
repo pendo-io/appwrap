@@ -1,4 +1,4 @@
-package appengine_interfaces
+package appwrap
 
 import (
 	"google.golang.org/appengine/memcache"

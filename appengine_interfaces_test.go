@@ -1,4 +1,4 @@
-package appengine_interfaces
+package appwrap
 
 import (
 	. "gopkg.in/check.v1"

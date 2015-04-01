@@ -1,4 +1,4 @@
-package appengine_interfaces
+package appwrap
 
 import (
 	"fmt"
