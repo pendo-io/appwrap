@@ -119,9 +119,9 @@ type appengineDatastoreIterator struct {
 }
 
 func (i *appengineDatastoreIterator) Next(dst interface{}) (*datastore.Key, error) {
-	return i.Next(dst)
+	return i.iter.Next(dst)
 }
 
 func (i *appengineDatastoreIterator) Cursor() (DatastoreCursor, error) {
-	return i.Cursor()
+	return i.iter.Cursor()
 }

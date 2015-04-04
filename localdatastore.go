@@ -189,14 +189,24 @@ func (a dsItemListSorter) less(i, j int) bool {
 	return false
 }
 
-func (item *dsItem) cp(dst interface{}) error {
+func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
+	props := item.props
+	if fields != nil {
+		props := props[0:0]
+		for _, prop := range item.props {
+			if fields[prop.Name] {
+				props = append(props, prop)
+			}
+		}
+	}
+
 	//fmt.Printf("%T <- %+v\n", dst, item.props)
 	if loadSaver, okay := dst.(datastore.PropertyLoadSaver); okay {
 		//fmt.Printf("\tload saver\n")
 		//fmt.Printf("FILLED %+v\n", dst)
-		return loadSaver.Load(item.props)
+		return loadSaver.Load(props)
 	} else {
-		return datastore.LoadStruct(dst, item.props)
+		return datastore.LoadStruct(dst, props)
 	}
 }
 
@@ -207,7 +217,7 @@ type LocalDatastore struct {
 }
 
 func StubContext() context.Context {
-	return internal.WithAppIDOverride(context.Background(), "memds")
+	return context.WithValue(internal.WithAppIDOverride(context.Background(), "memds"), "stubcontext", true)
 }
 
 func NewLocalDatastore() Datastore {
@@ -245,7 +255,7 @@ func (ds *LocalDatastore) Get(k *datastore.Key, dst interface{}) error {
 	if item, exists := ds.entities[k.String()]; !exists {
 		return datastore.ErrNoSuchEntity
 	} else {
-		return item.cp(dst)
+		return item.cp(dst, nil)
 	}
 }
 
@@ -382,6 +392,7 @@ type memoryQuery struct {
 	offset   int
 	start    memoryCursor
 	order    []string
+	project  map[string]bool
 }
 
 func (mq *memoryQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
@@ -427,7 +438,14 @@ func (mq *memoryQuery) Order(how string) DatastoreQuery {
 }
 
 func (mq *memoryQuery) Project(fieldName ...string) DatastoreQuery {
-	panic("not supported")
+	n := *mq
+
+	n.project = make(map[string]bool)
+	for _, name := range fieldName {
+		n.project[name] = true
+	}
+
+	return &n
 }
 
 func (mq *memoryQuery) Start(c DatastoreCursor) DatastoreQuery {
@@ -443,7 +461,7 @@ func (mq *memoryQuery) Run() DatastoreIterator {
 	//fmt.Printf("\t%d: %s: %+v\n", i, items[i].key, items[i].props)
 	//}
 
-	return &memQueryIterator{items: items, keysOnly: mq.keysOnly}
+	return &memQueryIterator{items: items, keysOnly: mq.keysOnly, project: mq.project}
 }
 
 func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
@@ -459,7 +477,7 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
 		// underlying type we need -- dst is a pointer to an array or structs
 		resultSlice := reflect.MakeSlice(reflect.TypeOf(dst).Elem(), len(items), len(items))
 		for i := range items {
-			if err := items[i].cp(resultSlice.Index(i).Addr().Interface()); err != nil {
+			if err := items[i].cp(resultSlice.Index(i).Addr().Interface(), mq.project); err != nil {
 				return nil, err
 			}
 
@@ -580,6 +598,7 @@ type memQueryIterator struct {
 	items    []*dsItem
 	next     int
 	keysOnly bool
+	project  map[string]bool
 }
 
 func (mqi *memQueryIterator) Next(itemPtr interface{}) (*datastore.Key, error) {
@@ -591,7 +610,7 @@ func (mqi *memQueryIterator) Next(itemPtr interface{}) (*datastore.Key, error) {
 	mqi.next++
 
 	if !mqi.keysOnly {
-		if err := mqi.items[i].cp(itemPtr); err != nil {
+		if err := mqi.items[i].cp(itemPtr, mqi.project); err != nil {
 			return nil, err
 		}
 	}
