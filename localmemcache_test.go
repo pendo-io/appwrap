@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"time"
 	//"fmt"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/memcache"
@@ -51,6 +52,16 @@ func (dsit *AppengineInterfacesTest) TestMemCache(c *C) {
 	_, err = cache.Get(keys[0])
 	c.Assert(err, Equals, memcache.ErrCacheMiss)
 	c.Assert(cache.Delete(keys[0]), Equals, memcache.ErrCacheMiss)
+
+	// Make sure zero-value expires != very old expires. Zero value
+	// means "never expire".
+	c.Assert(cache.Add(&memcache.Item{Key: "neverexpire", Value: []byte("foo"), Expiration: 0}), IsNil)
+	c.Assert(cache.Add(&memcache.Item{Key: "alreadyexpired", Value: []byte("bar"), Expiration: time.Duration(5)}), IsNil)
+	_, err = cache.Get("neverexpire")
+	c.Assert(err, IsNil)
+	_, err = cache.Get("alreadyexpired")
+	c.Assert(err, Equals, memcache.ErrCacheMiss)
+
 }
 
 func (dsit *AppengineInterfacesTest) TestMemCacheIncrement(c *C) {

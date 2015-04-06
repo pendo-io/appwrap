@@ -100,7 +100,7 @@ func (mc *LocalMemcache) Flush() error {
 func (mc *LocalMemcache) Get(key string) (*memcache.Item, error) {
 	if item, exists := mc.items[key]; !exists {
 		return nil, memcache.ErrCacheMiss
-	} else if item.expires.Before(time.Now()) {
+	} else if !item.expires.IsZero() && item.expires.Before(time.Now()) {
 		delete(mc.items, key)
 		return nil, memcache.ErrCacheMiss
 	} else {
@@ -166,7 +166,7 @@ func (mc *LocalMemcache) Set(item *memcache.Item) error {
 	if item.Expiration > 0 {
 		expires = time.Now().Add(item.Expiration)
 	} else {
-		expires = time.Now().Add(time.Hour * 24)
+		expires = time.Time{}
 	}
 
 	mc.items[item.Key] = cachedItem{value: item.Value, expires: expires, addedAt: time.Now()}
