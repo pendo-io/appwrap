@@ -76,6 +76,9 @@ func (dsit *AppengineInterfacesTest) TestMemCacheIncrement(c *C) {
 	v, err = cache.IncrementExisting("k", -10)
 	c.Assert(v, Equals, uint64(15))
 
+	v, err = cache.Increment("k", 1, 0)
+	c.Assert(v, Equals, uint64(16))
+
 }
 
 func (dsit *AppengineInterfacesTest) TestMemCacheCAS(c *C) {

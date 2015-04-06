@@ -136,15 +136,14 @@ func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint6
 		var oldValue uint64
 		if !exists {
 			item = cachedItem{addedAt: time.Now()}
-		}
-
-		if initialValue == nil {
+			if initialValue != nil {
+				oldValue = *initialValue
+			}
+		} else {
 			var err error
 			if oldValue, err = strconv.ParseUint(string(item.value), 10, 64); err != nil {
 				return 0, err
 			}
-		} else {
-			oldValue = *initialValue
 		}
 
 		var newValue uint64
