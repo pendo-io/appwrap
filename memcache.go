@@ -13,6 +13,7 @@ type Memcache interface {
 	Flush() error
 	Get(key string) (*memcache.Item, error)
 	GetMulti(keys []string) (map[string]*memcache.Item, error)
+	Increment(key string, amount int64, initialValue uint64) (uint64, error)
 	IncrementExisting(key string, amount int64) (uint64, error)
 	Namespace(ns string) Memcache
 	Set(item *memcache.Item) error

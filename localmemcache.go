@@ -121,16 +121,42 @@ func (mc *LocalMemcache) GetMulti(keys []string) (map[string]*memcache.Item, err
 	return results, nil
 }
 
+func (mc *LocalMemcache) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
+	return mc.increment(key, amount, &initialValue)
+}
+
 func (mc *LocalMemcache) IncrementExisting(key string, amount int64) (uint64, error) {
-	// this doesn't reset the expiration time. probably should?
-	if item, exists := mc.items[key]; !exists {
+	return mc.increment(key, amount, nil)
+}
+
+func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64) (uint64, error) {
+	if item, exists := mc.items[key]; !exists && initialValue == nil {
 		return 0, memcache.ErrCacheMiss
-	} else if val, err := strconv.ParseInt(string(item.value), 10, 64); err != nil {
-		return 0, err
 	} else {
-		item.value = []byte(fmt.Sprintf("%d", val+amount))
+		var oldValue uint64
+		if !exists {
+			item = cachedItem{addedAt: time.Now()}
+		}
+
+		if initialValue == nil {
+			var err error
+			if oldValue, err = strconv.ParseUint(string(item.value), 10, 64); err != nil {
+				return 0, err
+			}
+		} else {
+			oldValue = *initialValue
+		}
+
+		var newValue uint64
+		if amount < 0 {
+			newValue = oldValue - uint64(-amount)
+		} else {
+			newValue = oldValue + uint64(amount)
+		}
+
+		item.value = []byte(fmt.Sprintf("%d", newValue))
 		mc.items[key] = item
-		return uint64(val + amount), nil
+		return newValue, nil
 	}
 }
 

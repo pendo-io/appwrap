@@ -46,6 +46,10 @@ func (mc AppengineMemcache) GetMulti(keys []string) (map[string]*memcache.Item, 
 	return memcache.GetMulti(mc.c, keys)
 }
 
+func (mc AppengineMemcache) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
+	return memcache.Increment(mc.c, key, amount, initialValue)
+}
+
 func (mc AppengineMemcache) IncrementExisting(key string, amount int64) (uint64, error) {
 	return memcache.IncrementExisting(mc.c, key, amount)
 }
