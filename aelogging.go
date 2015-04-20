@@ -16,21 +16,21 @@ type appengineLogging struct {
 }
 
 func (al appengineLogging) Debugf(format string, args ...interface{}) {
-	log.Debugf(al.c, format, args)
+	log.Debugf(al.c, format, args...)
 }
 
 func (al appengineLogging) Infof(format string, args ...interface{}) {
-	log.Infof(al.c, format, args)
+	log.Infof(al.c, format, args...)
 }
 
 func (al appengineLogging) Warningf(format string, args ...interface{}) {
-	log.Warningf(al.c, format, args)
+	log.Warningf(al.c, format, args...)
 }
 
 func (al appengineLogging) Errorf(format string, args ...interface{}) {
-	log.Errorf(al.c, format, args)
+	log.Errorf(al.c, format, args...)
 }
 
 func (al appengineLogging) Criticalf(format string, args ...interface{}) {
-	log.Criticalf(al.c, format, args)
+	log.Criticalf(al.c, format, args...)
 }
