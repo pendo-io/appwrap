@@ -2,6 +2,7 @@ package appwrap
 
 import (
 	"google.golang.org/appengine/datastore"
+	"time"
 )
 
 type DatastoreCursor interface{}
@@ -35,4 +36,5 @@ type Datastore interface {
 	PutMulti(keys []*datastore.Key, src interface{}) ([]*datastore.Key, error)
 	RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error
 	NewQuery(kind string) DatastoreQuery
+	Deadline(t time.Time) Datastore
 }

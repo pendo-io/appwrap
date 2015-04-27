@@ -228,6 +228,10 @@ func NewLocalDatastore() Datastore {
 	}
 }
 
+func (ds *LocalDatastore) Deadline(t time.Time) Datastore {
+	return ds
+}
+
 func (ds *LocalDatastore) Namespace(ns string) Datastore {
 	// this should do something?
 	return ds

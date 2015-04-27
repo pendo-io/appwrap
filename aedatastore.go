@@ -15,6 +15,11 @@ func NewAppengineDatastore(c context.Context) Datastore {
 	return AppengineDatastore{c}
 }
 
+func (cds AppengineDatastore) Deadline(t time.Time) Datastore {
+	c, _ := context.WithDeadline(cds.c, t)
+	return AppengineDatastore{c}
+}
+
 func (cds AppengineDatastore) Namespace(ns string) Datastore {
 	c, _ := appengine.Namespace(cds.c, ns)
 	return AppengineDatastore{c}
