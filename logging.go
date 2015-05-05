@@ -25,24 +25,53 @@ type Logging interface {
 	Criticalf(format string, args ...interface{}) // Critical message
 }
 
+type FormatLogger struct {
+	Logf func(format string, args ...interface{})
+}
+
+func (fl FormatLogger) Debugf(format string, args ...interface{}) {
+	fl.Logf("debug: "+format, args...)
+}
+
+func (fl FormatLogger) Infof(format string, args ...interface{}) {
+	fl.Logf("info: "+format, args...)
+}
+
+func (fl FormatLogger) Warningf(format string, args ...interface{}) {
+	fl.Logf("Warning: "+format, args...)
+}
+
+func (fl FormatLogger) Errorf(format string, args ...interface{}) {
+	fl.Logf("Error: "+format, args...)
+}
+
+func (fl FormatLogger) Criticalf(format string, args ...interface{}) {
+	fl.Logf("CRITICAL: "+format, args...)
+}
+
 type WriterLogger struct {
-	writer io.Writer
+	FormatLogger
 }
 
 func NewWriterLogger(writer io.Writer) Logging {
-	return WriterLogger{writer}
+	return WriterLogger{
+		FormatLogger{
+			func(format string, args ...interface{}) {
+				buf := []byte(fmt.Sprintf(fmt.Sprintf(format, args...)))
+				written := 0
+				for written < len(buf) {
+					if wrote, err := writer.Write(buf[written:len(buf)]); err != nil {
+						return
+					} else {
+						written += wrote
+					}
+				}
+			},
+		},
+	}
 }
 
 func (fl WriterLogger) log(priority string, format string, args ...interface{}) {
-	buf := []byte(fmt.Sprintf("%s: %s\n", priority, fmt.Sprintf(format, args...)))
-	written := 0
-	for written < len(buf) {
-		if wrote, err := fl.writer.Write(buf[written:len(buf)]); err != nil {
-			return
-		} else {
-			written += wrote
-		}
-	}
 }
 
 func (fl WriterLogger) Debugf(format string, args ...interface{}) {
@@ -103,5 +132,39 @@ func (ll LevelLogger) Errorf(format string, args ...interface{}) {
 func (ll LevelLogger) Criticalf(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelCritical {
 		ll.wrappedLogger.Criticalf(format, args...)
+	}
+}
+
+type TeeLogging struct {
+	Logs []Logging
+}
+
+func (tee TeeLogging) Debugf(format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Debugf(format, args...)
+	}
+}
+
+func (tee TeeLogging) Infof(format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Infof(format, args...)
+	}
+}
+
+func (tee TeeLogging) Warningf(format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Warningf(format, args...)
+	}
+}
+
+func (tee TeeLogging) Errorf(format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Errorf(format, args...)
+	}
+}
+
+func (tee TeeLogging) Criticalf(format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Criticalf(format, args...)
 	}
 }

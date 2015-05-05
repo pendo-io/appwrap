@@ -1,3 +1,5 @@
+// +build appengine appenginevm
+
 package appwrap
 
 // +build appengine
