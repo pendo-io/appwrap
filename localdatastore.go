@@ -246,12 +246,19 @@ func (ds *LocalDatastore) AllocateIDs(kind string, parent *datastore.Key, n int)
 }
 
 func (ds *LocalDatastore) DeleteMulti(keys []*datastore.Key) (err error) {
-	for _, k := range keys {
+	multiError := make(appengine.MultiError, len(keys))
+	errors := false
+	for i, k := range keys {
 		if _, exists := ds.entities[k.String()]; !exists {
-			err = datastore.ErrNoSuchEntity
+			multiError[i] = datastore.ErrNoSuchEntity
+			errors = true
 		} else {
 			delete(ds.entities, k.String())
 		}
+	}
+
+	if errors {
+		err = multiError
 	}
 
 	return

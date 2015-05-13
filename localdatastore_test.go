@@ -2,6 +2,7 @@ package appwrap
 
 import (
 	"fmt"
+	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	. "gopkg.in/check.v1"
 )
@@ -140,6 +141,16 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 	for i := 0; i < 3; i++ {
 		c.Assert(gotItems[i].S, Equals, items[i+2].S)
 	}
+
+	_, err = mem.Put(keys[0], &items[0])
+	c.Assert(err, IsNil)
+	err = mem.DeleteMulti(keys[0:2])
+	c.Assert(err, NotNil)
+	multiErr, okay := err.(appengine.MultiError)
+	c.Assert(okay, Equals, true)
+	c.Assert(multiErr, HasLen, 2)
+	c.Assert(multiErr[0], IsNil)
+	c.Assert(multiErr[1], Equals, datastore.ErrNoSuchEntity)
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
