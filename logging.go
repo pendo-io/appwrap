@@ -57,7 +57,7 @@ func NewWriterLogger(writer io.Writer) Logging {
 	return WriterLogger{
 		FormatLogger{
 			func(format string, args ...interface{}) {
-				buf := []byte(fmt.Sprintf(fmt.Sprintf(format, args...)))
+				buf := []byte(fmt.Sprintf(fmt.Sprintf(format+"\n", args...)))
 				written := 0
 				for written < len(buf) {
 					if wrote, err := writer.Write(buf[written:len(buf)]); err != nil {
@@ -69,29 +69,6 @@ func NewWriterLogger(writer io.Writer) Logging {
 			},
 		},
 	}
-}
-
-func (fl WriterLogger) log(priority string, format string, args ...interface{}) {
-}
-
-func (fl WriterLogger) Debugf(format string, args ...interface{}) {
-	fl.log("debug", format, args...)
-}
-
-func (fl WriterLogger) Infof(format string, args ...interface{}) {
-	fl.log("info", format, args...)
-}
-
-func (fl WriterLogger) Warningf(format string, args ...interface{}) {
-	fl.log("Warning", format, args...)
-}
-
-func (fl WriterLogger) Errorf(format string, args ...interface{}) {
-	fl.log("Error", format, args...)
-}
-
-func (fl WriterLogger) Criticalf(format string, args ...interface{}) {
-	fl.log("CRITICAL", format, args...)
 }
 
 // LevelLogger is a wrapper for any goisms.SimpleLogging that
