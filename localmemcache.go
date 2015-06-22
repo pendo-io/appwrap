@@ -51,7 +51,7 @@ func (mc *LocalMemcache) AddMulti(items []*memcache.Item) error {
 		return errList
 	}
 
-	return errList
+	return nil
 }
 
 func (mc *LocalMemcache) CompareAndSwap(item *memcache.Item) error {
