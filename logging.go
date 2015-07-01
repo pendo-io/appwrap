@@ -25,6 +25,15 @@ type Logging interface {
 	Criticalf(format string, args ...interface{}) // Critical message
 }
 
+// Sometimes, you just need to satify the interface and do nothing.
+type NullLogger struct{}
+
+func (nl NullLogger) Debugf(format string, args ...interface{})    {}
+func (nl NullLogger) Infof(format string, args ...interface{})     {}
+func (nl NullLogger) Warningf(format string, args ...interface{})  {}
+func (nl NullLogger) Errorf(format string, args ...interface{})    {}
+func (nl NullLogger) Criticalf(format string, args ...interface{}) {}
+
 type FormatLogger struct {
 	Logf func(format string, args ...interface{})
 }
