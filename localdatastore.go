@@ -206,7 +206,10 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
 	if loadSaver, okay := dst.(datastore.PropertyLoadSaver); okay {
 		//fmt.Printf("\tload saver\n")
 		//fmt.Printf("FILLED %+v\n", dst)
-		return loadSaver.Load(props)
+		// Load() may mess with the array; don't let it break our stored data
+		propsCopy := make([]datastore.Property, len(props))
+		copy(propsCopy, props)
+		return loadSaver.Load(propsCopy)
 	} else {
 		return datastore.LoadStruct(dst, props)
 	}
