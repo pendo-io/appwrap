@@ -7,7 +7,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/internal"
 	"reflect"
 	"sort"
 	"strings"
@@ -221,8 +220,22 @@ type LocalDatastore struct {
 	emptyContext context.Context
 }
 
+// stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
+// call to context.Context.Value(). This is just enough to statisfy the
+// appengine.Datastore.NewKey() mechanism. We had to do this to deal with Go 1.6,
+// because "internal" packages' visibility is now enforced.
+type stubCtx int
+
+func (s *stubCtx) Deadline() (deadline time.Time, ok bool) { return }
+func (s *stubCtx) Done() <-chan struct{}                   { return nil }
+func (s *stubCtx) Err() error                              { return nil }
+func (s *stubCtx) Value(key interface{}) interface{}       { return "s~memds" }
+func (s *stubCtx) String() string                          { return "stubcontext" }
+
+var stubContext = new(stubCtx)
+
 func StubContext() context.Context {
-	return context.WithValue(internal.WithAppIDOverride(context.Background(), "memds"), "stubcontext", true)
+	return stubContext
 }
 
 func NewLocalDatastore() Datastore {
