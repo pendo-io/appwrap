@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -218,6 +219,7 @@ type LocalDatastore struct {
 	lastId       int64
 	entities     map[string]*dsItem
 	emptyContext context.Context
+	mtx          sync.Mutex
 }
 
 // stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
@@ -261,6 +263,12 @@ func (ds *LocalDatastore) AllocateIDs(kind string, parent *datastore.Key, n int)
 	return first, first + int64(n) - 1, nil
 }
 
+func (ds *LocalDatastore) delete(keyStr string) {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	delete(ds.entities, keyStr)
+}
+
 func (ds *LocalDatastore) DeleteMulti(keys []*datastore.Key) (err error) {
 	multiError := make(appengine.MultiError, len(keys))
 	errors := false
@@ -280,8 +288,15 @@ func (ds *LocalDatastore) DeleteMulti(keys []*datastore.Key) (err error) {
 	return
 }
 
+func (ds *LocalDatastore) get(keyStr string) (item *dsItem, found bool) {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	item, found = ds.entities[keyStr]
+	return
+}
+
 func (ds *LocalDatastore) Get(k *datastore.Key, dst interface{}) error {
-	if item, exists := ds.entities[k.String()]; !exists {
+	if item, exists := ds.get(k.String()); !exists {
 		return datastore.ErrNoSuchEntity
 	} else {
 		return item.cp(dst, nil)
@@ -310,6 +325,12 @@ func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *dat
 	return datastore.NewKey(ds.emptyContext, kind, sId, iId, parent)
 }
 
+func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	ds.entities[keyStr] = item
+}
+
 func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.Key, error) {
 	finalKeyCopy := *key
 	finalKey := &finalKeyCopy
@@ -330,7 +351,7 @@ func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.K
 		return nil, err
 	} else {
 		k := *finalKey
-		ds.entities[finalKey.String()] = &dsItem{props: item, key: &k}
+		ds.put(finalKey.String(), &dsItem{props: item, key: &k})
 	}
 
 	return finalKey, nil

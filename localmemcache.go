@@ -7,6 +7,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/memcache"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type cachedItem struct {
 
 type LocalMemcache struct {
 	items map[string]cachedItem
+	mtx   sync.Mutex
 }
 
 func NewLocalMemcache() Memcache {
@@ -27,7 +29,7 @@ func NewLocalMemcache() Memcache {
 }
 
 func (mc *LocalMemcache) Add(item *memcache.Item) error {
-	if _, exists := mc.items[item.Key]; exists {
+	if _, exists := mc.get(item.Key); exists {
 		return memcache.ErrNotStored
 	} else {
 		return mc.Set(item)
@@ -66,12 +68,18 @@ func (mc *LocalMemcache) CompareAndSwap(item *memcache.Item) error {
 	return mc.SetMulti([]*memcache.Item{item})
 }
 
+func (mc *LocalMemcache) delete(key string) {
+	//mc.mtx.Lock()
+	//defer mc.mtx.Unlock()
+	delete(mc.items, key)
+}
+
 func (mc *LocalMemcache) Delete(key string) error {
-	if _, exists := mc.items[key]; !exists {
+	if _, exists := mc.get(key); !exists {
 		return memcache.ErrCacheMiss
 	}
 
-	delete(mc.items, key)
+	mc.delete(key)
 	return nil
 }
 
@@ -79,7 +87,7 @@ func (mc *LocalMemcache) DeleteMulti(keys []string) error {
 	errors := false
 	multiError := make(appengine.MultiError, len(keys))
 	for i, key := range keys {
-		if _, exists := mc.items[key]; !exists {
+		if _, exists := mc.get(key); !exists {
 			multiError[i] = memcache.ErrCacheMiss
 			errors = true
 		} else {
@@ -95,15 +103,24 @@ func (mc *LocalMemcache) DeleteMulti(keys []string) error {
 }
 
 func (mc *LocalMemcache) Flush() error {
+	//mc.mtx.Lock()
+	//defer mc.mtx.Unlock()
 	mc.items = make(map[string]cachedItem)
 	return nil
 }
 
+func (mc *LocalMemcache) get(key string) (item cachedItem, found bool) {
+	//mc.mtx.Lock()
+	//defer mc.mtx.Unlock()
+	item, found = mc.items[key]
+	return
+}
+
 func (mc *LocalMemcache) Get(key string) (*memcache.Item, error) {
-	if item, exists := mc.items[key]; !exists {
+	if item, exists := mc.get(key); !exists {
 		return nil, memcache.ErrCacheMiss
 	} else if !item.expires.IsZero() && item.expires.Before(time.Now()) {
-		delete(mc.items, key)
+		mc.delete(key)
 		return nil, memcache.ErrCacheMiss
 	} else {
 		return &memcache.Item{Key: key, Value: item.value, Object: item.addedAt}, nil
@@ -132,7 +149,7 @@ func (mc *LocalMemcache) IncrementExisting(key string, amount int64) (uint64, er
 }
 
 func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64) (uint64, error) {
-	if item, exists := mc.items[key]; !exists && initialValue == nil {
+	if item, exists := mc.get(key); !exists && initialValue == nil {
 		return 0, memcache.ErrCacheMiss
 	} else {
 		var oldValue uint64
@@ -156,9 +173,15 @@ func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint6
 		}
 
 		item.value = []byte(fmt.Sprintf("%d", newValue))
-		mc.items[key] = item
+		mc.set(key, item)
 		return newValue, nil
 	}
+}
+
+func (mc *LocalMemcache) set(key string, cachedItem cachedItem) {
+	//mc.mtx.Lock()
+	//defer mc.mtx.Unlock()
+	mc.items[key] = cachedItem
 }
 
 func (mc *LocalMemcache) Set(item *memcache.Item) error {
@@ -169,8 +192,7 @@ func (mc *LocalMemcache) Set(item *memcache.Item) error {
 	} else {
 		expires = time.Time{}
 	}
-
-	mc.items[item.Key] = cachedItem{value: item.Value, expires: expires, addedAt: time.Now()}
+	mc.set(item.Key, cachedItem{value: item.Value, expires: expires, addedAt: time.Now()})
 	return nil
 }
 
