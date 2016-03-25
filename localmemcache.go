@@ -69,8 +69,8 @@ func (mc *LocalMemcache) CompareAndSwap(item *memcache.Item) error {
 }
 
 func (mc *LocalMemcache) delete(key string) {
-	//mc.mtx.Lock()
-	//defer mc.mtx.Unlock()
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
 	delete(mc.items, key)
 }
 
@@ -103,15 +103,15 @@ func (mc *LocalMemcache) DeleteMulti(keys []string) error {
 }
 
 func (mc *LocalMemcache) Flush() error {
-	//mc.mtx.Lock()
-	//defer mc.mtx.Unlock()
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
 	mc.items = make(map[string]cachedItem)
 	return nil
 }
 
 func (mc *LocalMemcache) get(key string) (item cachedItem, found bool) {
-	//mc.mtx.Lock()
-	//defer mc.mtx.Unlock()
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
 	item, found = mc.items[key]
 	return
 }
