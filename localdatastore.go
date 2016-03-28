@@ -219,7 +219,7 @@ type LocalDatastore struct {
 	lastId       int64
 	entities     map[string]*dsItem
 	emptyContext context.Context
-	mtx          sync.Mutex
+	mtx          *sync.Mutex
 }
 
 // stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
@@ -245,6 +245,7 @@ func NewLocalDatastore() Datastore {
 		lastId:       1 << 30,
 		entities:     make(map[string]*dsItem),
 		emptyContext: StubContext(),
+		mtx:          &sync.Mutex{},
 	}
 }
 
@@ -270,6 +271,9 @@ func (ds *LocalDatastore) delete(keyStr string) {
 }
 
 func (ds *LocalDatastore) DeleteMulti(keys []*datastore.Key) (err error) {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+
 	multiError := make(appengine.MultiError, len(keys))
 	errors := false
 	for i, k := range keys {
@@ -384,7 +388,7 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts 
 }
 
 func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
-	return &memoryQuery{entities: ds.entities, kind: kind}
+	return &memoryQuery{localDs: ds, kind: kind}
 }
 
 type filter struct {
@@ -433,7 +437,7 @@ type memoryCursor *datastore.Key
 var firstItemCursor memoryCursor = &datastore.Key{}
 
 type memoryQuery struct {
-	entities map[string]*dsItem
+	localDs  *LocalDatastore
 	filters  []filter
 	kind     string
 	ancestor *datastore.Key
@@ -556,8 +560,12 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 	}
 
 	//fmt.Printf("MATCHING %+v\n", mq)
-	items := make([]*dsItem, 0, len(mq.entities))
-	for _, item := range mq.entities {
+	items := make([]*dsItem, 0)
+
+	mq.localDs.mtx.Lock()
+	defer mq.localDs.mtx.Unlock()
+
+	for _, item := range mq.localDs.entities {
 		if mq.kind != item.key.Kind() {
 			continue
 		}
