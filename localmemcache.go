@@ -179,8 +179,8 @@ func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint6
 }
 
 func (mc *LocalMemcache) set(key string, cachedItem cachedItem) {
-	//mc.mtx.Lock()
-	//defer mc.mtx.Unlock()
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
 	mc.items[key] = cachedItem
 }
 

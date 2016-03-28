@@ -345,7 +345,7 @@ func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.K
 			return nil, err
 		} else {
 			k := *finalKey
-			ds.entities[finalKey.String()] = &dsItem{props: item, key: &k}
+			ds.put(finalKey.String(), &dsItem{props: item, key: &k})
 		}
 	} else if item, err := datastore.SaveStruct(src); err != nil {
 		return nil, err
