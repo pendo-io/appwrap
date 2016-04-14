@@ -37,3 +37,21 @@ func (s *AppengineInterfacesTest) TestLevelLogger(c *C) {
 
 	c.Check(w.String(), Equals, "")
 }
+
+func (s *AppengineInterfacesTest) TestPrefixLogger(c *C) {
+	w := &bytes.Buffer{}
+
+	log := PrefixLogger{NewWriterLogger(w), "prefix: "}
+	log.Debugf("msg %d", 0)
+	log.Infof("msg %d", 1)
+	log.Warningf("msg %d", 2)
+	log.Errorf("msg %d", 3)
+	log.Criticalf("msg %d", 4)
+
+	c.Check(w.String(), Equals,
+		"debug: prefix: msg 0\n"+
+			"info: prefix: msg 1\n"+
+			"Warning: prefix: msg 2\n"+
+			"Error: prefix: msg 3\n"+
+			"CRITICAL: prefix: msg 4\n")
+}

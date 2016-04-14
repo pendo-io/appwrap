@@ -154,3 +154,28 @@ func (tee TeeLogging) Criticalf(format string, args ...interface{}) {
 		l.Criticalf(format, args...)
 	}
 }
+
+type PrefixLogger struct {
+	Logging
+	Prefix string
+}
+
+func (pl PrefixLogger) Debugf(format string, args ...interface{}) {
+	pl.Logging.Debugf(pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) Infof(format string, args ...interface{}) {
+	pl.Logging.Infof(pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) Warningf(format string, args ...interface{}) {
+	pl.Logging.Warningf(pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) Errorf(format string, args ...interface{}) {
+	pl.Logging.Errorf(pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) Criticalf(format string, args ...interface{}) {
+	pl.Logging.Criticalf(pl.Prefix+format, args...)
+}
