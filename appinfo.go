@@ -11,14 +11,15 @@ import (
 type AppengineInfo interface {
 	ModuleName() string
 	VersionID() string
-	ModuleDefaultVersionID(moduleName string) (string,error)
+	ModuleDefaultVersionID(moduleName string) (string, error)
+	AppID() string
 }
 
 type AppengineInfoFromContext struct {
 	c context.Context
 }
 
-func NewAppengineInfoFromContext(c context.Context) AppengineInfo{
+func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	return AppengineInfoFromContext{c}
 }
 
@@ -34,3 +35,6 @@ func (ai AppengineInfoFromContext) ModuleDefaultVersionID(moduleName string) (st
 	return module.DefaultVersion(ai.c, moduleName)
 }
 
+func (ai AppengineInfoFromContext) AppID() string {
+	return appengine.AppID(ai.c)
+}
