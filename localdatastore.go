@@ -194,7 +194,7 @@ func (a dsItemListSorter) less(i, j int) bool {
 func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
 	props := item.props
 	if fields != nil {
-		props := props[0:0]
+		props := make([]datastore.Property, 0, len(fields))
 		for _, prop := range item.props {
 			if fields[prop.Name] {
 				props = append(props, prop)
@@ -202,7 +202,7 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
 		}
 	}
 
-	//fmt.Printf("%T <- %+v\n", dst, item.props)
+	//fmt.Printf("%T <- %+v (%d)\n", dst, props, len(item.props))
 	if loadSaver, okay := dst.(datastore.PropertyLoadSaver); okay {
 		//fmt.Printf("\tload saver\n")
 		//fmt.Printf("FILLED %+v\n", dst)
