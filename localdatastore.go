@@ -381,10 +381,18 @@ func (ds *LocalDatastore) PutMulti(keys []*datastore.Key, src interface{}) ([]*d
 }
 
 func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error {
+	// Need to copy this _and_ the entities object, which is a map
 	dsCopy := *ds
-	err := f(&dsCopy)
+	entityMapCopy := make(map[string]*dsItem, len(dsCopy.entities))
+	for k, v := range ds.entities {
+		entityMapCopy[k] = v
+	}
+	dsCopy.entities = entityMapCopy
+	if err := f(&dsCopy); err != nil {
+		return err
+	}
 	*ds = dsCopy
-	return err
+	return nil
 }
 
 func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {

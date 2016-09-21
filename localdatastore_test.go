@@ -383,3 +383,44 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(keys, HasLen, 2)
 }
+
+func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
+	mem := NewLocalDatastore()
+
+	items := make([]customEntity, 5)
+	keys := make([]*datastore.Key, 5)
+	for i := 1; i <= 5; i++ {
+		keys[i-1] = mem.NewKey("test", "", int64(i), nil)
+		items[i-1] = customEntity{i}
+	}
+
+	_, err := mem.PutMulti(keys, items)
+	c.Assert(err, IsNil)
+
+	// Make a change and commit it
+	c.Assert(mem.RunInTransaction(func(ds Datastore) error {
+		var e customEntity
+		err := ds.Get(keys[2], &e)
+		e.i = 9000
+		_, err = ds.Put(keys[2], &e)
+		return err
+	}, nil), IsNil)
+
+	var updatedE customEntity
+	c.Assert(mem.Get(keys[2], &updatedE), IsNil)
+	c.Check(updatedE.i, Equals, 9000)
+
+	// Make a change and roll it back
+	c.Assert(mem.RunInTransaction(func(ds Datastore) error {
+		var e customEntity
+		_ = ds.Get(keys[2], &e)
+		e.i = 42
+		_, _ = ds.Put(keys[2], &e)
+		return fmt.Errorf("NOOOOOO")
+	}, nil), NotNil)
+
+	c.Assert(mem.Get(keys[2], &updatedE), IsNil)
+	c.Check(updatedE.i, Equals, 9000)
+
+	// Now let's make a change and abort
+}
