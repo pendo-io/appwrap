@@ -381,17 +381,33 @@ func (ds *LocalDatastore) PutMulti(keys []*datastore.Key, src interface{}) ([]*d
 }
 
 func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error {
-	// Need to copy this _and_ the entities object, which is a map
-	dsCopy := *ds
-	entityMapCopy := make(map[string]*dsItem, len(dsCopy.entities))
-	for k, v := range ds.entities {
-		entityMapCopy[k] = v
+	// The datastore must be locked while running a transaction, since the transaction will need to
+	// put the new entities in place on commit (as well as the new lastId), or just go back to the original
+	// datastore on state.
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+
+	// Create a new datastore; it's mutex is unlocked, since the "original" datastore is locked.
+	// We will copy the entities and lastId from the current datastore before running the transaction func().
+	dsCopy := &LocalDatastore{
+		lastId:       ds.lastId,
+		entities:     make(map[string]*dsItem),
+		emptyContext: StubContext(),
+		mtx:          &sync.Mutex{},
 	}
-	dsCopy.entities = entityMapCopy
-	if err := f(&dsCopy); err != nil {
+	for k, v := range ds.entities {
+		dsCopy.entities[k] = v
+	}
+
+	// If the tranaction fails, just return the error (and unlock the datastore's mutex) with
+	// no updates.
+	if err := f(dsCopy); err != nil {
 		return err
 	}
-	*ds = dsCopy
+
+	// Put the new entities and lastId in place on "commit".
+	ds.entities = dsCopy.entities
+	ds.lastId = dsCopy.lastId
 	return nil
 }
 

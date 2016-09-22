@@ -2,6 +2,8 @@ package appwrap
 
 import (
 	"fmt"
+	"sync"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	. "gopkg.in/check.v1"
@@ -422,5 +424,54 @@ func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
 	c.Assert(mem.Get(keys[2], &updatedE), IsNil)
 	c.Check(updatedE.i, Equals, 9000)
 
-	// Now let's make a change and abort
+}
+
+func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
+	mem := NewLocalDatastore()
+
+	items := make([]customEntity, 5)
+	keys := make([]*datastore.Key, 5)
+	for i := 1; i <= 5; i++ {
+		keys[i-1] = mem.NewKey("test", "", int64(i), nil)
+		items[i-1] = customEntity{i}
+	}
+
+	_, err := mem.PutMulti(keys, items)
+	c.Assert(err, IsNil)
+
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			_ = mem.RunInTransaction(func(ds Datastore) error {
+				var e customEntity
+				// We expect to write e.i to be a 10 x the 1-based count of the thread
+				// However, we will always rollback the writes to the fourth value, so
+				// we expect to see 10, 20, 30, 4, 50 when verifying.
+				_ = ds.Get(keys[i%len(keys)], &e)
+				e.i = (i%len(keys) + 1) * 10
+				_, _ = ds.Put(keys[i%len(keys)], &e)
+
+				if (i%len(keys) + 1) == 4 {
+					return fmt.Errorf("oof")
+				}
+				return nil
+			}, nil)
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := range keys {
+		var updatedEAgain customEntity
+		c.Assert(mem.Get(keys[i], &updatedEAgain), IsNil)
+		if i == 3 {
+			c.Check(updatedEAgain.i, Equals, 4)
+		} else {
+			c.Check(updatedEAgain.i, Equals, (i+1)*10)
+		}
+	}
+
 }
