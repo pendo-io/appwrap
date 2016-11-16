@@ -9,10 +9,11 @@ import (
 )
 
 type AppengineInfo interface {
+	AppID() string
+	InstanceID() string
+	ModuleDefaultVersionID(moduleName string) (string, error)
 	ModuleName() string
 	VersionID() string
-	ModuleDefaultVersionID(moduleName string) (string, error)
-	AppID() string
 }
 
 type AppengineInfoFromContext struct {
@@ -21,6 +22,10 @@ type AppengineInfoFromContext struct {
 
 func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	return AppengineInfoFromContext{c}
+}
+
+func (ai AppengineInfoFromContext) InstanceID() string {
+	return appengine.InstanceID()
 }
 
 func (ai AppengineInfoFromContext) ModuleName() string {
