@@ -13,6 +13,7 @@ type AppengineInfo interface {
 	InstanceID() string
 	ModuleDefaultVersionID(moduleName string) (string, error)
 	ModuleName() string
+	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
 }
 
@@ -30,6 +31,10 @@ func (ai AppengineInfoFromContext) InstanceID() string {
 
 func (ai AppengineInfoFromContext) ModuleName() string {
 	return appengine.ModuleName(ai.c)
+}
+
+func (ai AppengineInfoFromContext) NumInstances(moduleName, version string) (int, error) {
+	return module.NumInstances(ai.c, moduleName, version)
 }
 
 func (ai AppengineInfoFromContext) VersionID() string {
