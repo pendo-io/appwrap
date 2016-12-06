@@ -220,6 +220,8 @@ type LocalDatastore struct {
 	entities     map[string]*dsItem
 	emptyContext context.Context
 	mtx          *sync.Mutex
+	namespaces   map[string]*LocalDatastore
+	parent       *LocalDatastore
 }
 
 // stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
@@ -246,6 +248,7 @@ func NewLocalDatastore() Datastore {
 		entities:     make(map[string]*dsItem),
 		emptyContext: StubContext(),
 		mtx:          &sync.Mutex{},
+		namespaces:   make(map[string]*LocalDatastore),
 	}
 }
 
@@ -254,8 +257,16 @@ func (ds *LocalDatastore) Deadline(t time.Time) Datastore {
 }
 
 func (ds *LocalDatastore) Namespace(ns string) Datastore {
-	// this should do something?
-	return ds
+	if ds.parent != nil {
+		ds = ds.parent
+	}
+
+	if _, exists := ds.namespaces[ns]; !exists {
+		ds.namespaces[ns] = NewLocalDatastore().(*LocalDatastore)
+		ds.namespaces[ns].parent = ds
+	}
+
+	return ds.namespaces[ns]
 }
 
 func (ds *LocalDatastore) AllocateIDs(kind string, parent *datastore.Key, n int) (int64, int64, error) {
