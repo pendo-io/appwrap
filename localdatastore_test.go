@@ -3,6 +3,7 @@ package appwrap
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -474,4 +475,130 @@ func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
 		}
 	}
 
+}
+
+func (dsit *AppengineInterfacesTest) TestComparator(c *C) {
+	mem := NewLocalDatastore()
+
+	checkVals := func(base interface{}, valsEq []interface{}, valsLT []interface{}, valsGT []interface{}) bool {
+		var f filter
+		pass := true
+		for _, vEq := range valsEq {
+			f = filter{
+				op:  "=",
+				val: vEq,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = filter{
+				op:  "<=",
+				val: vEq,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = filter{
+				op:  ">=",
+				val: vEq,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+		}
+		for _, vLT := range valsLT {
+			f = filter{
+				op:  ">",
+				val: vLT,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = filter{
+				op:  ">=",
+				val: vLT,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+		}
+		for _, vGT := range valsGT {
+			f = filter{
+				op:  "<",
+				val: vGT,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = filter{
+				op:  "<=",
+				val: vGT,
+			}
+			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+		}
+		return pass
+	}
+
+	c.Assert(checkVals(false, []interface{}{false}, []interface{}{}, []interface{}{true}), IsTrue)
+	c.Assert(checkVals(true, []interface{}{true}, []interface{}{false}, []interface{}{}), IsTrue)
+
+	c.Assert(checkVals(3, []interface{}{3}, []interface{}{-1, 0, 2}, []interface{}{4, 10067}), IsTrue)
+	c.Assert(checkVals(-42, []interface{}{-42}, []interface{}{-104, -23123}, []interface{}{-3, 0, 4, 10067}), IsTrue)
+
+	c.Assert(checkVals(int64(3), []interface{}{int64(3), int32(3), 3}, []interface{}{int64(-1), int64(0), int64(2), int32(-1), int32(0), int32(2), -1, 0, 2}, []interface{}{int64(4), int64(10067), int32(4), int32(10067), 4, 10067}), IsTrue)
+	c.Assert(checkVals(int64(-42), []interface{}{int64(-42), int32(-42), -42}, []interface{}{int64(-104), int64(-23123), int32(-104), int32(-23123), -104, -23123}, []interface{}{int64(-3), int64(0), int64(4), int64(10067), int32(-3), int32(0), int32(4), int32(10067), -3, 0, 4, 10067}), IsTrue)
+
+	c.Assert(checkVals("miners", []interface{}{"miners"}, []interface{}{"miner", "minered", "liners", "linters"}, []interface{}{"minerses", "niner", "minter"}), IsTrue)
+
+	format := "2006-01-02 15:04:05 -0700"
+	timeBase, _ := time.Parse(format, "2016-12-10 12:00:00 -0000")
+	timeEq1, _ := time.Parse(format, "2016-12-10 12:00:00 -0000")
+	timeEq2, _ := time.Parse(format, "2016-12-10 07:00:00 -0500")
+	timeEq3, _ := time.Parse(format, "2016-12-10 17:00:00 +0500")
+	timeLT1, _ := time.Parse(format, "2016-12-10 11:59:59 -0000")
+	timeLT2, _ := time.Parse(format, "2016-12-10 06:59:59 -0500")
+	timeLT3, _ := time.Parse(format, "2016-12-10 16:59:59 +0500")
+	timeGT1, _ := time.Parse(format, "2016-12-10 12:00:01 -0000")
+	timeGT2, _ := time.Parse(format, "2016-12-10 07:00:01 -0500")
+	timeGT3, _ := time.Parse(format, "2016-12-10 17:00:01 +0500")
+	c.Assert(checkVals(timeBase,
+		[]interface{}{timeEq1, timeEq2, timeEq3},
+		[]interface{}{timeLT1, timeLT2, timeLT3},
+		[]interface{}{timeGT1, timeGT2, timeGT3},
+	), IsTrue)
+
+	c.Assert(checkVals((*datastore.Key)(nil),
+		[]interface{}{
+			(*datastore.Key)(nil),
+		},
+		[]interface{}{},
+		[]interface{}{
+			mem.NewKey("anyKind", "stringKey", 0, nil),
+			mem.NewKey("anyKind", "", 237, nil),
+			mem.NewKey("anyKind", "", 0, nil),
+		},
+	), IsTrue)
+	c.Assert(checkVals(mem.NewKey("kindC", "stringKey5", 0, nil),
+		[]interface{}{
+			mem.NewKey("kindC", "stringKey5", 0, nil),
+		},
+		[]interface{}{
+			mem.NewKey("kindC", "stringKey4", 0, nil),
+			mem.NewKey("kindA", "stringKey6", 0, nil),
+		},
+		[]interface{}{
+			mem.NewKey("kindC", "stringKey6", 0, nil),
+			mem.NewKey("kindC", "stringKey5", 0, mem.NewKey("anyKind", "", 0, nil)),
+			mem.NewKey("kindZ", "stringKey4", 0, nil),
+		},
+	), IsTrue)
+	c.Assert(checkVals(mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, nil))),
+		[]interface{}{
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, nil))),
+		},
+		[]interface{}{
+			mem.NewKey("kindC", "", 5, nil),
+			mem.NewKey("kindC", "", 4, nil),
+			mem.NewKey("kindB", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, nil))),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindK", "", 5, mem.NewKey("kindZ", "", 0, nil))),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindO", "", 0, nil))),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 4, mem.NewKey("kindP", "", 0, nil))),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, nil)),
+		},
+		[]interface{}{
+			mem.NewKey("kindC", "", 6, nil),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindM", "", 0, nil)),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 6, nil)),
+			mem.NewKey("kindD", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, nil))),
+			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, mem.NewKey("anyKind", "", 0, nil)))),
+		},
+	), IsTrue)
 }

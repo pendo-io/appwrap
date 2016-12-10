@@ -64,7 +64,7 @@ func _cmp(aI, bI interface{}) int {
 			return 0
 		} else if aI.(bool) == false {
 			return -1
-		} else if aI.(bool) == false {
+		} else {
 			return 1
 		}
 	case int:
@@ -103,12 +103,16 @@ func _cmp(aI, bI interface{}) int {
 			return -1
 		} else if b == (*datastore.Key)(nil) {
 			return 1
+		} else if a.Kind() < b.Kind() {
+			return -1
+		} else if a.Kind() > b.Kind() {
+			return 1
 		} else if a.IntID() < b.IntID() || a.StringID() < b.StringID() {
 			return -1
 		} else if a.IntID() > b.IntID() || a.StringID() > b.StringID() {
 			return 1
 		} else {
-			return 0
+			return _cmp(a.Parent(), b.Parent())
 		}
 	case time.Time:
 		if aI.(time.Time).Before(bI.(time.Time)) {
@@ -410,7 +414,7 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts 
 		dsCopy.entities[k] = v
 	}
 
-	// If the tranaction fails, just return the error (and unlock the datastore's mutex) with
+	// If the transaction fails, just return the error (and unlock the datastore's mutex) with
 	// no updates.
 	if err := f(dsCopy); err != nil {
 		return err
