@@ -55,3 +55,11 @@ func (s *AppengineInterfacesTest) TestPrefixLogger(c *C) {
 			"Error: prefix: msg 3\n"+
 			"CRITICAL: prefix: msg 4\n")
 }
+
+func (s *AppengineInterfacesTest) TestDoublePercents(c *C) {
+	w := &bytes.Buffer{}
+	log := NewWriterLogger(w)
+	log.Infof("%.2f%%", 50.5)
+	c.Assert(w.String(), Equals, "info: 50.50%\n")
+
+}

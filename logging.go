@@ -66,7 +66,7 @@ func NewWriterLogger(writer io.Writer) Logging {
 	return WriterLogger{
 		FormatLogger{
 			func(format string, args ...interface{}) {
-				buf := []byte(fmt.Sprintf(fmt.Sprintf(format+"\n", args...)))
+				buf := []byte(fmt.Sprintf(format+"\n", args...))
 				written := 0
 				for written < len(buf) {
 					if wrote, err := writer.Write(buf[written:len(buf)]); err != nil {
