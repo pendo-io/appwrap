@@ -11,7 +11,7 @@ import (
 )
 
 func (s *AppengineInterfacesTest) TestMemDsNewKey(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 	k := mem.NewKey("Kind", "string", 0, nil)
 	c.Assert(k.Kind(), Equals, "Kind")
 	c.Assert(k.StringID(), Equals, "string")
@@ -50,7 +50,7 @@ func (c *customEntity) Save() ([]datastore.Property, error) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGet(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 	k, err := mem.Put(mem.NewKey("test", "keyval", 0, nil), &simpleEntity{"hello"})
 	c.Assert(err, IsNil)
 	c.Assert(k.StringID(), Equals, "keyval")
@@ -82,11 +82,19 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGet(c *C) {
 	_, err = mem.Put(mem.NewKey("test", "keyval", 0, nil), simpleEntity{"hello"})
 	c.Assert(err, NotNil)
 	c.Assert(mem.Get(k2, s), NotNil)
+}
 
+func (dsit *AppengineInterfacesTest) TestFieldInjection(c *C) {
+	mem := NewLocalDatastore(true)
+	k, err := mem.Put(mem.NewKey("test", "", 0, nil), &customEntity{5})
+	c.Assert(err, IsNil)
+
+	var e customEntity
+	c.Assert(mem.Get(k, &e), ErrorMatches, "unknown property _debug_added_field")
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	first, last, err := mem.AllocateIDs("simple", nil, 10)
 	c.Assert(err, IsNil)
@@ -99,7 +107,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	items := make([]simpleEntity, 5)
 	itemPtrs := make([]*simpleEntity, 5)
@@ -117,7 +125,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 		c.Assert(finalKeys[i], DeepEquals, keys[i])
 	}
 
-	mem = NewLocalDatastore()
+	mem = NewLocalDatastore(false)
 	finalKeys, err = mem.PutMulti(keys, itemPtrs)
 	c.Assert(err, IsNil)
 	for i := range keys {
@@ -157,7 +165,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	items := make([]customEntity, 5)
 	itemPtrs := make([]*customEntity, 5)
@@ -178,7 +186,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
 		c.Assert(gotItems[i].i, Equals, items[i].i)
 	}
 
-	mem = NewLocalDatastore()
+	mem = NewLocalDatastore(false)
 	_, err = mem.PutMulti(keys, itemPtrs)
 	c.Assert(err, IsNil)
 
@@ -190,7 +198,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 	parent := mem.NewKey("parent", "item", 0, nil)
 
 	items := make([]customEntity, 5)
@@ -265,7 +273,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -322,7 +330,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsUnindexed(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	type unindexedEntity struct {
 		S string `datastore:",noindex"`
@@ -360,7 +368,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsUnindexed(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	type listEntity struct {
 		S []string
@@ -388,7 +396,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -428,7 +436,7 @@ func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -478,7 +486,7 @@ func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestComparator(c *C) {
-	mem := NewLocalDatastore()
+	mem := NewLocalDatastore(false)
 
 	checkVals := func(base interface{}, valsEq []interface{}, valsLT []interface{}, valsGT []interface{}) bool {
 		var f filter

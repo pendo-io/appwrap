@@ -195,7 +195,7 @@ func (a dsItemListSorter) less(i, j int) bool {
 	return false
 }
 
-func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
+func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) error {
 	props := item.props
 	if fields != nil {
 		props := make([]datastore.Property, 0, len(fields))
@@ -204,6 +204,10 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
 				props = append(props, prop)
 			}
 		}
+	}
+
+	if addField {
+		props = append(props, datastore.Property{Name: "_debug_added_field", Value: true})
 	}
 
 	//fmt.Printf("%T <- %+v (%d)\n", dst, props, len(item.props))
@@ -220,12 +224,13 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool) error {
 }
 
 type LocalDatastore struct {
-	lastId       int64
-	entities     map[string]*dsItem
-	emptyContext context.Context
-	mtx          *sync.Mutex
-	namespaces   map[string]*LocalDatastore
-	parent       *LocalDatastore
+	lastId          int64
+	entities        map[string]*dsItem
+	emptyContext    context.Context
+	mtx             *sync.Mutex
+	namespaces      map[string]*LocalDatastore
+	parent          *LocalDatastore
+	addEntityFields bool
 }
 
 // stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
@@ -246,13 +251,14 @@ func StubContext() context.Context {
 	return stubContext
 }
 
-func NewLocalDatastore() Datastore {
+func NewLocalDatastore(addField bool) Datastore {
 	return &LocalDatastore{
-		lastId:       1 << 30,
-		entities:     make(map[string]*dsItem),
-		emptyContext: StubContext(),
-		mtx:          &sync.Mutex{},
-		namespaces:   make(map[string]*LocalDatastore),
+		lastId:          1 << 30,
+		entities:        make(map[string]*dsItem),
+		emptyContext:    StubContext(),
+		mtx:             &sync.Mutex{},
+		namespaces:      make(map[string]*LocalDatastore),
+		addEntityFields: addField,
 	}
 }
 
@@ -266,7 +272,7 @@ func (ds *LocalDatastore) Namespace(ns string) Datastore {
 	}
 
 	if _, exists := ds.namespaces[ns]; !exists {
-		ds.namespaces[ns] = NewLocalDatastore().(*LocalDatastore)
+		ds.namespaces[ns] = NewLocalDatastore(ds.addEntityFields).(*LocalDatastore)
 		ds.namespaces[ns].parent = ds
 	}
 
@@ -318,7 +324,7 @@ func (ds *LocalDatastore) Get(k *datastore.Key, dst interface{}) error {
 	if item, exists := ds.get(k.String()); !exists {
 		return datastore.ErrNoSuchEntity
 	} else {
-		return item.cp(dst, nil)
+		return item.cp(dst, nil, ds.addEntityFields)
 	}
 }
 
@@ -427,7 +433,7 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts 
 }
 
 func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
-	return &memoryQuery{localDs: ds, kind: kind}
+	return &memoryQuery{localDs: ds, kind: kind, addEntityFields: ds.addEntityFields}
 }
 
 type filter struct {
@@ -476,16 +482,17 @@ type memoryCursor *datastore.Key
 var firstItemCursor memoryCursor = &datastore.Key{}
 
 type memoryQuery struct {
-	localDs  *LocalDatastore
-	filters  []filter
-	kind     string
-	ancestor *datastore.Key
-	keysOnly bool
-	limit    int
-	offset   int
-	start    memoryCursor
-	order    []string
-	project  map[string]bool
+	localDs         *LocalDatastore
+	filters         []filter
+	kind            string
+	ancestor        *datastore.Key
+	keysOnly        bool
+	limit           int
+	offset          int
+	start           memoryCursor
+	order           []string
+	project         map[string]bool
+	addEntityFields bool
 }
 
 func (mq *memoryQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
@@ -554,7 +561,7 @@ func (mq *memoryQuery) Run() DatastoreIterator {
 	//fmt.Printf("\t%d: %s: %+v\n", i, items[i].key, items[i].props)
 	//}
 
-	return &memQueryIterator{items: items, keysOnly: mq.keysOnly, project: mq.project}
+	return &memQueryIterator{items: items, keysOnly: mq.keysOnly, project: mq.project, addEntityFields: mq.addEntityFields}
 }
 
 func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
@@ -570,7 +577,7 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
 		// underlying type we need -- dst is a pointer to an array or structs
 		resultSlice := reflect.MakeSlice(reflect.TypeOf(dst).Elem(), len(items), len(items))
 		for i := range items {
-			if err := items[i].cp(resultSlice.Index(i).Addr().Interface(), mq.project); err != nil {
+			if err := items[i].cp(resultSlice.Index(i).Addr().Interface(), mq.project, mq.addEntityFields); err != nil {
 				return nil, err
 			}
 
@@ -692,10 +699,11 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 }
 
 type memQueryIterator struct {
-	items    []*dsItem
-	next     int
-	keysOnly bool
-	project  map[string]bool
+	items           []*dsItem
+	next            int
+	keysOnly        bool
+	project         map[string]bool
+	addEntityFields bool
 }
 
 func (mqi *memQueryIterator) Next(itemPtr interface{}) (*datastore.Key, error) {
@@ -707,7 +715,7 @@ func (mqi *memQueryIterator) Next(itemPtr interface{}) (*datastore.Key, error) {
 	mqi.next++
 
 	if !mqi.keysOnly {
-		if err := mqi.items[i].cp(itemPtr, mqi.project); err != nil {
+		if err := mqi.items[i].cp(itemPtr, mqi.project, mqi.addEntityFields); err != nil {
 			return nil, err
 		}
 	}
