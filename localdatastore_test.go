@@ -610,3 +610,14 @@ func (dsit *AppengineInterfacesTest) TestComparator(c *C) {
 		},
 	), IsTrue)
 }
+
+func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
+	entity := struct{ foo string }{"hello"}
+
+	mem := NewLocalDatastore(false)
+	k1 := mem.NewKey("kind1", "", 1, nil)
+	k2 := mem.NewKey("kind2", "", 2, nil)
+
+	mem.Put(k1, entity)
+	mem.Put(k2, entity)
+}

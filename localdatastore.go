@@ -346,6 +346,19 @@ func (ds *LocalDatastore) GetMulti(keys []*datastore.Key, dstIntf interface{}) e
 	return nil
 }
 
+func (ds *LocalDatastore) Kinds() (kinds []string, err error) {
+	m := make(map[string]bool)
+
+	for _, item := range ds.entities {
+		if !m[item.key.Kind()] {
+			m[item.key.Kind()] = true
+			kinds = append(kinds, item.key.Kind())
+		}
+	}
+
+	return
+}
+
 func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *datastore.Key) *datastore.Key {
 	return datastore.NewKey(ds.emptyContext, kind, sId, iId, parent)
 }

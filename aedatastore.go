@@ -44,6 +44,10 @@ func (cds AppengineDatastore) GetMulti(keys []*datastore.Key, dst interface{}) e
 	return datastore.GetMulti(cds.c, keys, dst)
 }
 
+func (cds AppengineDatastore) Kinds() ([]string,error) {
+	return datastore.Kinds(cds.c)
+}
+
 func (cds AppengineDatastore) NewKey(kind string, sId string, iId int64, parent *datastore.Key) *datastore.Key {
 	return datastore.NewKey(cds.c, kind, sId, iId, parent)
 }

@@ -32,6 +32,7 @@ type Datastore interface {
 	DeleteMulti(keys []*datastore.Key) error
 	Get(keys *datastore.Key, dst interface{}) error
 	GetMulti(keys []*datastore.Key, dst interface{}) error
+	Kinds() ([]string, error)
 	Namespace(ns string) Datastore
 	NewKey(string, string, int64, *datastore.Key) *datastore.Key
 	Put(key *datastore.Key, src interface{}) (*datastore.Key, error)
