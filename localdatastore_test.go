@@ -2,6 +2,7 @@ package appwrap
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -618,6 +619,11 @@ func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 	k1 := mem.NewKey("kind1", "", 1, nil)
 	k2 := mem.NewKey("kind2", "", 2, nil)
 
-	mem.Put(k1, entity)
-	mem.Put(k2, entity)
+	mem.Put(k1, &entity)
+	mem.Put(k2, &entity)
+
+	kinds, err := mem.Kinds()
+	c.Assert(err, IsNil)
+	sort.Sort(sort.StringSlice(kinds))
+	c.Assert(kinds, DeepEquals, []string{"kind1", "kind2"})
 }
