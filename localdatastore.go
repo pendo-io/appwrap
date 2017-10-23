@@ -207,6 +207,8 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 	}
 
 	if addField {
+		// if you hit an error on this field not being defined you probably want to add a customer Load/Saver
+		// that ignores unknown fields
 		props = append(props, datastore.Property{Name: "_debug_added_field", Value: true})
 	}
 
