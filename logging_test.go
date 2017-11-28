@@ -14,28 +14,38 @@ func (s *AppengineInterfacesTest) TestLogging(c *C) {
 	log.Warningf("msg %d", 2)
 	log.Errorf("msg %d", 3)
 	log.Criticalf("msg %d", 4)
+	log.Request("GET", "http://foo.com", "param %d", "hello")
 
 	c.Check(w.String(), Equals,
 		"debug: msg 0\n"+
 			"info: msg 1\n"+
-			"Warning: msg 2\n"+
-			"Error: msg 3\n"+
-			"CRITICAL: msg 4\n")
+			"warning: msg 2\n"+
+			"error: msg 3\n"+
+			"critical: msg 4\n"+
+			"REQUEST: GET http://foo.com param %!d(string=hello)\n")
 }
 
 func (s *AppengineInterfacesTest) TestLevelLogger(c *C) {
+	logThings := func(l Logging) {
+		l.Request("GET", "http://foo.com", "param %s", "hello")
+		l.Debugf("WASSUP")
+		l.Infof("YO")
+		l.Warningf("WATCH OUT")
+		l.Errorf("BUSTED")
+		l.Criticalf("OUTTA HERE")
+	}
+
 	w := &bytes.Buffer{}
-
-	jay := NewWriterLogger(w)
-	silentBob := NewLevelLogger(LogLevelSilence, jay)
-
-	silentBob.Debugf("WASSUP")
-	silentBob.Infof("YO")
-	silentBob.Warningf("WATCH OUT")
-	silentBob.Errorf("BUSTED")
-	silentBob.Criticalf("OUTTA HERE")
-
+	logThings(NewLevelLogger(LogLevelSilence, NewWriterLogger(w)))
 	c.Check(w.String(), Equals, "")
+
+	w = &bytes.Buffer{}
+	logThings(NewLevelLogger(LogLevelError, NewWriterLogger(w)))
+	c.Check(w.String(), Equals,
+		"REQUEST: GET http://foo.com param hello\n"+
+			"error: BUSTED\n"+
+			"critical: OUTTA HERE\n")
+
 }
 
 func (s *AppengineInterfacesTest) TestPrefixLogger(c *C) {
@@ -51,9 +61,9 @@ func (s *AppengineInterfacesTest) TestPrefixLogger(c *C) {
 	c.Check(w.String(), Equals,
 		"debug: prefix: msg 0\n"+
 			"info: prefix: msg 1\n"+
-			"Warning: prefix: msg 2\n"+
-			"Error: prefix: msg 3\n"+
-			"CRITICAL: prefix: msg 4\n")
+			"warning: prefix: msg 2\n"+
+			"error: prefix: msg 3\n"+
+			"critical: prefix: msg 4\n")
 }
 
 func (s *AppengineInterfacesTest) TestDoublePercents(c *C) {

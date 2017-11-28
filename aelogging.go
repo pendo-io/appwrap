@@ -1,8 +1,6 @@
-// +build appengine appenginevm
+// +build appengine,!appenginevm
 
 package appwrap
-
-// +build appengine
 
 import (
 	"golang.org/x/net/context"

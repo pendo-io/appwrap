@@ -18,21 +18,23 @@ const (
 
 // Interface for system logging using printf() style strings
 type Logging interface {
-	Debugf(format string, args ...interface{})    // Debug message
-	Infof(format string, args ...interface{})     // Information message
-	Warningf(format string, args ...interface{})  // Warning message
-	Errorf(format string, args ...interface{})    // Error message
-	Criticalf(format string, args ...interface{}) // Critical message
+	Debugf(format string, args ...interface{})                // Debug message
+	Infof(format string, args ...interface{})                 // Information message
+	Warningf(format string, args ...interface{})              // Warning message
+	Errorf(format string, args ...interface{})                // Error message
+	Criticalf(format string, args ...interface{})             // Critical message
+	Request(request, url, format string, args ...interface{}) // This is conditionally implemented
 }
 
 // Sometimes, you just need to satify the interface and do nothing.
 type NullLogger struct{}
 
-func (nl NullLogger) Debugf(format string, args ...interface{})    {}
-func (nl NullLogger) Infof(format string, args ...interface{})     {}
-func (nl NullLogger) Warningf(format string, args ...interface{})  {}
-func (nl NullLogger) Errorf(format string, args ...interface{})    {}
-func (nl NullLogger) Criticalf(format string, args ...interface{}) {}
+func (nl NullLogger) Debugf(format string, args ...interface{})                {}
+func (nl NullLogger) Infof(format string, args ...interface{})                 {}
+func (nl NullLogger) Warningf(format string, args ...interface{})              {}
+func (nl NullLogger) Errorf(format string, args ...interface{})                {}
+func (nl NullLogger) Criticalf(format string, args ...interface{})             {}
+func (nl NullLogger) Request(request, url, format string, args ...interface{}) {}
 
 type FormatLogger struct {
 	Logf func(format string, args ...interface{})
@@ -47,15 +49,23 @@ func (fl FormatLogger) Infof(format string, args ...interface{}) {
 }
 
 func (fl FormatLogger) Warningf(format string, args ...interface{}) {
-	fl.Logf("Warning: "+format, args...)
+	fl.Logf("warning: "+format, args...)
 }
 
 func (fl FormatLogger) Errorf(format string, args ...interface{}) {
-	fl.Logf("Error: "+format, args...)
+	fl.Logf("error: "+format, args...)
 }
 
 func (fl FormatLogger) Criticalf(format string, args ...interface{}) {
-	fl.Logf("CRITICAL: "+format, args...)
+	fl.Logf("critical: "+format, args...)
+}
+
+func (fl FormatLogger) Request(request, url, format string, args ...interface{}) {
+	if len(format) > 0 {
+		format = " " + format
+	}
+
+	fl.Logf("REQUEST: %s %s"+format, append([]interface{}{request, url}, args...)...)
 }
 
 type WriterLogger struct {
@@ -80,44 +90,68 @@ func NewWriterLogger(writer io.Writer) Logging {
 	}
 }
 
-// LevelLogger is a wrapper for any goisms.SimpleLogging that
-// will filter out logging based on a minimum logging level.
+// LevelLogger is a wrapper for any goisms.SimpleLogging that will filter out logging based on a minimum logging level. It emits
+// the request itself iff another log is emitted
 type LevelLogger struct {
-	minlevel      LogLevel
-	wrappedLogger Logging
+	minlevel                                 LogLevel
+	wrappedLogger                            Logging
+	requestMethod, requestUrl, requestFormat string
+	requestArgs                              []interface{}
 }
 
 func NewLevelLogger(minlevel LogLevel, wrappedLogger Logging) Logging {
-	return LevelLogger{minlevel, wrappedLogger}
+	return &LevelLogger{minlevel: minlevel, wrappedLogger: wrappedLogger}
 }
 
-func (ll LevelLogger) Debugf(format string, args ...interface{}) {
+func (ll *LevelLogger) Debugf(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelDebug {
+		ll.emitRequest()
 		ll.wrappedLogger.Debugf(format, args...)
 	}
 }
 
-func (ll LevelLogger) Infof(format string, args ...interface{}) {
+func (ll *LevelLogger) Infof(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelInfo {
+		ll.emitRequest()
 		ll.wrappedLogger.Infof(format, args...)
 	}
 }
 
-func (ll LevelLogger) Warningf(format string, args ...interface{}) {
+func (ll *LevelLogger) Warningf(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelWarning {
+		ll.emitRequest()
 		ll.wrappedLogger.Warningf(format, args...)
 	}
 }
 
-func (ll LevelLogger) Errorf(format string, args ...interface{}) {
+func (ll *LevelLogger) Errorf(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelError {
+		ll.emitRequest()
 		ll.wrappedLogger.Errorf(format, args...)
 	}
 }
 
-func (ll LevelLogger) Criticalf(format string, args ...interface{}) {
+func (ll *LevelLogger) Criticalf(format string, args ...interface{}) {
 	if ll.minlevel <= LogLevelCritical {
+		ll.emitRequest()
 		ll.wrappedLogger.Criticalf(format, args...)
+	}
+}
+
+func (ll *LevelLogger) Request(request, url, format string, args ...interface{}) {
+	ll.requestMethod = request
+	ll.requestUrl = url
+	ll.requestFormat = format
+	ll.requestArgs = args
+}
+
+func (ll *LevelLogger) emitRequest() {
+	if ll.requestMethod != "" {
+		ll.wrappedLogger.Request(ll.requestMethod, ll.requestUrl, ll.requestFormat, ll.requestArgs...)
+		ll.requestMethod = ""
+		ll.requestUrl = ""
+		ll.requestFormat = ""
+		ll.requestArgs = nil
 	}
 }
 
@@ -155,6 +189,12 @@ func (tee TeeLogging) Criticalf(format string, args ...interface{}) {
 	}
 }
 
+func (tee TeeLogging) Request(request, url, format string, args ...interface{}) {
+	for _, l := range tee.Logs {
+		l.Request(request, url, format, args...)
+	}
+}
+
 type PrefixLogger struct {
 	Logging
 	Prefix string
@@ -178,4 +218,8 @@ func (pl PrefixLogger) Errorf(format string, args ...interface{}) {
 
 func (pl PrefixLogger) Criticalf(format string, args ...interface{}) {
 	pl.Logging.Criticalf(pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) Request(request, url, format string, args ...interface{}) {
+	pl.Logging.Request(request, url, pl.Prefix+format, args...)
 }
