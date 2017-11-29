@@ -34,3 +34,7 @@ func (al appengineLogging) Errorf(format string, args ...interface{}) {
 func (al appengineLogging) Criticalf(format string, args ...interface{}) {
 	log.Criticalf(al.c, format, args...)
 }
+
+func (al appengineLogging) Request(method, url, format string, args ...interface{}) {
+	// this is logged automatically by appengine
+}
