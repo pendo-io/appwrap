@@ -12,6 +12,7 @@ type AppengineInfo interface {
 	AppID() string
 	InstanceID() string
 	ModuleDefaultVersionID(moduleName string) (string, error)
+	ModuleHostname(version, module, app string) (string, error)
 	ModuleName() string
 	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
@@ -27,6 +28,11 @@ func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
 
 func (ai AppengineInfoFromContext) InstanceID() string {
 	return appengine.InstanceID()
+}
+
+func (ai AppengineInfoFromContext) ModuleHostname(version, module, app string) (string, error) {
+	// return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", strings.Split(aeInfo.VersionID(), ".")[0], aeInfo.ModuleName(), aeInfo.AppID()) // for later
+	return appengine.ModuleHostname(ai.c, version, module, app)
 }
 
 func (ai AppengineInfoFromContext) ModuleName() string {
