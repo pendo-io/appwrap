@@ -549,6 +549,7 @@ func (mq *memoryQuery) Offset(i int) DatastoreQuery {
 func (mq *memoryQuery) Order(how string) DatastoreQuery {
 	n := *mq
 	n.order = append(n.order, how)
+	mq.order = mq.order[:len(mq.order):len(mq.order)] // cap mq.order so a later append doesn't clobber n.order up
 	return &n
 }
 
