@@ -452,38 +452,18 @@ func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
 }
 
 type filter struct {
-	field string
-	op    string
-	val   interface{}
+	eqs  []eqValueFilter
+	ineq ineqValueFilter
 }
 
-func (f filter) cmpSingleton(val interface{}) bool {
-	c := cmp(val, f.val)
-
-	switch f.op {
-	case "=":
-		return c == 0
-	case "<":
-		return c == -1
-	case ">":
-		return c == 1
-	case "<=":
-		return c != 1
-	case ">=":
-		return c != -1
+func (f filter) cmpSingle(field string, item *dsItem, vf valueFilter) bool {
+	if field == "__key__" {
+		return vf.cmpValue(item.key)
 	}
 
-	panic(fmt.Sprintf("bad operator %s for filter", f.op))
-}
-
-func (f filter) cmp(item *dsItem) bool {
-	if f.field == "__key__" {
-		return f.cmpSingleton(item.key)
-	}
-
-	for x := range item.props {
-		if item.props[x].Name == f.field {
-			if f.cmpSingleton(item.props[x].Value) {
+	for _, prop := range item.props {
+		if prop.Name == field {
+			if vf.cmpValue(prop.Value) {
 				return true
 			}
 		}
@@ -492,13 +472,81 @@ func (f filter) cmp(item *dsItem) bool {
 	return false
 }
 
+func (f filter) cmp(field string, item *dsItem) bool {
+	if !f.cmpSingle(field, item, f.ineq) {
+		return false
+	}
+	for _, eq := range f.eqs {
+		if !f.cmpSingle(field, item, eq) {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *filter) add(op string, val interface{}) {
+	if op == "=" {
+		f.eqs = append(f.eqs, eqValueFilter{val: val})
+	} else {
+		f.ineq.ops = append(f.ineq.ops, op)
+		f.ineq.threshs = append(f.ineq.threshs, val)
+	}
+}
+
+func (f filter) clone() filter {
+	return filter{
+		eqs:  append([]eqValueFilter(nil), f.eqs...),
+		ineq: f.ineq.clone(),
+	}
+}
+
+type valueFilter interface {
+	cmpValue(v interface{}) bool
+}
+
+type eqValueFilter struct{ val interface{} }
+
+func (f eqValueFilter) cmpValue(v interface{}) bool { return cmp(v, f.val) == 0 }
+
+type ineqValueFilter struct {
+	ops     []string
+	threshs []interface{}
+}
+
+func (f ineqValueFilter) cmpValue(v interface{}) bool {
+	matches := true
+	for i, thresh := range f.threshs {
+		c := cmp(v, thresh)
+		switch op := f.ops[i]; op {
+		case "<":
+			matches = matches && (c == -1)
+		case ">":
+			matches = matches && (c == 1)
+		case "<=":
+			matches = matches && (c != 1)
+		case ">=":
+			matches = matches && (c != -1)
+		default:
+			panic(fmt.Sprintf("bad operator %s for filter", op))
+		}
+	}
+	return matches
+}
+
+func (f ineqValueFilter) clone() ineqValueFilter {
+	return ineqValueFilter{
+		ops:     append([]string(nil), f.ops...),
+		threshs: append([]interface{}(nil), f.threshs...),
+	}
+}
+
 type memoryCursor *datastore.Key
 
 var firstItemCursor memoryCursor = &datastore.Key{}
 
 type memoryQuery struct {
 	localDs         *LocalDatastore
-	filters         []filter
+	filters         map[string]filter
 	kind            string
 	ancestor        *datastore.Key
 	keysOnly        bool
@@ -517,14 +565,22 @@ func (mq *memoryQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
 }
 
 func (mq *memoryQuery) Filter(how string, what interface{}) DatastoreQuery {
-	filter := filter{
-		field: strings.SplitN(how, " ", 2)[0],
-		op:    strings.SplitN(how, " ", 2)[1],
-		val:   what,
+	n := *mq
+
+	// Copy filters map
+	n.filters = make(map[string]filter)
+	for f, filter := range mq.filters {
+		n.filters[f] = filter
 	}
 
-	n := *mq
-	n.filters = append(n.filters, filter)
+	// Extract field/op from how
+	howS := strings.SplitN(how, " ", 2)
+	field, op := howS[0], howS[1]
+
+	// Add op/what to the corresponding filter (clone the filter to prevent clobbering the old one)
+	f := n.filters[field].clone()
+	f.add(op, what)
+	n.filters[field] = f
 	return &n
 }
 
@@ -609,8 +665,8 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
 
 func (mq *memoryQuery) getMatchingItems() []*dsItem {
 	indexedFields := make(map[string]bool)
-	for _, filter := range mq.filters {
-		indexedFields[filter.field] = true
+	for field := range mq.filters {
+		indexedFields[field] = true
 	}
 
 	for _, order := range mq.order {
@@ -647,11 +703,8 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 		}
 
 		skip := false
-		for _, filter := range mq.filters {
-			//t := filter.cmp(item)
-			//fmt.Printf("HERE %+v %+v %+v: %d\n", filter, item, filter.val, t)
-
-			if !filter.cmp(item) {
+		for field, filter := range mq.filters {
+			if !filter.cmp(field, item) {
 				skip = true
 				break
 			}
@@ -705,11 +758,6 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 	if mq.limit > 0 && len(items) > mq.limit {
 		items = items[0:mq.limit]
 	}
-
-	//fmt.Printf("QUERY: %+v\n", mq)
-	//for i := range items {
-	//fmt.Printf("\t%d: %s: %+v\n", i, items[i].key, items[i].props)
-	//}
 
 	return items
 }
