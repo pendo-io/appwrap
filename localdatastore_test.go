@@ -486,52 +486,35 @@ func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
 
 }
 
-func (dsit *AppengineInterfacesTest) TestComparator(c *C) {
+func (dsit *AppengineInterfacesTest) TestValueFilter(c *C) {
 	mem := NewLocalDatastore(false)
 
 	checkVals := func(base interface{}, valsEq []interface{}, valsLT []interface{}, valsGT []interface{}) bool {
-		var f filter
+		var f valueFilter
 		pass := true
 		for _, vEq := range valsEq {
-			f = filter{
-				op:  "=",
-				val: vEq,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
-			f = filter{
-				op:  "<=",
-				val: vEq,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
-			f = filter{
-				op:  ">=",
-				val: vEq,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = eqValueFilter{val: vEq}
+			pass = c.Check(f.cmpValue(base), IsTrue) && pass
+			f = ineqValueFilter{ops: []string{"<=", ">="}, threshs: []interface{}{vEq, vEq}}
+			pass = c.Check(f.cmpValue(base), IsTrue) && pass
+			f = ineqValueFilter{ops: []string{"<", ">"}, threshs: []interface{}{vEq, vEq}}
+			pass = c.Check(f.cmpValue(base), IsFalse) && pass
 		}
 		for _, vLT := range valsLT {
-			f = filter{
-				op:  ">",
-				val: vLT,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
-			f = filter{
-				op:  ">=",
-				val: vLT,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = eqValueFilter{val: vLT}
+			pass = c.Check(f.cmpValue(base), IsFalse) && pass
+			f = ineqValueFilter{ops: []string{">=", ">"}, threshs: []interface{}{vLT, vLT}}
+			pass = c.Check(f.cmpValue(base), IsTrue) && pass
+			f = ineqValueFilter{ops: []string{"<=", "<"}, threshs: []interface{}{vLT, vLT}}
+			pass = c.Check(f.cmpValue(base), IsFalse) && pass
 		}
 		for _, vGT := range valsGT {
-			f = filter{
-				op:  "<",
-				val: vGT,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
-			f = filter{
-				op:  "<=",
-				val: vGT,
-			}
-			pass = c.Check(f.cmpSingleton(base), IsTrue) && pass
+			f = eqValueFilter{val: vGT}
+			pass = c.Check(f.cmpValue(base), IsFalse) && pass
+			f = ineqValueFilter{ops: []string{"<=", "<"}, threshs: []interface{}{vGT, vGT}}
+			pass = c.Check(f.cmpValue(base), IsTrue) && pass
+			f = ineqValueFilter{ops: []string{">=", ">"}, threshs: []interface{}{vGT, vGT}}
+			pass = c.Check(f.cmpValue(base), IsFalse) && pass
 		}
 		return pass
 	}
@@ -610,6 +593,60 @@ func (dsit *AppengineInterfacesTest) TestComparator(c *C) {
 			mem.NewKey("kindC", "", 5, mem.NewKey("kindL", "", 5, mem.NewKey("kindP", "", 0, mem.NewKey("anyKind", "", 0, nil)))),
 		},
 	), IsTrue)
+}
+
+func (dsit *AppengineInterfacesTest) TestFilter(c *C) {
+	mem := NewLocalDatastore(false)
+
+	v := &dsItem{
+		key: mem.NewKey("kind", "theKey", 0, nil),
+		props: datastore.PropertyList{
+			{Name: "colSingle", Value: 123},
+			{Name: "colMulti", Value: 100, Multiple: true},
+			{Name: "colMulti", Value: 200, Multiple: true},
+			{Name: "colMulti", Value: 300, Multiple: true},
+		},
+	}
+
+	c.Assert(filter{eqs: []eqValueFilter{{val: 123}}}.cmp("colSingle", v), IsTrue)
+	c.Assert(filter{eqs: []eqValueFilter{{val: 321}}}.cmp("colSingle", v), IsFalse)
+	c.Assert(filter{eqs: []eqValueFilter{{val: 123}, {val: 321}}}.cmp("colSingle", v), IsFalse)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{100, 200}}}.cmp("colSingle", v), IsTrue)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{200, 300}}}.cmp("colSingle", v), IsFalse)
+
+	c.Assert(filter{eqs: []eqValueFilter{{val: 100}}}.cmp("colMulti", v), IsTrue)
+	c.Assert(filter{eqs: []eqValueFilter{{val: 123}}}.cmp("colMulti", v), IsFalse)
+	c.Assert(filter{eqs: []eqValueFilter{{val: 100}, {val: 300}}}.cmp("colMulti", v), IsTrue)
+	c.Assert(filter{eqs: []eqValueFilter{{val: 100}, {val: 400}}}.cmp("colMulti", v), IsFalse)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{100, 200}}}.cmp("colMulti", v), IsTrue)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{100, 400}}}.cmp("colMulti", v), IsTrue)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{500, 600}}}.cmp("colMulti", v), IsFalse)
+	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{0, 100}}}.cmp("colMulti", v), IsFalse)
+}
+
+func (dsit *AppengineInterfacesTest) TestBuilderClobber(c *C) {
+	q := &memoryQuery{}
+
+	q1 := q.Filter("fieldA =", 111).Filter("fieldA =", 112).Filter("fieldB =", 222).Filter("fieldC >=", 333).Filter("fieldC <", 334).Filter("fieldD <", 444).
+		Order("fieldA").Order("fieldB").Order("fieldC").Order("fieldD").(*memoryQuery)
+	q2 := q.Filter("fieldA2 =", 444).Filter("fieldA2 =", 443).Filter("fieldB2 =", 333).Filter("fieldC2 >=", 222).Filter("fieldC2 <", 221).Filter("fieldD2 <", 111).
+		Order("fieldA2").Order("fieldB2").Order("fieldC2").Order("fieldD2").(*memoryQuery)
+
+	c.Assert(q1.filters, DeepEquals, map[string]filter{
+		"fieldA": {eqs: []eqValueFilter{{val: 111}, {val: 112}}},
+		"fieldB": {eqs: []eqValueFilter{{val: 222}}},
+		"fieldC": {ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{333, 334}}},
+		"fieldD": {ineq: ineqValueFilter{ops: []string{"<"}, threshs: []interface{}{444}}},
+	})
+	c.Assert(q1.order, DeepEquals, []string{"fieldA", "fieldB", "fieldC", "fieldD"})
+
+	c.Assert(q2.filters, DeepEquals, map[string]filter{
+		"fieldA2": {eqs: []eqValueFilter{{val: 444}, {val: 443}}},
+		"fieldB2": {eqs: []eqValueFilter{{val: 333}}},
+		"fieldC2": {ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{222, 221}}},
+		"fieldD2": {ineq: ineqValueFilter{ops: []string{"<"}, threshs: []interface{}{111}}},
+	})
+	c.Assert(q2.order, DeepEquals, []string{"fieldA2", "fieldB2", "fieldC2", "fieldD2"})
 }
 
 func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
