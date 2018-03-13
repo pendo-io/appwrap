@@ -1,12 +1,4 @@
-// +build appengine appenginevm
-
 package appwrap
-
-import (
-	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/module"
-)
 
 type AppengineInfo interface {
 	AppID() string
@@ -16,41 +8,4 @@ type AppengineInfo interface {
 	ModuleName() string
 	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
-}
-
-type AppengineInfoFromContext struct {
-	c context.Context
-}
-
-func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
-	return AppengineInfoFromContext{c}
-}
-
-func (ai AppengineInfoFromContext) InstanceID() string {
-	return appengine.InstanceID()
-}
-
-func (ai AppengineInfoFromContext) ModuleHostname(version, module, app string) (string, error) {
-	// return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", strings.Split(aeInfo.VersionID(), ".")[0], aeInfo.ModuleName(), aeInfo.AppID()) // for later
-	return appengine.ModuleHostname(ai.c, version, module, app)
-}
-
-func (ai AppengineInfoFromContext) ModuleName() string {
-	return appengine.ModuleName(ai.c)
-}
-
-func (ai AppengineInfoFromContext) NumInstances(moduleName, version string) (int, error) {
-	return module.NumInstances(ai.c, moduleName, version)
-}
-
-func (ai AppengineInfoFromContext) VersionID() string {
-	return appengine.VersionID(ai.c)
-}
-
-func (ai AppengineInfoFromContext) ModuleDefaultVersionID(moduleName string) (string, error) {
-	return module.DefaultVersion(ai.c, moduleName)
-}
-
-func (ai AppengineInfoFromContext) AppID() string {
-	return appengine.AppID(ai.c)
 }
