@@ -5,6 +5,7 @@ package appwrap
 import (
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -236,6 +237,7 @@ type LocalDatastore struct {
 	namespaces      map[string]*LocalDatastore
 	parent          *LocalDatastore
 	addEntityFields bool
+	index           DatastoreIndex
 }
 
 // stubContext is a ridicule-worthy hack that returns a string "s~memds" for ANY
@@ -256,7 +258,7 @@ func StubContext() context.Context {
 	return stubContext
 }
 
-func NewLocalDatastore(addField bool) Datastore {
+func NewLocalDatastore(addField bool, index DatastoreIndex) Datastore {
 	return &LocalDatastore{
 		lastId:          1 << 30,
 		entities:        make(map[string]*dsItem),
@@ -264,6 +266,7 @@ func NewLocalDatastore(addField bool) Datastore {
 		mtx:             &sync.Mutex{},
 		namespaces:      make(map[string]*LocalDatastore),
 		addEntityFields: addField,
+		index:           index,
 	}
 }
 
@@ -277,7 +280,7 @@ func (ds *LocalDatastore) Namespace(ns string) Datastore {
 	}
 
 	if _, exists := ds.namespaces[ns]; !exists {
-		ds.namespaces[ns] = NewLocalDatastore(ds.addEntityFields).(*LocalDatastore)
+		ds.namespaces[ns] = NewLocalDatastore(ds.addEntityFields, nil).(*LocalDatastore)
 		ds.namespaces[ns].parent = ds
 	}
 
@@ -594,6 +597,149 @@ type memoryQuery struct {
 	addEntityFields bool
 }
 
+func (mq *memoryQuery) checkIndexes(trace bool) error {
+	debugMsgs := []string{}
+	debug := func(format string, vars ...interface{}) {
+		debugMsgs = append(debugMsgs, fmt.Sprintf(format, vars))
+		if trace {
+			fmt.Printf(format+"\n", vars...)
+		}
+	}
+
+	debug("looking for index for kind %s", mq.kind)
+
+	if mq.localDs.index == nil {
+		debug("    no index defined")
+		return nil
+	} else if len(mq.filters) == 0 {
+		debug("    no index needed for no filters")
+		return nil
+	} else if len(mq.filters) == 1 && len(mq.order) == 0 {
+		debug("    no index needed on single field")
+		return nil
+	} else if len(mq.filters) == 1 && len(mq.order) == 1 {
+		field := ""
+		for f := range mq.filters {
+			field = f
+		}
+		if mq.order[0] == field || mq.order[0] == "-"+field {
+			debug("    single field with order that matches field name")
+			return nil
+		}
+	}
+
+	neededFields := []string{}
+	inequalityField := ""
+	for field, filter := range mq.filters {
+		neededFields = append(neededFields, field)
+
+		if len(filter.ineq.ops) > 0 {
+			debug("    inequality needed %+v", filter.ineq)
+			if inequalityField == "" {
+				inequalityField = field
+			} else {
+				return errors.New("multiple inequalities specified")
+			}
+		}
+	}
+	sort.Sort(sort.StringSlice(neededFields))
+
+	debug("    needed fields: %+v", neededFields)
+
+	orderField := ""
+	orderDescending := false
+	switch len(mq.order) {
+	case 0:
+	case 1:
+		if mq.order[0][0] == '-' {
+			orderField = mq.order[0][1:]
+			orderDescending = true
+		} else {
+			orderField = mq.order[0]
+		}
+	default:
+		return errors.New("only a single Order() field is supported")
+	}
+
+	if orderField != "" {
+		debug("    order %s %t", orderField, orderDescending)
+		// we need orderField too, but don't duplicate it
+		if _, already := mq.filters[orderField]; !already {
+			neededFields = append(neededFields, orderField)
+		}
+	}
+	if inequalityField != "" {
+		debug("    inequality %s", inequalityField)
+	}
+
+	for _, index := range mq.localDs.index[mq.kind] {
+		debug("    considering %s", index)
+		if len(neededFields) > len(index.fields) {
+			debug("       too short")
+			continue
+		} else if mq.ancestor != nil && !index.ancestor {
+			debug("       no ancestor")
+			continue
+		}
+
+		matches := true
+		fieldIndexes := make([]int, len(neededFields))
+		lastField := "" // this tracks the name of the last field in the index yaml which we need
+		for i := range neededFields {
+			if field, exists := index.fields[neededFields[i]]; !exists {
+				debug("        field %s not indexed", neededFields[i])
+				matches = false
+				break
+			} else {
+				fieldIndexes[i] = field.index
+				if index.fields[lastField].index < field.index {
+					lastField = neededFields[i]
+				}
+			}
+		}
+
+		if !matches {
+			debug("        field mismatch")
+			continue
+		}
+
+		sort.Sort(sort.IntSlice(fieldIndexes)) // these should all be in a row
+		for i, val := range fieldIndexes {
+			if i != val {
+				debug("        fields all present, but not in the right order")
+				matches = false
+				break
+			}
+		}
+
+		if !matches {
+			debug("        field mismatch")
+			continue
+		}
+
+		if orderField != "" {
+			if lastField != orderField {
+				debug("        order field mismatch (got %s, needed %s)", lastField, orderField)
+				continue
+			} else if index.fields[lastField].descending != orderDescending {
+				debug("        order field sorting mismatch needed descending == %t", orderDescending)
+				continue
+			}
+		}
+
+		if inequalityField != "" && lastField != inequalityField {
+			debug("        inequality field mismatch (got %s, needed %s)", lastField, inequalityField)
+			continue
+		}
+
+		debug("        matched")
+
+		return nil
+	}
+
+	return fmt.Errorf("missing index: %s\n", strings.Join(debugMsgs, "\n"))
+}
+
 func (mq *memoryQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
 	n := *mq
 	n.ancestor = ancestor
@@ -673,17 +819,23 @@ func (mq *memoryQuery) Start(c DatastoreCursor) DatastoreQuery {
 }
 
 func (mq *memoryQuery) Run() DatastoreIterator {
-	items := mq.getMatchingItems()
 	//fmt.Printf("QUERY: %+v\n", mq)
 	//for i := range items {
 	//fmt.Printf("\t%d: %s: %+v\n", i, items[i].key, items[i].props)
 	//}
 
-	return &memQueryIterator{items: items, keysOnly: mq.keysOnly, project: mq.project, addEntityFields: mq.addEntityFields}
+	if items, indexErr := mq.getMatchingItems(); indexErr != nil {
+		panic(indexErr)
+	} else {
+		return &memQueryIterator{items: items, keysOnly: mq.keysOnly, project: mq.project, addEntityFields: mq.addEntityFields}
+	}
 }
 
 func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
-	items := mq.getMatchingItems()
+	items, indexErr := mq.getMatchingItems()
+	if indexErr != nil {
+		return nil, indexErr
+	}
 
 	keys := make([]*datastore.Key, len(items))
 	for i := range items {
@@ -709,7 +861,11 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
 	return keys, nil
 }
 
-func (mq *memoryQuery) getMatchingItems() []*dsItem {
+func (mq *memoryQuery) getMatchingItems() ([]*dsItem, error) {
+	if err := mq.checkIndexes(false); err != nil {
+		return nil, err
+	}
+
 	indexedFields := make(map[string]bool)
 	for field := range mq.filters {
 		indexedFields[field] = true
@@ -822,7 +978,7 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 		items = items[0:mq.limit]
 	}
 
-	return items
+	return items, nil
 }
 
 type memQueryIterator struct {
