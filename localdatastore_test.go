@@ -12,7 +12,7 @@ import (
 )
 
 func (s *AppengineInterfacesTest) TestMemDsNewKey(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 	k := mem.NewKey("Kind", "string", 0, nil)
 	c.Assert(k.Kind(), Equals, "Kind")
 	c.Assert(k.StringID(), Equals, "string")
@@ -51,7 +51,7 @@ func (c *customEntity) Save() ([]datastore.Property, error) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGet(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 	k, err := mem.Put(mem.NewKey("test", "keyval", 0, nil), &simpleEntity{"hello"})
 	c.Assert(err, IsNil)
 	c.Assert(k.StringID(), Equals, "keyval")
@@ -86,7 +86,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGet(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestFieldInjection(c *C) {
-	mem := NewLocalDatastore(true)
+	mem := NewLocalDatastore(true, nil)
 	k, err := mem.Put(mem.NewKey("test", "", 0, nil), &customEntity{5})
 	c.Assert(err, IsNil)
 
@@ -95,7 +95,7 @@ func (dsit *AppengineInterfacesTest) TestFieldInjection(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	first, last, err := mem.AllocateIDs("simple", nil, 10)
 	c.Assert(err, IsNil)
@@ -108,7 +108,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	items := make([]simpleEntity, 5)
 	itemPtrs := make([]*simpleEntity, 5)
@@ -126,7 +126,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 		c.Assert(finalKeys[i], DeepEquals, keys[i])
 	}
 
-	mem = NewLocalDatastore(false)
+	mem = NewLocalDatastore(false, nil)
 	finalKeys, err = mem.PutMulti(keys, itemPtrs)
 	c.Assert(err, IsNil)
 	for i := range keys {
@@ -166,7 +166,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	items := make([]customEntity, 5)
 	itemPtrs := make([]*customEntity, 5)
@@ -187,7 +187,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
 		c.Assert(gotItems[i].i, Equals, items[i].i)
 	}
 
-	mem = NewLocalDatastore(false)
+	mem = NewLocalDatastore(false, nil)
 	_, err = mem.PutMulti(keys, itemPtrs)
 	c.Assert(err, IsNil)
 
@@ -199,7 +199,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMultiLoadSaver(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 	parent := mem.NewKey("parent", "item", 0, nil)
 
 	items := make([]customEntity, 5)
@@ -274,7 +274,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -331,7 +331,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsUnindexed(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	type unindexedEntity struct {
 		S string `datastore:",noindex"`
@@ -369,7 +369,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsUnindexed(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	type listEntity struct {
 		S []string
@@ -397,7 +397,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -437,7 +437,7 @@ func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	items := make([]customEntity, 5)
 	keys := make([]*datastore.Key, 5)
@@ -487,7 +487,7 @@ func (dsit *AppengineInterfacesTest) TestTransactionMultiThreaded(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestValueFilter(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	checkVals := func(base interface{}, valsEq []interface{}, valsLT []interface{}, valsGT []interface{}) bool {
 		var f valueFilter
@@ -596,7 +596,7 @@ func (dsit *AppengineInterfacesTest) TestValueFilter(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestFilter(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	v := &dsItem{
 		key: mem.NewKey("kind", "theKey", 0, nil),
@@ -652,7 +652,7 @@ func (dsit *AppengineInterfacesTest) TestBuilderClobber(c *C) {
 func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 	entity := struct{ foo string }{"hello"}
 
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 	k1 := mem.NewKey("kind1", "", 1, nil)
 	k2 := mem.NewKey("kind2", "", 2, nil)
 
@@ -666,7 +666,7 @@ func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 }
 
 func (dsit *AppengineInterfacesTest) TestDistinct(c *C) {
-	mem := NewLocalDatastore(false)
+	mem := NewLocalDatastore(false, nil)
 
 	type thing struct {
 		A, B string
@@ -714,4 +714,94 @@ func (dsit *AppengineInterfacesTest) TestDistinct(c *C) {
 	_, err = q4.GetAll(&results)
 	c.Assert(err, IsNil)
 	c.Assert(results, HasLen, 2)
+}
+
+const checkIndexIndex = `
+indexes:
+
+- kind: entityKind
+  properties:
+     - name: A
+     - name: B
+       direction: desc
+     - name: C
+
+- kind: entityKind
+  ancestor: yes
+  properties:
+     - name: E
+     - name: C
+     - name: A
+`
+
+func (dsit *AppengineInterfacesTest) TestCheckIndex(c *C) {
+	// we can query a full entity w/o an index
+	mem := NewLocalDatastore(false, DatastoreIndex{})
+	key := mem.NewKey("someKey", "", 10, nil)
+	q := mem.NewQuery("someKind")
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	// a single field is fine
+	q = mem.NewQuery("someKind").Filter("singleField =", 0)
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	// even if it's an ancestor
+	q = mem.NewQuery("someKind").Filter("singleField =", 0).Ancestor(mem.NewKey("foo", "", 1, nil))
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	// even if it's ordered
+	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("singleField")
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("-singleField")
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	// but if it's ordered by a different field we're out of luck
+	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("otherField")
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	index, err := LoadIndex([]byte(checkIndexIndex))
+	c.Assert(err, IsNil)
+	mem = NewLocalDatastore(false, index)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456) // works
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("B =", 123).Filter("A =", 456) // order doesn't matter
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("D =", 456) // no index on D
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("E =", 123).Filter("C =", 456) // works
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("B =", 123).Filter("C =", 456) // we can't skip A
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("C =", 456) // we can't skip B
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Order("A") // order matches
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Order("-A") // order mismatch
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("E =", 123).Filter("C =", 456).Order("E") // can't sort by earlier item
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456).Order("-B") // an intermediate one works though
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B <", 456) // inequality is trailing
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("A <", 123).Filter("B =", 456) // inequality isn't trailing
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+
+	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Ancestor(key) // this has an ancestor index
+	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+
+	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456).Ancestor(key) // this doesn't have an ancestor
+	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
 }
