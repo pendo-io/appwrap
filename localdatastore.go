@@ -14,13 +14,11 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
 )
 
 type dsItem struct {
-	props datastore.PropertyList
-	key   *datastore.Key
+	props DatastorePropertyList
+	key   *DatastoreKey
 }
 
 type dsItemListSorter struct {
@@ -44,7 +42,7 @@ func typeConvert(a interface{}) interface{} {
 		return a
 	case string:
 		return a
-	case *datastore.Key:
+	case *DatastoreKey:
 		return a
 	case time.Time:
 		return a
@@ -99,13 +97,13 @@ func _cmp(aI, bI interface{}) int {
 		} else {
 			return 1
 		}
-	case *datastore.Key:
-		a, b := aI.(*datastore.Key), bI.(*datastore.Key)
+	case *DatastoreKey:
+		a, b := aI.(*DatastoreKey), bI.(*DatastoreKey)
 		if a == b {
 			return 0
-		} else if a == (*datastore.Key)(nil) {
+		} else if a == (*DatastoreKey)(nil) {
 			return -1
-		} else if b == (*datastore.Key)(nil) {
+		} else if b == (*DatastoreKey)(nil) {
 			return 1
 		} else if a.Kind() < b.Kind() {
 			return -1
@@ -202,7 +200,7 @@ func (a dsItemListSorter) less(i, j int) bool {
 func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) error {
 	props := item.props
 	if fields != nil {
-		props := make([]datastore.Property, 0, len(fields))
+		props := make([]DatastoreProperty, 0, len(fields))
 		for _, prop := range item.props {
 			if fields[prop.Name] {
 				props = append(props, prop)
@@ -213,19 +211,19 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 	if addField {
 		// if you hit an error on this field not being defined you probably want to add a customer Load/Saver
 		// that ignores unknown fields
-		props = append(props, datastore.Property{Name: "_debug_added_field", Value: true})
+		props = append(props, DatastoreProperty{Name: "_debug_added_field", Value: true})
 	}
 
 	//fmt.Printf("%T <- %+v (%d)\n", dst, props, len(item.props))
-	if loadSaver, okay := dst.(datastore.PropertyLoadSaver); okay {
+	if loadSaver, okay := dst.(DatastorePropertyLoadSaver); okay {
 		//fmt.Printf("\tload saver\n")
 		//fmt.Printf("FILLED %+v\n", dst)
 		// Load() may mess with the array; don't let it break our stored data
-		propsCopy := make([]datastore.Property, len(props))
+		propsCopy := make([]DatastoreProperty, len(props))
 		copy(propsCopy, props)
 		return loadSaver.Load(propsCopy)
 	} else {
-		return datastore.LoadStruct(dst, props)
+		return LoadStruct(dst, props)
 	}
 }
 
@@ -287,7 +285,11 @@ func (ds *LocalDatastore) Namespace(ns string) Datastore {
 	return ds.namespaces[ns]
 }
 
-func (ds *LocalDatastore) AllocateIDs(kind string, parent *datastore.Key, n int) (int64, int64, error) {
+func (ds *LocalDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
+	return emulateAllocateIDSet(ds, incompleteKeys)
+}
+
+func (ds *LocalDatastore) AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error) {
 	first := ds.lastId
 	ds.lastId += int64(n)
 	return first, first + int64(n) - 1, nil
@@ -299,23 +301,12 @@ func (ds *LocalDatastore) delete(keyStr string) {
 	delete(ds.entities, keyStr)
 }
 
-func (ds *LocalDatastore) DeleteMulti(keys []*datastore.Key) (err error) {
+func (ds *LocalDatastore) DeleteMulti(keys []*DatastoreKey) (err error) {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
 
-	multiError := make(appengine.MultiError, len(keys))
-	errors := false
-	for i, k := range keys {
-		if _, exists := ds.entities[k.String()]; !exists {
-			multiError[i] = datastore.ErrNoSuchEntity
-			errors = true
-		} else {
-			delete(ds.entities, k.String())
-		}
-	}
-
-	if errors {
-		err = multiError
+	for _, k := range keys {
+		delete(ds.entities, k.String())
 	}
 
 	return
@@ -335,18 +326,22 @@ func (ds *LocalDatastore) get(keyStr string) (item *dsItem, found bool) {
 	return
 }
 
-func (ds *LocalDatastore) Get(k *datastore.Key, dst interface{}) error {
+func (ds *LocalDatastore) Get(k *DatastoreKey, dst interface{}) error {
 	if item, exists := ds.get(k.String()); !exists {
-		return datastore.ErrNoSuchEntity
+		return ErrNoSuchEntity
 	} else {
 		return item.cp(dst, nil, ds.addEntityFields)
 	}
 }
 
-func (ds *LocalDatastore) GetMulti(keys []*datastore.Key, dstIntf interface{}) error {
+func (ds *LocalDatastore) GetMulti(keys []*DatastoreKey, dstIntf interface{}) error {
+	if len(keys) != reflect.ValueOf(dstIntf).Len() {
+		return errors.New("keys and dest have different lengths")
+	}
+
 	dstValue := reflect.ValueOf(dstIntf)
 	errors := false
-	multiError := make(appengine.MultiError, len(keys))
+	multiError := make(MultiError, len(keys))
 	for i, k := range keys {
 		if err := ds.Get(k, dstValue.Index(i).Addr().Interface()); err != nil {
 			multiError[i] = err
@@ -374,8 +369,8 @@ func (ds *LocalDatastore) Kinds() (kinds []string, err error) {
 	return
 }
 
-func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *datastore.Key) *datastore.Key {
-	return datastore.NewKey(ds.emptyContext, kind, sId, iId, parent)
+func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	return newKey(ds.emptyContext, kind, sId, iId, parent)
 }
 
 func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
@@ -389,7 +384,7 @@ func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
 	ds.entities[keyStr] = item
 }
 
-func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.Key, error) {
+func (ds *LocalDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
 	finalKeyCopy := *key
 	finalKey := &finalKeyCopy
 
@@ -398,14 +393,14 @@ func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.K
 		ds.lastId++
 	}
 
-	if saver, okay := src.(datastore.PropertyLoadSaver); okay {
+	if saver, okay := src.(DatastorePropertyLoadSaver); okay {
 		if item, err := saver.Save(); err != nil {
 			return nil, err
 		} else {
 			k := *finalKey
 			ds.put(finalKey.String(), &dsItem{props: item, key: &k})
 		}
-	} else if item, err := datastore.SaveStruct(src); err != nil {
+	} else if item, err := SaveStruct(src); err != nil {
 		return nil, err
 	} else {
 		k := *finalKey
@@ -415,9 +410,9 @@ func (ds *LocalDatastore) Put(key *datastore.Key, src interface{}) (*datastore.K
 	return finalKey, nil
 }
 
-func (ds *LocalDatastore) PutMulti(keys []*datastore.Key, src interface{}) ([]*datastore.Key, error) {
+func (ds *LocalDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
 	srcValue := reflect.ValueOf(src)
-	finalKeys := make([]*datastore.Key, len(keys))
+	finalKeys := make([]*DatastoreKey, len(keys))
 	for i, k := range keys {
 		val := srcValue.Index(i)
 		if val.Kind() == reflect.Struct {
@@ -434,7 +429,30 @@ func (ds *LocalDatastore) PutMulti(keys []*datastore.Key, src interface{}) ([]*d
 	return finalKeys, nil
 }
 
-func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error {
+type localDatastoreTransaction struct {
+	Datastore
+}
+
+func (lds localDatastoreTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
+	resultKey, err := lds.Datastore.Put(key, src)
+	return &PendingKey{key: resultKey}, err
+}
+
+func (lds localDatastoreTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
+	resultKeys, err := lds.Datastore.PutMulti(keys, src)
+	if err != nil {
+		return nil, err
+	}
+
+	pendingKeys := make([]*PendingKey, len(resultKeys))
+	for i := range resultKeys {
+		pendingKeys[i] = &PendingKey{key: resultKeys[i]}
+	}
+
+	return pendingKeys, err
+}
+
+func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
 	// The datastore must be locked while running a transaction, since the transaction will need to
 	// put the new entities in place on commit (as well as the new lastId), or just go back to the original
 	// datastore on state.
@@ -455,14 +473,14 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds Datastore) error, opts 
 
 	// If the transaction fails, just return the error (and unlock the datastore's mutex) with
 	// no updates.
-	if err := f(dsCopy); err != nil {
-		return err
+	if err := f(localDatastoreTransaction{Datastore: dsCopy}); err != nil {
+		return nil, err
 	}
 
 	// Put the new entities and lastId in place on "commit".
 	ds.entities = dsCopy.entities
 	ds.lastId = dsCopy.lastId
-	return nil
+	return unmappedDatastoreCommit{}, nil
 }
 
 func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
@@ -558,9 +576,9 @@ func (f ineqValueFilter) clone() ineqValueFilter {
 	}
 }
 
-type memoryCursor *datastore.Key
+type memoryCursor *DatastoreKey
 
-var firstItemCursor memoryCursor = &datastore.Key{}
+var firstItemCursor memoryCursor = &DatastoreKey{}
 
 type distinctKey struct {
 	field string
@@ -586,7 +604,7 @@ type memoryQuery struct {
 	localDs         *LocalDatastore
 	filters         map[string]filter
 	kind            string
-	ancestor        *datastore.Key
+	ancestor        *DatastoreKey
 	keysOnly        bool
 	limit           int
 	offset          int
@@ -740,7 +758,7 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 	return fmt.Errorf("missing index: %s\n", strings.Join(debugMsgs, "\n"))
 }
 
-func (mq *memoryQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
+func (mq *memoryQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
 	n := *mq
 	n.ancestor = ancestor
 	return &n
@@ -831,13 +849,13 @@ func (mq *memoryQuery) Run() DatastoreIterator {
 	}
 }
 
-func (mq *memoryQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
+func (mq *memoryQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
 	items, indexErr := mq.getMatchingItems()
 	if indexErr != nil {
 		return nil, indexErr
 	}
 
-	keys := make([]*datastore.Key, len(items))
+	keys := make([]*DatastoreKey, len(items))
 	for i := range items {
 		k := *items[i].key
 		keys[i] = &k
@@ -989,9 +1007,9 @@ type memQueryIterator struct {
 	addEntityFields bool
 }
 
-func (mqi *memQueryIterator) Next(itemPtr interface{}) (*datastore.Key, error) {
+func (mqi *memQueryIterator) Next(itemPtr interface{}) (*DatastoreKey, error) {
 	if mqi.next >= len(mqi.items) {
-		return nil, datastore.Done
+		return nil, DatastoreDone
 	}
 
 	i := mqi.next

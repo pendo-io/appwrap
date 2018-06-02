@@ -3,6 +3,7 @@
 package appwrap
 
 import (
+	"errors"
 	"time"
 
 	"golang.org/x/net/context"
@@ -10,7 +11,36 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
+type DatastoreKey = datastore.Key
+type DatastoreProperty = datastore.Property
+type DatastorePropertyList = datastore.PropertyList
+type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
+type DatastoreTransactionOptions = datastore.TransactionOptions
+type GeoPoint = appengine.GeoPoint
+type MultiError = appengine.MultiError
+type PendingKey struct{ key *datastore.Key }
+
+var DatastoreDone = datastore.Done
+var ErrConcurrentTransaction = datastore.ErrConcurrentTransaction
+var ErrNoSuchEntity = datastore.ErrNoSuchEntity
+
+func LoadStruct(dest interface{}, props DatastorePropertyList) error {
+	return datastore.LoadStruct(dest, props)
+}
+
+func SaveStruct(src interface{}) (DatastorePropertyList, error) {
+	return datastore.SaveStruct(src)
+}
+
+func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	return datastore.NewKey(ctx, kind, sId, iId, parent)
+}
+
 type AppengineDatastore struct {
+	c context.Context
+}
+
+type AppengineDatastoreTransaction struct {
 	c context.Context
 }
 
@@ -28,20 +58,60 @@ func (cds AppengineDatastore) Namespace(ns string) Datastore {
 	return AppengineDatastore{c}
 }
 
-func (cds AppengineDatastore) AllocateIDs(kind string, parent *datastore.Key, n int) (int64, int64, error) {
+func emulateAllocateIDSet(d LegacyDatastore, incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
+	kind := ""
+	var parent *DatastoreKey
+
+	for _, k := range incompleteKeys {
+		if kind == "" {
+			kind = k.Kind()
+			parent = k.Parent()
+		} else if kind != k.Kind() {
+			return nil, errors.New("kind mismatch in legacy AllocateIDSet")
+		}
+
+		newParent := k.Parent()
+		if parent == nil && newParent == nil {
+			continue
+		} else if parent == nil {
+			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
+		} else if !parent.Equal(newParent) {
+			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
+		}
+	}
+
+	if low, high, err := d.AllocateIDs(kind, parent, len(incompleteKeys)); err != nil {
+		return nil, nil
+	} else if int(high-low+1) != len(incompleteKeys) {
+		return nil, errors.New("high/low mismatch in emulateAllocateIDSet()")
+	} else {
+		newKeys := make([]*DatastoreKey, len(incompleteKeys))
+		for i := range incompleteKeys {
+			newKeys[i] = d.NewKey(kind, "", low+int64(i), parent)
+		}
+
+		return newKeys, nil
+	}
+}
+
+func (cds AppengineDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
+	return emulateAllocateIDSet(cds, incompleteKeys)
+}
+
+func (cds AppengineDatastore) AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error) {
 	return datastore.AllocateIDs(cds.c, kind, parent, n)
 }
 
-func (cds AppengineDatastore) DeleteMulti(keys []*datastore.Key) error {
+func (cds AppengineDatastore) DeleteMulti(keys []*DatastoreKey) error {
 	longerTimeoutCtx, _ := context.WithTimeout(cds.c, time.Second*20)
 	return datastore.DeleteMulti(longerTimeoutCtx, keys)
 }
 
-func (cds AppengineDatastore) Get(key *datastore.Key, dst interface{}) error {
+func (cds AppengineDatastore) Get(key *DatastoreKey, dst interface{}) error {
 	return datastore.Get(cds.c, key, dst)
 }
 
-func (cds AppengineDatastore) GetMulti(keys []*datastore.Key, dst interface{}) error {
+func (cds AppengineDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
 	return datastore.GetMulti(cds.c, keys, dst)
 }
 
@@ -49,40 +119,35 @@ func (cds AppengineDatastore) Kinds() ([]string, error) {
 	return datastore.Kinds(cds.c)
 }
 
-func (cds AppengineDatastore) NewKey(kind string, sId string, iId int64, parent *datastore.Key) *datastore.Key {
+func (cds AppengineDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
 	return datastore.NewKey(cds.c, kind, sId, iId, parent)
 }
 
-func (cds AppengineDatastore) Put(key *datastore.Key, src interface{}) (*datastore.Key, error) {
+func (cds AppengineDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
 	return datastore.Put(cds.c, key, src)
 }
 
-func (cds AppengineDatastore) PutMulti(keys []*datastore.Key, src interface{}) ([]*datastore.Key, error) {
+func (cds AppengineDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
 	return datastore.PutMulti(cds.c, keys, src)
 }
 
-func (cds AppengineDatastore) GetContext() context.Context {
-	// this is not part of the core datastore interface. use with great care.
-	return cds.c
-}
-
-func (cds AppengineDatastore) RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error {
-	return datastore.RunInTransaction(cds.c, func(c context.Context) error {
-		return f(AppengineDatastore{c})
+func (cds AppengineDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
+	return unmappedDatastoreCommit{}, datastore.RunInTransaction(cds.c, func(c context.Context) error {
+		return f(AppengineDatastoreTransaction{c: cds.c})
 	}, opts)
 }
 
 func (cds AppengineDatastore) NewQuery(kind string) DatastoreQuery {
-	return &appengineDatastoreQuery{datastore.NewQuery(kind), cds}
+	return &appengineDatastoreQuery{Query: datastore.NewQuery(kind), context: cds.c}
 }
 
 type appengineDatastoreQuery struct {
 	*datastore.Query
-	cds AppengineDatastore
+	context context.Context
 }
 
 func (q *appengineDatastoreQuery) nest(newQ *datastore.Query) DatastoreQuery {
-	return &appengineDatastoreQuery{newQ, q.cds}
+	return &appengineDatastoreQuery{Query: newQ, context: q.context}
 }
 
 func (q *appengineDatastoreQuery) KeysOnly() DatastoreQuery {
@@ -102,11 +167,11 @@ func (q *appengineDatastoreQuery) Offset(i int) DatastoreQuery {
 }
 
 func (q *appengineDatastoreQuery) Run() DatastoreIterator {
-	return &appengineDatastoreIterator{q.Query.Run(q.cds.c)}
+	return &appengineDatastoreIterator{q.Query.Run(q.context)}
 }
 
-func (q *appengineDatastoreQuery) GetAll(dst interface{}) ([]*datastore.Key, error) {
-	return q.Query.GetAll(q.cds.c, dst)
+func (q *appengineDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
+	return q.Query.GetAll(q.context, dst)
 }
 
 func (q *appengineDatastoreQuery) Order(how string) DatastoreQuery {
@@ -114,7 +179,7 @@ func (q *appengineDatastoreQuery) Order(how string) DatastoreQuery {
 	return q2
 }
 
-func (q *appengineDatastoreQuery) Ancestor(ancestor *datastore.Key) DatastoreQuery {
+func (q *appengineDatastoreQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
 	return q.nest(q.Query.Ancestor(ancestor))
 }
 
@@ -134,10 +199,56 @@ type appengineDatastoreIterator struct {
 	iter *datastore.Iterator
 }
 
-func (i *appengineDatastoreIterator) Next(dst interface{}) (*datastore.Key, error) {
+func (i *appengineDatastoreIterator) Next(dst interface{}) (*DatastoreKey, error) {
 	return i.iter.Next(dst)
 }
 
 func (i *appengineDatastoreIterator) Cursor() (DatastoreCursor, error) {
 	return i.iter.Cursor()
+}
+
+func (dt AppengineDatastoreTransaction) DeleteMulti(keys []*DatastoreKey) error {
+	longerTimeoutCtx, _ := context.WithTimeout(dt.c, time.Second*20)
+	return datastore.DeleteMulti(longerTimeoutCtx, keys)
+}
+
+func (dt AppengineDatastoreTransaction) Get(key *DatastoreKey, dst interface{}) error {
+	return datastore.Get(dt.c, key, dst)
+}
+
+func (dt AppengineDatastoreTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error {
+	return datastore.GetMulti(dt.c, keys, dst)
+}
+
+func (dt AppengineDatastoreTransaction) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	return datastore.NewKey(dt.c, kind, sId, iId, parent)
+}
+
+func (dt AppengineDatastoreTransaction) NewQuery(kind string) DatastoreQuery {
+	return &appengineDatastoreQuery{Query: datastore.NewQuery(kind), context: dt.c}
+}
+
+func (dt AppengineDatastoreTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
+	key, err := datastore.Put(dt.c, key, src)
+	return &PendingKey{key: key}, err
+}
+
+func (dt AppengineDatastoreTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
+	resultKeys, err := datastore.PutMulti(dt.c, keys, src)
+	if err != nil {
+		return nil, err
+	}
+
+	pendingKeys := make([]*PendingKey, len(resultKeys))
+	for i := range resultKeys {
+		pendingKeys[i] = &PendingKey{key: resultKeys[i]}
+	}
+
+	return pendingKeys, err
+}
+
+type unmappedDatastoreCommit struct{}
+
+func (unmappedDatastoreCommit) Key(pending *PendingKey) *DatastoreKey {
+	return pending.key
 }

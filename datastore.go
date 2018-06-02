@@ -1,22 +1,18 @@
-// +build appengine appenginevm
-
 package appwrap
 
 import (
 	"time"
-
-	"google.golang.org/appengine/datastore"
 )
 
 type DatastoreCursor interface{}
 
 type DatastoreIterator interface {
-	Next(itemPtr interface{}) (*datastore.Key, error)
+	Next(itemPtr interface{}) (*DatastoreKey, error)
 	Cursor() (DatastoreCursor, error)
 }
 
 type DatastoreQuery interface {
-	Ancestor(ancestor *datastore.Key) DatastoreQuery
+	Ancestor(ancestor *DatastoreKey) DatastoreQuery
 	Distinct() DatastoreQuery
 	Filter(how string, what interface{}) DatastoreQuery
 	KeysOnly() DatastoreQuery
@@ -26,20 +22,39 @@ type DatastoreQuery interface {
 	Project(fieldName ...string) DatastoreQuery
 	Start(c DatastoreCursor) DatastoreQuery
 	Run() DatastoreIterator
-	GetAll(dst interface{}) ([]*datastore.Key, error)
+	GetAll(dst interface{}) ([]*DatastoreKey, error)
+}
+
+type DatastoreTransaction interface {
+	DeleteMulti(keys []*DatastoreKey) error
+	Get(keys *DatastoreKey, dst interface{}) error
+	GetMulti(keys []*DatastoreKey, dst interface{}) error
+	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
+	NewQuery(kind string) DatastoreQuery
+	Put(key *DatastoreKey, src interface{}) (*PendingKey, error)
+	PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error)
 }
 
 type Datastore interface {
-	AllocateIDs(kind string, parent *datastore.Key, n int) (int64, int64, error)
-	DeleteMulti(keys []*datastore.Key) error
-	Get(keys *datastore.Key, dst interface{}) error
-	GetMulti(keys []*datastore.Key, dst interface{}) error
-	Kinds() ([]string, error)
-	Namespace(ns string) Datastore
-	NewKey(string, string, int64, *datastore.Key) *datastore.Key
-	Put(key *datastore.Key, src interface{}) (*datastore.Key, error)
-	PutMulti(keys []*datastore.Key, src interface{}) ([]*datastore.Key, error)
-	RunInTransaction(f func(coreds Datastore) error, opts *datastore.TransactionOptions) error
-	NewQuery(kind string) DatastoreQuery
+	AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error)
 	Deadline(t time.Time) Datastore
+	DeleteMulti(keys []*DatastoreKey) error
+	Get(keys *DatastoreKey, dst interface{}) error
+	GetMulti(keys []*DatastoreKey, dst interface{}) error
+	Namespace(ns string) Datastore
+	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
+	NewQuery(kind string) DatastoreQuery
+	Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error)
+	PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error)
+	RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error)
+}
+
+type Commit interface {
+	Key(pending *PendingKey) *DatastoreKey
+}
+
+type LegacyDatastore interface {
+	AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error)
+	Kinds() ([]string, error)
+	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
 }
