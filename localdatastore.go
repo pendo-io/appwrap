@@ -3,6 +3,8 @@
 package appwrap
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"sort"
@@ -545,6 +547,26 @@ type memoryCursor *datastore.Key
 
 var firstItemCursor memoryCursor = &datastore.Key{}
 
+type distinctKey struct {
+	field string
+	value interface{}
+}
+
+type distinctKeys []distinctKey
+
+func (dk distinctKeys) Len() int           { return len(dk) }
+func (dk distinctKeys) Swap(i, j int)      { dk[i], dk[j] = dk[j], dk[i] }
+func (dk distinctKeys) Less(i, j int) bool { return dk[i].field < dk[j].field }
+
+func (dk distinctKeys) Hash() string {
+	sort.Sort(dk)
+	h := sha1.New()
+	for i := range dk {
+		h.Write([]byte(fmt.Sprintf("%s", dk[i].value)))
+	}
+	return base64.URLEncoding.EncodeToString(h.Sum(nil))[0:27]
+}
+
 type memoryQuery struct {
 	localDs         *LocalDatastore
 	filters         map[string]filter
@@ -556,6 +578,7 @@ type memoryQuery struct {
 	start           memoryCursor
 	order           []string
 	project         map[string]bool
+	distinct        bool
 	addEntityFields bool
 }
 
@@ -618,6 +641,16 @@ func (mq *memoryQuery) Project(fieldName ...string) DatastoreQuery {
 		n.project[name] = true
 	}
 
+	return &n
+}
+
+func (mq *memoryQuery) Distinct() DatastoreQuery {
+	if mq.project == nil {
+		panic("Distinct is only allowed with Projection Queries")
+	}
+
+	n := *mq
+	n.distinct = true
 	return &n
 }
 
@@ -684,6 +717,7 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 	mq.localDs.mtx.Lock()
 	defer mq.localDs.mtx.Unlock()
 
+	distinctHashes := make(map[string]bool)
 	for _, item := range mq.localDs.entities {
 		if mq.kind != item.key.Kind() {
 			continue
@@ -715,6 +749,8 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 			continue
 		}
 
+		var dk distinctKeys
+
 		for i := range item.props {
 			if !item.props[i].NoIndex {
 			} else if _, needIndex := indexedFields[item.props[i].Name]; needIndex {
@@ -722,10 +758,24 @@ func (mq *memoryQuery) getMatchingItems() []*dsItem {
 				skip = true
 				break
 			}
+			if mq.distinct && mq.project[item.props[i].Name] {
+				dk = append(dk, distinctKey{field: item.props[i].Name, value: item.props[i].Value})
+			}
 		}
 
 		if skip {
 			continue
+		}
+
+		if mq.distinct {
+			if len(dk) == 0 {
+				panic("Distinct() used in query, but no projection keys used")
+			}
+			itemhash := dk.Hash()
+			if distinctHashes[itemhash] {
+				continue
+			}
+			distinctHashes[itemhash] = true
 		}
 
 		items = append(items, item)

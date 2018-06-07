@@ -17,6 +17,7 @@ type DatastoreIterator interface {
 
 type DatastoreQuery interface {
 	Ancestor(ancestor *datastore.Key) DatastoreQuery
+	Distinct() DatastoreQuery
 	Filter(how string, what interface{}) DatastoreQuery
 	KeysOnly() DatastoreQuery
 	Limit(i int) DatastoreQuery
