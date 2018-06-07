@@ -664,3 +664,54 @@ func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 	sort.Sort(sort.StringSlice(kinds))
 	c.Assert(kinds, DeepEquals, []string{"kind1", "kind2"})
 }
+
+func (dsit *AppengineInterfacesTest) TestDistinct(c *C) {
+	mem := NewLocalDatastore(false)
+
+	type thing struct {
+		A, B string
+		C    int
+	}
+
+	var (
+		keys   []*datastore.Key
+		things []thing
+	)
+	for i := 1; i <= 10; i++ {
+		keys = append(keys, mem.NewKey("thing", "", int64(i), nil))
+		things = append(things, thing{A: fmt.Sprintf("%v", i), B: "blah", C: 10 - i})
+	}
+	_, err := mem.PutMulti(keys, things)
+	c.Assert(err, IsNil)
+
+	// Test: no projection, so it panics
+	c.Assert(func() { mem.NewQuery("thing").Distinct() }, Panics, "Distinct is only allowed with Projection Queries")
+
+	// Test: projection, no real distinct items, should return all ten things
+	var results []thing
+	q1 := mem.NewQuery("thing").Project("A").Distinct()
+	_, err = q1.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(results, HasLen, 10)
+
+	// Test: projection on b, which is always the same; should return one item
+	q2 := mem.NewQuery("thing").Project("B").Distinct()
+	_, err = q2.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(results, HasLen, 1)
+
+	// Test: projection on b, c, returns all items
+	q3 := mem.NewQuery("thing").Project("B", "C").Distinct()
+	_, err = q3.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(results, HasLen, 10)
+
+	// Test: Modify one item and make a duplicate, now should have two distinct items for b
+	things[4].B = "blat"
+	_, err = mem.Put(keys[4], &things[4])
+	c.Assert(err, IsNil)
+	q4 := mem.NewQuery("thing").Project("B").Distinct()
+	_, err = q4.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(results, HasLen, 2)
+}

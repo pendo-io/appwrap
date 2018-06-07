@@ -126,6 +126,10 @@ func (q *appengineDatastoreQuery) Project(fieldName ...string) DatastoreQuery {
 	return q.nest(q.Query.Project(fieldName...))
 }
 
+func (q *appengineDatastoreQuery) Distinct() DatastoreQuery {
+	return q.nest(q.Query.Distinct())
+}
+
 type appengineDatastoreIterator struct {
 	iter *datastore.Iterator
 }
