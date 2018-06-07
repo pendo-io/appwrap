@@ -3,10 +3,11 @@
 package appwrap
 
 import (
+	"time"
+
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"time"
 )
 
 type AppengineDatastore struct {
@@ -44,7 +45,7 @@ func (cds AppengineDatastore) GetMulti(keys []*datastore.Key, dst interface{}) e
 	return datastore.GetMulti(cds.c, keys, dst)
 }
 
-func (cds AppengineDatastore) Kinds() ([]string,error) {
+func (cds AppengineDatastore) Kinds() ([]string, error) {
 	return datastore.Kinds(cds.c)
 }
 

@@ -4,14 +4,15 @@ package appwrap
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
 )
 
 type dsItem struct {

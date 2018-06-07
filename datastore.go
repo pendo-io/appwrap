@@ -3,8 +3,9 @@
 package appwrap
 
 import (
-	"google.golang.org/appengine/datastore"
 	"time"
+
+	"google.golang.org/appengine/datastore"
 )
 
 type DatastoreCursor interface{}
