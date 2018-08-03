@@ -322,6 +322,14 @@ func (ds *LocalDatastore) get(keyStr string) (item *dsItem, found bool) {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
 	item, found = ds.entities[keyStr]
+	if item == nil || item.props == nil {
+		return
+	}
+	for i, prop := range item.props {
+		if timeVal, ok := prop.Value.(time.Time); ok {
+			item.props[i].Value = timeVal.UTC()
+		}
+	}
 	return
 }
 
@@ -371,6 +379,13 @@ func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *dat
 func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
+	if item.props != nil {
+		for i, prop := range item.props {
+			if timeVal, ok := prop.Value.(time.Time); ok {
+				item.props[i].Value = timeVal.UTC()
+			}
+		}
+	}
 	ds.entities[keyStr] = item
 }
 
