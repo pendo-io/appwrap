@@ -3,6 +3,7 @@ package appwrap
 import (
 	"fmt"
 	"io"
+	"net/http"
 )
 
 type LogLevel int
@@ -24,6 +25,17 @@ type Logging interface {
 	Errorf(format string, args ...interface{})                // Error message
 	Criticalf(format string, args ...interface{})             // Critical message
 	Request(request, url, format string, args ...interface{}) // This is conditionally implemented
+}
+
+// DataLogging for system logging that can accept json, strings, or structs
+type DataLogging interface {
+	Logging
+	Debug(data interface{})
+	Info(data interface{})
+	Warning(data interface{})
+	Error(data interface{})
+	Critical(data interface{})
+	Close(http.ResponseWriter)
 }
 
 // Sometimes, you just need to satify the interface and do nothing.
