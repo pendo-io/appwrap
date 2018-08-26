@@ -11,6 +11,11 @@ func NewAppengineLogging(c context.Context) Logging {
 	return appengineLogging{c}
 }
 
+func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Logging) LoggingServiceInterface {
+	loggingService := newStandardLoggingService(log)
+	return loggingService
+}
+
 type appengineLogging struct {
 	c context.Context
 }
@@ -38,3 +43,7 @@ func (al appengineLogging) Criticalf(format string, args ...interface{}) {
 func (al appengineLogging) Request(method, url, format string, args ...interface{}) {
 	// this is logged automatically by appengine
 }
+
+
+
+
