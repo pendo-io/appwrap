@@ -2,8 +2,6 @@ package appwrap
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 
 	. "gopkg.in/check.v1"
 )
