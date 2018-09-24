@@ -22,6 +22,7 @@ type PendingKey struct{ key *datastore.Key }
 
 var DatastoreDone = datastore.Done
 var ErrConcurrentTransaction = datastore.ErrConcurrentTransaction
+var ErrInvalidEntityType = datastore.ErrInvalidEntityType
 var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 

@@ -568,6 +568,7 @@ func (dsit *AppengineInterfacesTest) TestDistinct(c *C) {
 func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 	_ = DatastoreDone
 	_ = ErrConcurrentTransaction
+	_ = ErrInvalidEntityType
 	_ = ErrInvalidKey
 	_ = ErrNoSuchEntity
 

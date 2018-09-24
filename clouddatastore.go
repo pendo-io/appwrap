@@ -21,6 +21,7 @@ type PendingKey = datastore.PendingKey
 
 var DatastoreDone = iterator.Done
 var ErrConcurrentTransaction = datastore.ErrConcurrentTransaction
+var ErrInvalidEntityType = datastore.ErrInvalidEntityType
 var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 
