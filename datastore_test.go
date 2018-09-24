@@ -564,3 +564,23 @@ func (dsit *AppengineInterfacesTest) TestDistinct(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(results, HasLen, 2)
 }
+
+func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
+	_ = DatastoreDone
+	_ = ErrConcurrentTransaction
+	_ = ErrInvalidKey
+	_ = ErrNoSuchEntity
+
+	var (
+		_ = DatastoreKey{}
+		_ = DatastoreProperty{}
+		_ = DatastorePropertyList{}
+		_ = GeoPoint{}
+		_ = MultiError{}
+		_ = PendingKey{}
+	)
+
+	type (
+		_ = DatastorePropertyLoadSaver
+	)
+}

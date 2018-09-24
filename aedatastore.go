@@ -22,6 +22,7 @@ type PendingKey struct{ key *datastore.Key }
 
 var DatastoreDone = datastore.Done
 var ErrConcurrentTransaction = datastore.ErrConcurrentTransaction
+var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
@@ -30,6 +31,10 @@ func LoadStruct(dest interface{}, props DatastorePropertyList) error {
 
 func SaveStruct(src interface{}) (DatastorePropertyList, error) {
 	return datastore.SaveStruct(src)
+}
+
+func DecodeKey(encoded string) (*datastore.Key, error) {
+	return datastore.DecodeKey(encoded)
 }
 
 func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {

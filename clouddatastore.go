@@ -21,6 +21,7 @@ type PendingKey = datastore.PendingKey
 
 var DatastoreDone = iterator.Done
 var ErrConcurrentTransaction = datastore.ErrConcurrentTransaction
+var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 
 type keyWrapper struct {
@@ -57,6 +58,10 @@ func LoadStruct(dest interface{}, props DatastorePropertyList) error {
 
 func SaveStruct(src interface{}) (DatastorePropertyList, error) {
 	return datastore.SaveStruct(src)
+}
+
+func DecodeKey(encoded string) (*datastore.Key, error) {
+	return datastore.DecodeKey(encoded)
 }
 
 func toKeyWrapper(ctx context.Context, key *datastore.Key) *DatastoreKey {
