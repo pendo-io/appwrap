@@ -27,6 +27,22 @@ var ErrInvalidEntityType = datastore.ErrInvalidEntityType
 var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 
+func KeyKind(key *DatastoreKey) string {
+	return key.Kind()
+}
+
+func KeyParent(key *DatastoreKey) *DatastoreKey {
+	return key.Parent()
+}
+
+func KeyIntID(key *DatastoreKey) int64 {
+	return key.IntID()
+}
+
+func KeyStringID(key *DatastoreKey) string {
+	return key.StringID()
+}
+
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
 	return datastore.LoadStruct(dest, props)
 }

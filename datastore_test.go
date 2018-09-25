@@ -10,16 +10,16 @@ import (
 func (dsit *AppengineInterfacesTest) TestMemDsNewKey(c *C) {
 	mem := dsit.newDatastore()
 	k := mem.NewKey("Kind", "string", 0, nil)
-	c.Assert(k.Kind(), Equals, "Kind")
-	c.Assert(k.StringID(), Equals, "string")
-	c.Assert(k.IntID(), Equals, int64(0))
-	c.Assert(k.Parent(), IsNil)
+	c.Assert(KeyKind(k), Equals, "Kind")
+	c.Assert(KeyStringID(k), Equals, "string")
+	c.Assert(KeyIntID(k), Equals, int64(0))
+	c.Assert(KeyParent(k), IsNil)
 
 	k2 := mem.NewKey("Child", "", 50, k)
-	c.Assert(k2.Kind(), Equals, "Child")
-	c.Assert(k2.StringID(), Equals, "")
-	c.Assert(k2.IntID(), Equals, int64(50))
-	c.Assert(k2.Parent().Equal(k), IsTrue)
+	c.Assert(KeyKind(k2), Equals, "Child")
+	c.Assert(KeyStringID(k2), Equals, "")
+	c.Assert(KeyIntID(k2), Equals, int64(50))
+	c.Assert(KeyParent(k2).Equal(k), IsTrue)
 }
 
 type simpleEntity struct {
@@ -57,18 +57,18 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGet(c *C) {
 	mem := dsit.newDatastore()
 	k, err := mem.Put(mem.NewKey("test", "keyval", 0, nil), &simpleEntity{"hello"})
 	c.Assert(err, IsNil)
-	c.Assert(k.StringID(), Equals, "keyval")
-	c.Assert(k.IntID(), Equals, int64(0))
+	c.Assert(KeyStringID(k), Equals, "keyval")
+	c.Assert(KeyIntID(k), Equals, int64(0))
 
 	k2, err := mem.Put(mem.NewKey("test", "", 0, nil), &customEntity{5})
 	c.Assert(err, IsNil)
-	c.Assert(k2.StringID(), Equals, "")
-	//c.Assert(k2.IntID() > 10000, Equals, true)
+	c.Assert(KeyStringID(k2), Equals, "")
+	//c.Assert(KeyIntID(k2) > 10000, Equals, true)
 
 	k3, err := mem.Put(mem.NewKey("test", "", 5, nil), &customEntity{10})
 	c.Assert(err, IsNil)
-	c.Assert(k3.StringID(), Equals, "")
-	c.Assert(k3.IntID(), Equals, int64(5))
+	c.Assert(KeyStringID(k3), Equals, "")
+	c.Assert(KeyIntID(k3), Equals, int64(5))
 
 	var s simpleEntity
 	c.Assert(mem.Get(k, &s), IsNil)
@@ -211,7 +211,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 	c.Assert(gotKeys, HasLen, 5)
 	c.Assert(results, HasLen, 5)
 	for i := range keys {
-		c.Assert(gotKeys[i].IntID(), Equals, int64(i+1))
+		c.Assert(KeyIntID(gotKeys[i]), Equals, int64(i+1))
 		c.Assert(results[i].i, Equals, items[i].i)
 	}
 
@@ -221,7 +221,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 	c.Assert(gotKeys, HasLen, 2)
 	c.Assert(results, HasLen, 2)
 	for i := 3; i <= 4; i++ {
-		c.Assert(gotKeys[i-3].IntID(), Equals, int64(i))
+		c.Assert(KeyIntID(gotKeys[i-3]), Equals, int64(i))
 		c.Assert(results[i-3].i, Equals, i)
 	}
 
@@ -231,7 +231,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 	c.Assert(gotKeys, HasLen, 3)
 	c.Assert(results, HasLen, 3)
 	for i := 3; i <= 5; i++ {
-		c.Assert(gotKeys[i-3].IntID(), Equals, int64(i))
+		c.Assert(KeyIntID(gotKeys[i-3]), Equals, int64(i))
 		c.Assert(results[i-3].i, Equals, i)
 	}
 
@@ -244,7 +244,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryGetAll(c *C) {
 
 	for i := 2; i < 5; i += 2 {
 		if i%2 == 0 {
-			c.Assert(gotKeys[i/2-1].IntID(), Equals, int64(i))
+			c.Assert(KeyIntID(gotKeys[i/2-1]), Equals, int64(i))
 			c.Assert(results[i/2-1].i, Equals, i)
 		}
 	}
@@ -278,7 +278,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
 		var item customEntity
 		k, err := iter.Next(&item)
 		c.Assert(err, IsNil)
-		c.Assert(k.IntID(), Equals, int64(i))
+		c.Assert(KeyIntID(k), Equals, int64(i))
 		c.Assert(item.i, Equals, i)
 		if i == 2 {
 			middleCursor, _ = iter.Cursor()
@@ -292,12 +292,12 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
 	var item customEntity
 	k, err := q.Start(startCursor).Run().Next(&item)
 	c.Assert(err, IsNil)
-	c.Assert(k.IntID(), Equals, int64(1))
+	c.Assert(KeyIntID(k), Equals, int64(1))
 	c.Assert(item.i, Equals, 1)
 
 	k, err = q.Start(middleCursor).Run().Next(&item)
 	c.Assert(err, IsNil)
-	c.Assert(k.IntID(), Equals, int64(3))
+	c.Assert(KeyIntID(k), Equals, int64(3))
 	c.Assert(item.i, Equals, 3)
 
 	k, err = q.Start(endCursor).Run().Next(&item)
@@ -308,7 +308,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsQueryRun(c *C) {
 	for i := 1; i <= 5; i++ {
 		k, err := iter.Next(nil)
 		c.Assert(err, IsNil)
-		c.Assert(k.IntID(), Equals, int64(i))
+		c.Assert(KeyIntID(k), Equals, int64(i))
 	}
 	_, err = iter.Next(nil)
 	c.Assert(err, Equals, DatastoreDone)
@@ -371,7 +371,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 	keys, err := q.GetAll(&results)
 	c.Assert(err, IsNil)
 	c.Assert(keys, HasLen, 1)
-	c.Assert(keys[0].IntID(), Equals, int64(1))
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
 
 	q = mem.NewQuery("test").Filter("S =", "one")
 	results = nil
@@ -503,9 +503,9 @@ func (dsit *AppengineInterfacesTest) TestDsAllocateIdSet(c *C) {
 	c.Assert(len(keys), Equals, len(templates))
 	vals := make(map[int64]bool)
 	for i := range keys {
-		c.Assert(keys[i].Kind(), Equals, "someKind")
-		c.Assert(keys[i].Parent().Equal(parent), IsTrue)
-		vals[keys[i].IntID()] = true
+		c.Assert(KeyKind(keys[i]), Equals, "someKind")
+		c.Assert(KeyParent(keys[i]).Equal(parent), IsTrue)
+		vals[KeyIntID(keys[i])] = true
 	}
 
 	c.Assert(len(vals), Equals, len(templates))

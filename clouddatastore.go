@@ -11,7 +11,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-type DatastoreKey = keyWrapper
+type DatastoreKey = datastore.Key
 type DatastoreProperty = datastore.Property
 type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
@@ -26,32 +26,20 @@ var ErrInvalidEntityType = datastore.ErrInvalidEntityType
 var ErrInvalidKey = datastore.ErrInvalidKey
 var ErrNoSuchEntity = datastore.ErrNoSuchEntity
 
-type keyWrapper struct {
-	dsKey *datastore.Key
+func KeyKind(key *DatastoreKey) string {
+	return key.Kind
 }
 
-func (kw *keyWrapper) Kind() string {
-	return kw.dsKey.Kind
+func KeyParent(key *DatastoreKey) *DatastoreKey {
+	return key.Parent
 }
 
-func (kw *keyWrapper) Parent() *keyWrapper {
-	if kw.dsKey.Parent == nil {
-		return nil
-	}
-
-	return &keyWrapper{dsKey: kw.dsKey.Parent}
+func KeyIntID(key *DatastoreKey) int64 {
+	return key.ID
 }
 
-func (kw *keyWrapper) Equal(other *keyWrapper) bool {
-	return kw.dsKey.Equal(other.dsKey)
-}
-
-func (kw *keyWrapper) IntID() int64 {
-	return kw.dsKey.ID
-}
-
-func (kw *keyWrapper) StringID() string {
-	return kw.dsKey.Name
+func KeyStringID(key *DatastoreKey) string {
+	return key.Name
 }
 
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
@@ -66,43 +54,12 @@ func DecodeKey(encoded string) (*datastore.Key, error) {
 	return datastore.DecodeKey(encoded)
 }
 
-func toKeyWrapper(ctx context.Context, key *datastore.Key) *DatastoreKey {
-	if key == nil {
-		return nil
-	}
-
-	return &keyWrapper{dsKey: key}
-}
-
-func toDsKeyList(keyWrapperList []*keyWrapper) []*datastore.Key {
-	keyList := make([]*datastore.Key, len(keyWrapperList))
-	for i, key := range keyWrapperList {
-		keyList[i] = key.dsKey
-	}
-
-	return keyList
-}
-
-func toKeyWrapperList(dsKeyList []*datastore.Key) []*keyWrapper {
-	wrappedKeys := make([]*keyWrapper, len(dsKeyList))
-	for i, key := range dsKeyList {
-		wrappedKeys[i] = &keyWrapper{dsKey: key}
-	}
-
-	return wrappedKeys
-}
-
 func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
-	key := &keyWrapper{
-		dsKey: &datastore.Key{
-			Kind: kind,
-			ID:   iId,
-			Name: sId,
-		},
-	}
-
-	if parent != nil {
-		key.dsKey.Parent = parent.dsKey
+	key := &datastore.Key{
+		Kind:   kind,
+		ID:     iId,
+		Name:   sId,
+		Parent: parent,
 	}
 
 	return key
@@ -137,48 +94,34 @@ func (cds CloudDatastore) Namespace(ns string) Datastore {
 }
 
 func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
-	if keys, err := cds.client.AllocateIDs(cds.ctx, toDsKeyList(incompleteKeys)); err != nil {
-		return nil, err
-	} else {
-		return toKeyWrapperList(keys), nil
-	}
+	return cds.client.AllocateIDs(cds.ctx, incompleteKeys)
 }
 
 func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
-	return cds.client.DeleteMulti(cds.ctx, toDsKeyList(keys))
+	return cds.client.DeleteMulti(cds.ctx, keys)
 }
 
 func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
-	return cds.client.Get(cds.ctx, key.dsKey, dst)
+	return cds.client.Get(cds.ctx, key, dst)
 }
 
 func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	return cds.client.GetMulti(cds.ctx, toDsKeyList(keys), dst)
+	return cds.client.GetMulti(cds.ctx, keys, dst)
 }
 
 func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
 	key := newKey(nil, kind, sId, iId, parent)
-	if cds.namespace != "" {
-		key.dsKey.Namespace = cds.namespace
-	}
+	key.Namespace = cds.namespace
 
 	return key
 }
 
 func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
-	if k, err := cds.client.Put(cds.ctx, key.dsKey, src); err != nil {
-		return nil, err
-	} else {
-		return toKeyWrapper(cds.ctx, k), nil
-	}
+	return cds.client.Put(cds.ctx, key, src)
 }
 
 func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
-	if putKeyList, err := cds.client.PutMulti(cds.ctx, toDsKeyList(keys), src); err != nil {
-		return nil, err
-	} else {
-		return toKeyWrapperList(putKeyList), nil
-	}
+	return cds.client.PutMulti(cds.ctx, keys, src)
 }
 
 func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
@@ -216,22 +159,20 @@ type CloudTransaction struct {
 }
 
 func (ct CloudTransaction) DeleteMulti(keys []*DatastoreKey) error {
-	return ct.transaction.DeleteMulti(toDsKeyList(keys))
+	return ct.transaction.DeleteMulti(keys)
 }
 
 func (ct CloudTransaction) Get(key *DatastoreKey, dst interface{}) error {
-	return ct.transaction.Get(key.dsKey, dst)
+	return ct.transaction.Get(key, dst)
 }
 
 func (ct CloudTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	return ct.transaction.GetMulti(toDsKeyList(keys), dst)
+	return ct.transaction.GetMulti(keys, dst)
 }
 
 func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
 	key := newKey(nil, kind, sId, iId, parent)
-	if ct.namespace != "" {
-		key.dsKey.Namespace = ct.namespace
-	}
+	key.Namespace = ct.namespace
 
 	return key
 }
@@ -247,11 +188,11 @@ func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
 }
 
 func (ct CloudTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
-	return ct.transaction.Put(key.dsKey, src)
+	return ct.transaction.Put(key, src)
 }
 
 func (ct CloudTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
-	return ct.transaction.PutMulti(toDsKeyList(keys), src)
+	return ct.transaction.PutMulti(keys, src)
 }
 
 type CloudDatastoreCommit struct {
@@ -260,7 +201,7 @@ type CloudDatastoreCommit struct {
 }
 
 func (cdc CloudDatastoreCommit) Key(pending *PendingKey) *DatastoreKey {
-	return toKeyWrapper(cdc.ctx, cdc.commit.Key(pending))
+	return cdc.commit.Key(pending)
 }
 
 type CloudDatastoreQuery struct {
@@ -271,7 +212,7 @@ type CloudDatastoreQuery struct {
 
 func (cdq CloudDatastoreQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
 	q := cdq
-	q.q = cdq.q.Ancestor(ancestor.dsKey)
+	q.q = cdq.q.Ancestor(ancestor)
 	return q
 }
 
@@ -329,7 +270,7 @@ func (cdq CloudDatastoreQuery) Run() DatastoreIterator {
 
 func (cdq CloudDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
 	keys, err := cdq.client.GetAll(cdq.ctx, cdq.q, dst)
-	return toKeyWrapperList(keys), err
+	return keys, err
 }
 
 type cloudDatastoreIterator struct {
@@ -338,7 +279,7 @@ type cloudDatastoreIterator struct {
 
 func (i cloudDatastoreIterator) Next(dst interface{}) (*DatastoreKey, error) {
 	key, err := i.iter.Next(dst)
-	return &keyWrapper{dsKey: key}, err
+	return key, err
 }
 
 func (i cloudDatastoreIterator) Cursor() (DatastoreCursor, error) {
