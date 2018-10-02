@@ -374,15 +374,19 @@ func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 	return newKey(ds.emptyContext, kind, sId, iId, parent)
 }
 
-func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
+func (ds *LocalDatastore) put(keyStr string, item *dsItem) error {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
 	for i, prop := range item.props {
 		if timeVal, ok := prop.Value.(time.Time); ok {
 			item.props[i].Value = timeVal.UTC()
 		}
+		if keyVal, ok := prop.Value.(*DatastoreKey); ok && keyVal != nil && keyVal.Incomplete(){
+			return fmt.Errorf("Key path element must not be incomplete:, %v", keyVal)
+		}
 	}
 	ds.entities[keyStr] = item
+	return nil
 }
 
 func (ds *LocalDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
@@ -399,13 +403,17 @@ func (ds *LocalDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey
 			return nil, err
 		} else {
 			k := *finalKey
-			ds.put(finalKey.String(), &dsItem{props: item, key: &k})
+			if err := ds.put(finalKey.String(), &dsItem{props: item, key: &k}); err != nil {
+				return nil, err
+			}
 		}
 	} else if item, err := SaveStruct(src); err != nil {
 		return nil, err
 	} else {
 		k := *finalKey
-		ds.put(finalKey.String(), &dsItem{props: item, key: &k})
+		if err := ds.put(finalKey.String(), &dsItem{props: item, key: &k}); err != nil {
+			return nil, err
+		}
 	}
 
 	return finalKey, nil
@@ -419,7 +427,6 @@ func (ds *LocalDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*Da
 		if val.Kind() == reflect.Struct {
 			val = val.Addr()
 		}
-
 		if finalK, err := ds.Put(k, val.Interface()); err != nil {
 			return nil, err
 		} else {
