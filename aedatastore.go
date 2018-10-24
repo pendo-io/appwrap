@@ -67,6 +67,10 @@ type AppengineDatastoreTransaction struct {
 	c context.Context
 }
 
+func NewDatastore(c context.Context) (Datastore, error) {
+	return AppengineDatastore{c}, nil
+}
+
 func NewAppengineDatastore(c context.Context) Datastore {
 	return AppengineDatastore{c}
 }
@@ -274,4 +278,32 @@ type unmappedDatastoreCommit struct{}
 
 func (unmappedDatastoreCommit) Key(pending *PendingKey) *DatastoreKey {
 	return pending.key
+}
+
+func ToAppwrapPropertyList(l []DatastoreProperty) []AppwrapProperty {
+	awList := make([]AppwrapProperty, len(l))
+	for i, p := range l {
+		awList[i] = AppwrapProperty{
+			Multiple: p.Multiple,
+			Name:     p.Name,
+			NoIndex:  p.NoIndex,
+			Value:    p.Value,
+		}
+	}
+
+	return awList
+}
+
+func ToDatastorePropertyList(l []AppwrapProperty) []DatastoreProperty {
+	dsList := make([]DatastoreProperty, len(l))
+	for i, p := range l {
+		dsList[i] = DatastoreProperty{
+			Multiple: p.Multiple,
+			Name:     p.Name,
+			NoIndex:  p.NoIndex,
+			Value:    p.Value,
+		}
+	}
+
+	return dsList
 }

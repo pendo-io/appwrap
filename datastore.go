@@ -58,3 +58,10 @@ type LegacyDatastore interface {
 	Kinds() ([]string, error)
 	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
 }
+
+type AppwrapProperty struct {
+	Multiple bool
+	Name     string
+	NoIndex  bool
+	Value    interface{}
+}

@@ -71,6 +71,8 @@ type CloudDatastore struct {
 	namespace string
 }
 
+var NewDatastore = NewCloudDatastore
+
 func NewCloudDatastore(c context.Context) (Datastore, error) {
 	if client, err := datastore.NewClient(c, ""); err != nil {
 		return nil, err
@@ -284,4 +286,54 @@ func (i cloudDatastoreIterator) Next(dst interface{}) (*DatastoreKey, error) {
 
 func (i cloudDatastoreIterator) Cursor() (DatastoreCursor, error) {
 	return i.iter.Cursor()
+}
+
+func ToAppwrapPropertyList(l []DatastoreProperty) []AppwrapProperty {
+	awList := make([]AppwrapProperty, 0, len(l))
+	for _, prop := range l {
+		if intfList, isList := prop.Value.([]interface{}); isList {
+			for _, val := range intfList {
+				awList = append(awList, AppwrapProperty{
+					Multiple: true,
+					Name:     prop.Name,
+					NoIndex:  prop.NoIndex,
+					Value:    val,
+				})
+			}
+		} else {
+			awList = append(awList, AppwrapProperty{
+				Multiple: false,
+				Name:     prop.Name,
+				NoIndex:  prop.NoIndex,
+				Value:    prop.Value,
+			})
+		}
+	}
+
+	return awList
+}
+
+func ToDatastorePropertyList(l []AppwrapProperty) []DatastoreProperty {
+	dsList := make([]DatastoreProperty, 0, len(l))
+	multipleByName := map[string]int{}
+	for _, prop := range l {
+		if !prop.Multiple {
+			dsList = append(dsList, DatastoreProperty{
+				Name:    prop.Name,
+				NoIndex: prop.NoIndex,
+				Value:   prop.Value,
+			})
+		} else if index, exists := multipleByName[prop.Name]; exists {
+			dsList[index].Value = append(dsList[index].Value.([]interface{}), prop.Value)
+		} else {
+			multipleByName[prop.Name] = len(dsList)
+			dsList = append(dsList, DatastoreProperty{
+				Name:    prop.Name,
+				NoIndex: prop.NoIndex,
+				Value:   []interface{}{prop.Value},
+			})
+		}
+	}
+
+	return dsList
 }

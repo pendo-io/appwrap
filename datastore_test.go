@@ -571,8 +571,11 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 	_ = ErrInvalidEntityType
 	_ = ErrInvalidKey
 	_ = ErrNoSuchEntity
+	_ = ToAppwrapPropertyList
+	_ = ToDatastorePropertyList
 
 	var (
+		_ = AppwrapProperty{}
 		_ = DatastoreKey{}
 		_ = DatastoreProperty{}
 		_ = DatastorePropertyList{}
@@ -584,4 +587,47 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 	type (
 		_ = DatastorePropertyLoadSaver
 	)
+}
+
+type loadSaverEntity struct {
+	s     string
+	iList []int64
+	c     *C
+}
+
+func (s *loadSaverEntity) Load(props []DatastoreProperty) error {
+	for _, prop := range ToAppwrapPropertyList(props) {
+		switch prop.Name {
+		case "s":
+			s.s = prop.Value.(string)
+		case "iList":
+			s.c.Assert(prop.Multiple, IsTrue)
+			s.iList = append(s.iList, prop.Value.(int64))
+		}
+	}
+
+	return nil
+}
+
+func (s *loadSaverEntity) Save() ([]DatastoreProperty, error) {
+	aProps := []AppwrapProperty{{Name: "s", Value: s.s}}
+	for _, i := range s.iList {
+		aProps = append(aProps, AppwrapProperty{Name: "iList", Value: i, Multiple: true})
+	}
+
+	return ToDatastorePropertyList(aProps), nil
+}
+
+func (dsit *AppengineInterfacesTest) TestPropertyLoadSaver(c *C) {
+	ds := dsit.newDatastore()
+	s := loadSaverEntity{s: "name", iList: []int64{10, 20, 30}, c: c}
+	k := ds.NewKey("loadSaver", "", 12345, nil)
+	_, err := ds.Put(k, &s)
+	c.Assert(err, IsNil)
+
+	s2 := loadSaverEntity{c: c}
+	c.Assert(ds.Get(k, &s2), IsNil)
+
+	c.Assert(s.s, Equals, s2.s)
+	c.Assert(s.iList, DeepEquals, s2.iList)
 }
