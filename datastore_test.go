@@ -573,6 +573,11 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 	_ = ErrNoSuchEntity
 	_ = ToAppwrapPropertyList
 	_ = ToDatastorePropertyList
+	_ = KeyKind
+	_ = KeyParent
+	_ = KeyIntID
+	_ = KeyStringID
+	_ = KeyNamespace
 
 	var (
 		_ = AppwrapProperty{}

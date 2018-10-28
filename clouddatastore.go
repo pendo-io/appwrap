@@ -42,6 +42,10 @@ func KeyStringID(key *DatastoreKey) string {
 	return key.Name
 }
 
+func KeyNamespace(key *DatastoreKey) string {
+	return key.Namespace
+}
+
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
 	return datastore.LoadStruct(dest, props)
 }
@@ -74,7 +78,7 @@ type CloudDatastore struct {
 var NewDatastore = NewCloudDatastore
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
-	if client, err := datastore.NewClient(c, ""); err != nil {
+	if client, err := datastore.NewClient(c, "pendo-dev"); err != nil {
 		return nil, err
 	} else {
 		return CloudDatastore{
@@ -336,4 +340,11 @@ func ToDatastorePropertyList(l []AppwrapProperty) []DatastoreProperty {
 	}
 
 	return dsList
+}
+
+// namespace handling for this is slightly different based on appengine datastore keys vs cloud datastore keys
+func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	key := newKey(ds.emptyContext, kind, sId, iId, parent)
+	key.Namespace = "s~memds" // this mirrors StubContext
+	return key
 }

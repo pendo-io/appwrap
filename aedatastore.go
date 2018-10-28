@@ -4,7 +4,6 @@
 package appwrap
 
 import (
-	"errors"
 	"time"
 
 	"golang.org/x/net/context"
@@ -41,6 +40,10 @@ func KeyIntID(key *DatastoreKey) int64 {
 
 func KeyStringID(key *DatastoreKey) string {
 	return key.StringID()
+}
+
+func KeyNamespace(key *DatastoreKey) string {
+	return key.Namespace()
 }
 
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
@@ -83,42 +86,6 @@ func (cds AppengineDatastore) Deadline(t time.Time) Datastore {
 func (cds AppengineDatastore) Namespace(ns string) Datastore {
 	c, _ := appengine.Namespace(cds.c, ns)
 	return AppengineDatastore{c}
-}
-
-func emulateAllocateIDSet(d LegacyDatastore, incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
-	kind := ""
-	var parent *DatastoreKey
-
-	for _, k := range incompleteKeys {
-		if kind == "" {
-			kind = k.Kind()
-			parent = k.Parent()
-		} else if kind != k.Kind() {
-			return nil, errors.New("kind mismatch in legacy AllocateIDSet")
-		}
-
-		newParent := k.Parent()
-		if parent == nil && newParent == nil {
-			continue
-		} else if parent == nil {
-			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
-		} else if !parent.Equal(newParent) {
-			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
-		}
-	}
-
-	if low, high, err := d.AllocateIDs(kind, parent, len(incompleteKeys)); err != nil {
-		return nil, nil
-	} else if int(high-low+1) != len(incompleteKeys) {
-		return nil, errors.New("high/low mismatch in emulateAllocateIDSet()")
-	} else {
-		newKeys := make([]*DatastoreKey, len(incompleteKeys))
-		for i := range incompleteKeys {
-			newKeys[i] = d.NewKey(kind, "", low+int64(i), parent)
-		}
-
-		return newKeys, nil
-	}
 }
 
 func (cds AppengineDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
@@ -306,4 +273,9 @@ func ToDatastorePropertyList(l []AppwrapProperty) []DatastoreProperty {
 	}
 
 	return dsList
+}
+
+// namespace handling for this is slightly different based on appengine datastore keys vs cloud datastore keys
+func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	return newKey(ds.emptyContext, kind, sId, iId, parent)
 }

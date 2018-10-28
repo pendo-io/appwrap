@@ -1,6 +1,3 @@
-// +build appengine, appenginevm
-// +build !clouddatastore
-
 package appwrap
 
 import (
@@ -106,16 +103,16 @@ func _cmp(aI, bI interface{}) int {
 			return -1
 		} else if b == (*DatastoreKey)(nil) {
 			return 1
-		} else if a.Kind() < b.Kind() {
+		} else if KeyKind(a) < KeyKind(b) {
 			return -1
-		} else if a.Kind() > b.Kind() {
+		} else if KeyKind(a) > KeyKind(b) {
 			return 1
-		} else if a.IntID() < b.IntID() || a.StringID() < b.StringID() {
+		} else if KeyIntID(a) < KeyIntID(b) || KeyStringID(a) < KeyStringID(b) {
 			return -1
-		} else if a.IntID() > b.IntID() || a.StringID() > b.StringID() {
+		} else if KeyIntID(a) > KeyIntID(b) || KeyStringID(a) > KeyStringID(b) {
 			return 1
 		} else {
-			return _cmp(a.Parent(), b.Parent())
+			return _cmp(KeyParent(a), KeyParent(b))
 		}
 	case time.Time:
 		if aI.(time.Time).Before(bI.(time.Time)) {
@@ -290,6 +287,42 @@ func (ds *LocalDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*Data
 	return emulateAllocateIDSet(ds, incompleteKeys)
 }
 
+func emulateAllocateIDSet(d LegacyDatastore, incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
+	kind := ""
+	var parent *DatastoreKey
+
+	for _, k := range incompleteKeys {
+		if kind == "" {
+			kind = KeyKind(k)
+			parent = KeyParent(k)
+		} else if kind != KeyKind(k) {
+			return nil, errors.New("kind mismatch in legacy AllocateIDSet")
+		}
+
+		newParent := KeyParent(k)
+		if parent == nil && newParent == nil {
+			continue
+		} else if parent == nil {
+			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
+		} else if !parent.Equal(newParent) {
+			return nil, errors.New("parent mismatch in legacy AllocateIDSet")
+		}
+	}
+
+	if low, high, err := d.AllocateIDs(kind, parent, len(incompleteKeys)); err != nil {
+		return nil, nil
+	} else if int(high-low+1) != len(incompleteKeys) {
+		return nil, errors.New("high/low mismatch in emulateAllocateIDSet()")
+	} else {
+		newKeys := make([]*DatastoreKey, len(incompleteKeys))
+		for i := range incompleteKeys {
+			newKeys[i] = d.NewKey(kind, "", low+int64(i), parent)
+		}
+
+		return newKeys, nil
+	}
+}
+
 func (ds *LocalDatastore) AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error) {
 	first := ds.lastId
 	ds.lastId += int64(n)
@@ -361,17 +394,13 @@ func (ds *LocalDatastore) Kinds() (kinds []string, err error) {
 	m := make(map[string]bool)
 
 	for _, item := range ds.entities {
-		if !m[item.key.Kind()] {
-			m[item.key.Kind()] = true
-			kinds = append(kinds, item.key.Kind())
+		if !m[KeyKind(item.key)] {
+			m[KeyKind(item.key)] = true
+			kinds = append(kinds, KeyKind(item.key))
 		}
 	}
 
 	return
-}
-
-func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
-	return newKey(ds.emptyContext, kind, sId, iId, parent)
 }
 
 func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
@@ -389,8 +418,8 @@ func (ds *LocalDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey
 	finalKeyCopy := *key
 	finalKey := &finalKeyCopy
 
-	if finalKey.StringID() == "" && finalKey.IntID() == 0 {
-		finalKey = ds.NewKey(finalKey.Kind(), "", ds.lastId, finalKey.Parent())
+	if KeyStringID(finalKey) == "" && KeyIntID(finalKey) == 0 {
+		finalKey = ds.NewKey(KeyKind(finalKey), "", ds.lastId, KeyParent(finalKey))
 		ds.lastId++
 	}
 
@@ -430,13 +459,24 @@ func (ds *LocalDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*Da
 	return finalKeys, nil
 }
 
+type mappedCommit struct {
+	keyMap map[*PendingKey]*DatastoreKey
+}
+
+func (commit mappedCommit) Key(pending *PendingKey) *DatastoreKey {
+	return commit.keyMap[pending]
+}
+
 type localDatastoreTransaction struct {
 	Datastore
+	keyMap map[*PendingKey]*DatastoreKey
 }
 
 func (lds localDatastoreTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
 	resultKey, err := lds.Datastore.Put(key, src)
-	return &PendingKey{key: resultKey}, err
+	pk := &PendingKey{}
+	lds.keyMap[pk] = resultKey
+	return pk, err
 }
 
 func (lds localDatastoreTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
@@ -447,7 +487,9 @@ func (lds localDatastoreTransaction) PutMulti(keys []*DatastoreKey, src interfac
 
 	pendingKeys := make([]*PendingKey, len(resultKeys))
 	for i := range resultKeys {
-		pendingKeys[i] = &PendingKey{key: resultKeys[i]}
+		pendingKeys[i] = &PendingKey{}
+		lds.keyMap[pendingKeys[i]] = resultKeys[i]
+
 	}
 
 	return pendingKeys, err
@@ -474,14 +516,15 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 
 	// If the transaction fails, just return the error (and unlock the datastore's mutex) with
 	// no updates.
-	if err := f(localDatastoreTransaction{Datastore: dsCopy}); err != nil {
+	transaction := &localDatastoreTransaction{Datastore: dsCopy, keyMap: make(map[*PendingKey]*DatastoreKey)}
+	if err := f(transaction); err != nil {
 		return nil, err
 	}
 
 	// Put the new entities and lastId in place on "commit".
 	ds.entities = dsCopy.entities
 	ds.lastId = dsCopy.lastId
-	return unmappedDatastoreCommit{}, nil
+	return mappedCommit{keyMap: transaction.keyMap}, nil
 }
 
 func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
@@ -906,7 +949,7 @@ func (mq *memoryQuery) getMatchingItems() ([]*dsItem, error) {
 
 	distinctHashes := make(map[string]bool)
 	for _, item := range mq.localDs.entities {
-		if mq.kind != item.key.Kind() {
+		if mq.kind != KeyKind(item.key) {
 			continue
 		}
 
@@ -916,7 +959,7 @@ func (mq *memoryQuery) getMatchingItems() ([]*dsItem, error) {
 				if k.Equal(mq.ancestor) {
 					break
 				}
-				k = k.Parent()
+				k = KeyParent(k)
 			}
 
 			if k == nil {
