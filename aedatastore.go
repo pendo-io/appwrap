@@ -139,7 +139,7 @@ func (cds AppengineDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([
 
 func (cds AppengineDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
 	return unmappedDatastoreCommit{}, datastore.RunInTransaction(cds.c, func(c context.Context) error {
-		return f(AppengineDatastoreTransaction{c: cds.c})
+		return f(AppengineDatastoreTransaction{c: c})
 	}, opts)
 }
 
