@@ -12,9 +12,12 @@ type AppengineInfoStandard struct {
 	c context.Context
 }
 
-func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
+// Don't call this.  It exists to make NewAppengineInfoFromContext mockable
+func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	return AppengineInfoStandard{c}
 }
+
+var NewAppengineInfoFromContext = InternalNewAppengineInfoFromContext
 
 func (ai AppengineInfoStandard) InstanceID() string {
 	return appengine.InstanceID()

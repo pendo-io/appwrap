@@ -19,9 +19,12 @@ type AppengineInfoFlex struct {
 	c context.Context
 }
 
-func NewAppengineInfoFromContext(c context.Context) AppengineInfo {
+// Don't call this.  It exists to make NewAppengineInfoFromContext mockable
+func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	return AppengineInfoFlex{c: c}
 }
+
+var NewAppengineInfoFromContext = InternalNewAppengineInfoFromContext
 
 func (ai AppengineInfoFlex) AppID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
