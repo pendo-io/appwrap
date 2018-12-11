@@ -1,5 +1,3 @@
-// +build appengine appenginevm
-
 package appwrap
 
 import (

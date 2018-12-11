@@ -1,4 +1,3 @@
-// +build appengine, appenginevm
 // +build !clouddatastore
 
 package appwrap
