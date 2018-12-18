@@ -59,7 +59,7 @@ func (f *StackdriverLoggingFixture) assertParentLogEntry(c *C, log *StackdriverL
 
 func (f *StackdriverLoggingFixture) arrangeValidClient(r *http.Request) DataLogging {
 	r.Header[headerCloudTraceContext] = []string{"id-to-connect-logs"}
-	return NewStackdriverLogging(map[string]string{}, LogName("pendo_test"), f.logCh, r)
+	return NewStackdriverLogging(map[string]string{}, LogName("pendo_test"), f.logCh, r, "")
 }
 
 func (s *StackdriverLoggingTests) TestLogSetup(c *C) {
@@ -67,7 +67,7 @@ func (s *StackdriverLoggingTests) TestLogSetup(c *C) {
 	r := httptest.NewRequest(http.MethodGet, "http://localhost", strings.NewReader("Hello"))
 	r.Header[headerCloudTraceContext] = []string{"id-to-connect-logs"}
 
-	log := NewStackdriverLogging(map[string]string{"test": "this"}, LogName("pendo_test"), f.logCh, r).(*StackdriverLogging)
+	log := NewStackdriverLogging(map[string]string{"test": "this"}, LogName("pendo_test"), f.logCh, r, "").(*StackdriverLogging)
 
 	c.Assert(log.commonLabels, HasLen, 1)
 	c.Assert(log.commonLabels["test"], Equals, "this")
@@ -75,6 +75,35 @@ func (s *StackdriverLoggingTests) TestLogSetup(c *C) {
 	c.Assert(log.logName, Equals, LogName("pendo_test"))
 	c.Assert(log.traceContext, Equals, "id-to-connect-logs")
 	c.Assert(log.request, DeepEquals, r)
+	f.assertMocks(c)
+}
+
+func (s *StackdriverLoggingTests) TestLogSetupNoAppEngineTrace(c *C) {
+	f := s.SetUpFixture(c)
+	r := httptest.NewRequest(http.MethodGet, "http://localhost", strings.NewReader("Hello"))
+
+	log := NewStackdriverLogging(map[string]string{"test": "this"}, LogName("pendo_test"), f.logCh, r, "custom-trace-id").(*StackdriverLogging)
+
+	c.Assert(log.commonLabels, HasLen, 1)
+	c.Assert(log.commonLabels["test"], Equals, "this")
+	c.Assert(log.maxSeverity, Equals, logging.Default)
+	c.Assert(log.logName, Equals, LogName("pendo_test"))
+	c.Assert(log.traceContext, Equals, "custom-trace-id")
+	c.Assert(log.request, DeepEquals, r)
+	f.assertMocks(c)
+}
+
+func (s *StackdriverLoggingTests) TestLogSetupRequestNil(c *C) {
+	f := s.SetUpFixture(c)
+
+	log := NewStackdriverLogging(map[string]string{"test": "this"}, LogName("pendo_test"), f.logCh, nil, "custom-trace-id").(*StackdriverLogging)
+
+	c.Assert(log.commonLabels, HasLen, 1)
+	c.Assert(log.commonLabels["test"], Equals, "this")
+	c.Assert(log.maxSeverity, Equals, logging.Default)
+	c.Assert(log.logName, Equals, LogName("pendo_test"))
+	c.Assert(log.traceContext, Equals, "custom-trace-id")
+	c.Assert(log.request, IsNil)
 	f.assertMocks(c)
 }
 
@@ -233,6 +262,34 @@ func (s *StackdriverLoggingTests) TestLogDataFunctions(c *C) {
 		c.Assert(entry.Trace, Equals, "id-to-connect-logs")
 	}
 
+	f.assertMocks(c)
+}
+
+func (s *StackdriverLoggingTests) TestCloseNoRequest(c *C) {
+	f := s.SetUpFixture(c)
+	w := httptest.NewRecorder()
+	log := NewStackdriverLogging(map[string]string{"test": "this"}, LogName("pendo_test"), f.logCh, nil, "custom-trace-id").(*StackdriverLogging)
+	log.AddLabel("subscriptionId", "12345")
+
+	doneCh := make(chan (bool))
+	var logs []LogMessage
+	go func() {
+		select {
+		case logMessage, ok := <-f.logCh:
+			if ok {
+				logs = append(logs, logMessage)
+			} else {
+				doneCh <- true
+				return
+			}
+		}
+	}()
+
+	log.Close(w)
+	close(f.logCh)
+	<-doneCh
+
+	c.Assert(logs, HasLen, 0)
 	f.assertMocks(c)
 }
 

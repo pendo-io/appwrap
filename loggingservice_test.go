@@ -10,8 +10,8 @@ import (
 	"cloud.google.com/go/logging"
 	"github.com/pendo-io/appwrap"
 	"github.com/stretchr/testify/mock"
-
 	. "gopkg.in/check.v1"
+
 	"pendo.io/goisms"
 )
 
@@ -173,12 +173,12 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceProcessLogAndClose(c *C) 
 	f.appInfoMock.On("AppID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 
-	log1 := LogMessage{ LogName: LogName("test1"), Entry: logging.Entry { Severity: logging.Critical }}
+	log1 := LogMessage{LogName: LogName("test1"), Entry: logging.Entry{Severity: logging.Critical}}
 	loggerMock1 := &LoggerMock{}
 	f.clientMock.On("Logger", "test1", mock.Anything, mock.Anything).Return(loggerMock1).Once()
 	loggerMock1.On("Log", log1.Entry).Return().Once()
 
-	log2 := LogMessage{ LogName: LogName("test2"), Entry: logging.Entry { Severity: logging.Error }}
+	log2 := LogMessage{LogName: LogName("test2"), Entry: logging.Entry{Severity: logging.Error}}
 	loggerMock2 := &LoggerMock{}
 	f.clientMock.On("Logger", "test2", mock.Anything, mock.Anything).Return(loggerMock2).Once()
 	loggerMock2.On("Log", log2.Entry).Return().Once()
@@ -188,7 +188,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceProcessLogAndClose(c *C) 
 	logCh := make(chan LogMessage)
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
 
-	go service.ProcessLogEntries()
+	go service.processLogEntries()
 
 	logCh <- log1
 	logCh <- log2
@@ -212,7 +212,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceClose(c *C) {
 	logCh := make(chan LogMessage)
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
 
-	go service.ProcessLogEntries()
+	go service.processLogEntries()
 	service.Close()
 
 	f.assertMocks(c)
