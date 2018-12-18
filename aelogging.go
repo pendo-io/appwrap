@@ -43,7 +43,3 @@ func (al appengineLogging) Criticalf(format string, args ...interface{}) {
 func (al appengineLogging) Request(method, url, format string, args ...interface{}) {
 	// this is logged automatically by appengine
 }
-
-
-
-

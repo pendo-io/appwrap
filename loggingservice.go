@@ -64,8 +64,7 @@ func (c StackdriverClient) Close() error {
 }
 
 type LoggingServiceInterface interface {
-	ProcessLogEntries()
-	CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging
+	CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging
 	Close()
 }
 
@@ -79,13 +78,8 @@ type StandardLoggingService struct {
 	log Logging
 }
 
-// ProcessLogEntries is not implemented since the App Engine Standard Logging handles this on its own
-func (sls StandardLoggingService) ProcessLogEntries() {
-
-}
-
 // CreateLog simply returns the App Engine logger for legacy standard environments
-func (sls StandardLoggingService) CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging {
+func (sls StandardLoggingService) CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging {
 	return sls.log
 }
 
@@ -98,7 +92,6 @@ func (sls StandardLoggingService) Close() {
 type StackdriverLoggingService struct {
 	appInfo         AppengineInfo
 	client          LoggerClientInterface
-	doneCh	chan bool
 	log             Logging
 	logCh           chan LogMessage
 	resourceOptions logging.LoggerOption
@@ -116,7 +109,6 @@ func newStackdriverLoggingService(client LoggerClientInterface, appInfo Appengin
 	return &StackdriverLoggingService{
 		appInfo:         appInfo,
 		client:          client,
-		doneCh: make(chan bool),
 		log:             log,
 		logCh:           logCh,
 		resourceOptions: basicAppEngineOptions(moduleName, projectId, versionId),
@@ -124,32 +116,28 @@ func newStackdriverLoggingService(client LoggerClientInterface, appInfo Appengin
 }
 
 // ProcessLogEntries will create a new log entry with a logger
-func (sl *StackdriverLoggingService) ProcessLogEntries() {
-	for {
-		select {
-		case logMessage, ok := <-sl.logCh:
-			if ok {
-				logger := sl.client.Logger(string(logMessage.LogName), logMessage.CommonLabels, sl.resourceOptions)
-				logger.Log(logMessage.Entry)
-			} else {
-				sl.doneCh <- true
-				return
-			}
-
-		}
+func (sl *StackdriverLoggingService) processLogEntries() {
+	for logMessage := range sl.logCh {
+		logger := sl.client.Logger(string(logMessage.LogName), logMessage.CommonLabels, sl.resourceOptions)
+		logger.Log(logMessage.Entry)
 	}
 }
 
 // Close will close the logging service and flush the logs.  This will close off the logging service from being able to receive logs
 func (sl *StackdriverLoggingService) Close() {
-	close(sl.logCh)
-	<- sl.doneCh
-	sl.client.Close()
+	if err := sl.client.Close(); err != nil {
+		sl.log.Errorf("Unable to close stackdriver logging client: %+v", err)
+	}
 }
 
 // CreateLog will return a new logger to use throughout a single request
-func (sl *StackdriverLoggingService) CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging {
-	return NewStackdriverLogging(labels, logName, sl.logCh, r)
+//
+// Every Request on AppEngine includes a header X-Cloud-Trace-Context which contains a traceId.  This id can be
+// used to correlate various logs together from a request.  Stackdriver will leverage this field when producing
+// a child/parent relationship in the Stackdriver UI. However, not all logs include a request object.  In that
+// instance we will fallback to the provided traceId
+func (sl *StackdriverLoggingService) CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging {
+	return NewStackdriverLogging(labels, logName, sl.logCh, r, traceId)
 }
 
 // basicAppEngineOptions creates labels that will map the correct app engine instance to Stackdriver

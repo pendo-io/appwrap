@@ -3,12 +3,13 @@
 package appwrap
 
 import (
-	"cloud.google.com/go/logging"
 	"fmt"
-	"golang.org/x/net/context"
 	"math/rand"
 	"os"
 	"time"
+
+	"cloud.google.com/go/logging"
+	"golang.org/x/net/context"
 )
 
 func NewAppengineLogging(c context.Context) Logging {
@@ -34,11 +35,15 @@ func NewAppengineLogging(c context.Context) Logging {
 }
 
 func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Logging) LoggingServiceInterface {
-	client, _ := logging.NewClient(c, aeInfo.AppID())
+	client, err := logging.NewClient(c, aeInfo.AppID())
+	if err != nil {
+		panic(fmt.Sprintf("unable to configure stackdriver logger: %s", err.Error()))
+	}
+	
 	stackdriverClient := NewStackdriverClient(client)
 	logCh := make(chan LogMessage)
-	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, logCh, log)
-	go loggingService.ProcessLogEntries()
+	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, logCh, log).(*StackdriverLoggingService)
+	go loggingService.processLogEntries()
 
 	return loggingService
 }
