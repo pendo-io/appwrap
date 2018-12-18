@@ -1,13 +1,14 @@
 package appwrap
 
 import (
-	"cloud.google.com/go/logging"
 	"context"
 	"fmt"
-	"github.com/go-martini/martini"
 	"net/http"
 	"sync"
 	"time"
+
+	"cloud.google.com/go/logging"
+	"github.com/go-martini/martini"
 )
 
 const (
@@ -34,8 +35,13 @@ type StackdriverLogging struct {
 }
 
 // NewStackdriverLogging will return a new logger set up to work with an App Engine flexible environment
-func NewStackdriverLogging(commonLabels map[string]string, logName LogName, logCh chan LogMessage, req *http.Request) DataLogging {
-	traceContext := req.Header.Get(headerCloudTraceContext)
+func NewStackdriverLogging(commonLabels map[string]string, logName LogName, logCh chan LogMessage, req *http.Request, traceId string) DataLogging {
+	traceContext := traceId
+	if req != nil {
+		if traceHeader := req.Header.Get(headerCloudTraceContext); traceHeader != "" {
+			traceContext = traceHeader
+		}
+	}
 
 	return &StackdriverLogging{
 		logCh:        logCh,
@@ -148,7 +154,14 @@ func (sl *StackdriverLogging) processLog(severity logging.Severity, data interfa
 }
 
 // Close will close the logger and log request and response information to the parent logger
+//
+// Close is only needed when creating a request log entry.  If the current logger does not include
+// a request object then there is no need to call this function.
 func (sl StackdriverLogging) Close(w http.ResponseWriter) {
+	if sl.request == nil {
+		return
+	}
+
 	labelsOptions := logging.CommonLabels(map[string]string{
 		traceIdPath: sl.traceContext,
 	})
