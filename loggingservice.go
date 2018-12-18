@@ -65,7 +65,7 @@ func (c StackdriverClient) Close() error {
 
 type LoggingServiceInterface interface {
 	ProcessLogEntries()
-	CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging
+	CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging
 	Close()
 }
 
@@ -85,7 +85,7 @@ func (sls StandardLoggingService) ProcessLogEntries() {
 }
 
 // CreateLog simply returns the App Engine logger for legacy standard environments
-func (sls StandardLoggingService) CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging {
+func (sls StandardLoggingService) CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging {
 	return sls.log
 }
 
@@ -125,19 +125,12 @@ func newStackdriverLoggingService(client LoggerClientInterface, appInfo Appengin
 
 // ProcessLogEntries will create a new log entry with a logger
 func (sl *StackdriverLoggingService) ProcessLogEntries() {
-	for {
-		select {
-		case logMessage, ok := <-sl.logCh:
-			if ok {
-				logger := sl.client.Logger(string(logMessage.LogName), logMessage.CommonLabels, sl.resourceOptions)
-				logger.Log(logMessage.Entry)
-			} else {
-				sl.doneCh <- true
-				return
-			}
-
-		}
+	for logMessage := range sl.logCh {
+		logger := sl.client.Logger(string(logMessage.LogName), logMessage.CommonLabels, sl.resourceOptions)
+		logger.Log(logMessage.Entry)
 	}
+
+	sl.doneCh <- true
 }
 
 // Close will close the logging service and flush the logs.  This will close off the logging service from being able to receive logs
@@ -148,8 +141,8 @@ func (sl *StackdriverLoggingService) Close() {
 }
 
 // CreateLog will return a new logger to use throughout a single request
-func (sl *StackdriverLoggingService) CreateLog(r *http.Request, labels map[string]string, logName LogName) Logging {
-	return NewStackdriverLogging(labels, logName, sl.logCh, r)
+func (sl *StackdriverLoggingService) CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging {
+	return NewStackdriverLogging(labels, logName, sl.logCh, r, traceId)
 }
 
 // basicAppEngineOptions creates labels that will map the correct app engine instance to Stackdriver
