@@ -38,7 +38,7 @@ func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Log
 	stackdriverClient := NewStackdriverClient(client)
 	logCh := make(chan LogMessage)
 	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, logCh, log)
-	go loggingService.ProcessLogEntries()
+	go loggingService.processLogEntries()
 
 	return loggingService
 }

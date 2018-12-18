@@ -188,7 +188,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceProcessLogAndClose(c *C) 
 	logCh := make(chan LogMessage)
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
 
-	go service.ProcessLogEntries()
+	go service.processLogEntries()
 
 	logCh <- log1
 	logCh <- log2
@@ -212,7 +212,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceClose(c *C) {
 	logCh := make(chan LogMessage)
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
 
-	go service.ProcessLogEntries()
+	go service.processLogEntries()
 	service.Close()
 
 	f.assertMocks(c)
