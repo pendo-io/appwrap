@@ -56,3 +56,21 @@ func (s *AppengineInterfacesTest) TestToDatastorePropertyList(c *C) {
 		{Name: "int", Value: int64(17)},
 	})
 }
+
+// tests we can decode both old and new cloud datastore style encoding
+func (s *AppengineInterfacesTest) TestDecodeCompatibility(c *C) {
+	newEncoding := "CgkiB3NfbWVtZHMSFAoKcGFyZW50S2luZBoGc29tZUlkEg0KCWNoaWxkS2luZBAX"
+	oldEncoding := "agdzX21lbWRzciULEgpwYXJlbnRLaW5kIgZzb21lSWQMCxIJY2hpbGRLaW5kGBcMogEHc19tZW1kcw"
+
+	ds := s.newDatastore().Namespace("s_memds")
+	parentKey := ds.NewKey("parentKind", "someId", 0, nil)
+	key := ds.NewKey("childKind", "", 23, parentKey)
+
+	oldKey, err := DecodeKey(oldEncoding)
+	c.Assert(err, IsNil)
+	c.Assert(oldKey.Equal(key), IsTrue)
+
+	newKey, err := DecodeKey(newEncoding)
+	c.Assert(err, IsNil)
+	c.Assert(newKey.Equal(key), IsTrue)
+}

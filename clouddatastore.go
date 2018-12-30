@@ -8,6 +8,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
+	olddatastore "google.golang.org/appengine/datastore"
 )
 
 type DatastoreKey = datastore.Key
@@ -54,7 +55,28 @@ func SaveStruct(src interface{}) (DatastorePropertyList, error) {
 }
 
 func DecodeKey(encoded string) (*datastore.Key, error) {
-	return datastore.DecodeKey(encoded)
+	if k, err1 := datastore.DecodeKey(encoded); err1 == nil {
+		return k, nil
+	} else if oldKey, err2 := olddatastore.DecodeKey(encoded); err2 != nil {
+		return k, err1
+	} else {
+		return cvtOldToNew(oldKey.Namespace(), oldKey), nil
+	}
+}
+
+func cvtOldToNew(namespace string, oldKey *olddatastore.Key) *datastore.Key {
+	var parent *datastore.Key
+	if oldKey.Parent() != nil {
+		parent = cvtOldToNew(namespace, oldKey.Parent())
+	}
+
+	return &datastore.Key{
+		Namespace: namespace,
+		Kind:      oldKey.Kind(),
+		ID:        oldKey.IntID(),
+		Name:      oldKey.StringID(),
+		Parent:    parent,
+	}
 }
 
 func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {

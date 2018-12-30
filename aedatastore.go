@@ -5,7 +5,8 @@ package appwrap
 import (
 	"time"
 
-	"golang.org/x/net/context"
+	newdatastore "cloud.google.com/go/datastore"
+	"context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 )
@@ -54,7 +55,36 @@ func SaveStruct(src interface{}) (DatastorePropertyList, error) {
 }
 
 func DecodeKey(encoded string) (*datastore.Key, error) {
-	return datastore.DecodeKey(encoded)
+	if key, err1 := datastore.DecodeKey(encoded); err1 == nil {
+		return key, nil
+	} else if newKey, err2 := newdatastore.DecodeKey(encoded); err2 == nil {
+
+		return cvtNewToOld(newKey)
+	} else {
+		return nil, err1
+	}
+}
+
+func cvtNewToOld(newKey *newdatastore.Key) (*datastore.Key, error) {
+	var parent *datastore.Key
+	if newKey.Parent != nil {
+		if p, err := cvtNewToOld(newKey.Parent); err != nil {
+			return nil, err
+		} else {
+			parent = p
+		}
+	}
+
+	c := appengine.BackgroundContext() // this works, but not in tests :-(
+	if newKey.Namespace != "" {
+		if newC, err := appengine.Namespace(c, newKey.Namespace); err != nil {
+			return nil, err
+		} else {
+			c = newC
+		}
+	}
+
+	return datastore.NewKey(c, newKey.Kind, newKey.Name, newKey.ID, parent), nil
 }
 
 func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
