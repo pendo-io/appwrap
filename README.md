@@ -11,5 +11,4 @@ Test with
 
 and set
 
-```export DATASTORE_EMULATOR_HOST=127.0.0.1:8090
-export DATASTORE_PROJECT_ID=pendo-io```
+```export DATASTORE_EMULATOR_HOST=127.0.0.1:8090```
