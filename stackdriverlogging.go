@@ -26,7 +26,8 @@ type StackdriverLogging struct {
 	ctx          context.Context
 	commonLabels map[string]string
 	maxSeverity  logging.Severity
-	logCh        chan LogMessage
+	childLogger  LoggerInterface
+	parentLogger LoggerInterface
 	logName      LogName
 	mtx          *sync.Mutex
 	traceContext string
@@ -35,7 +36,7 @@ type StackdriverLogging struct {
 }
 
 // NewStackdriverLogging will return a new logger set up to work with an App Engine flexible environment
-func NewStackdriverLogging(commonLabels map[string]string, logName LogName, logCh chan LogMessage, req *http.Request, traceId string) DataLogging {
+func (sl *StackdriverLoggingService) newStackdriverLogging(commonLabels map[string]string, logName LogName, req *http.Request, traceId string) DataLogging {
 	traceContext := traceId
 	if req != nil {
 		if traceHeader := req.Header.Get(headerCloudTraceContext); traceHeader != "" {
@@ -43,11 +44,16 @@ func NewStackdriverLogging(commonLabels map[string]string, logName LogName, logC
 		}
 	}
 
+	labelsOptions := logging.CommonLabels(map[string]string{
+		traceIdPath: traceContext,
+	})
+
 	return &StackdriverLogging{
-		logCh:        logCh,
 		commonLabels: commonLabels,
 		logName:      logName,
 		maxSeverity:  logging.Default,
+		childLogger:  sl.client.Logger(string(logName), labelsOptions, sl.resourceOptions),
+		parentLogger: sl.client.Logger(requestLogPath, labelsOptions, sl.resourceOptions),
 		mtx:          &sync.Mutex{},
 		start:        time.Now(),
 		traceContext: traceContext,
@@ -129,24 +135,16 @@ func (sl *StackdriverLogging) formattedStringLog(severity logging.Severity, form
 
 // processLog will create a new log entry with the child logger
 func (sl *StackdriverLogging) processLog(severity logging.Severity, data interface{}) {
-	labelsOptions := logging.CommonLabels(map[string]string{
-		traceIdPath: sl.traceContext,
-	})
 
-	logMessage := LogMessage{
-		LogName:      sl.logName,
-		CommonLabels: labelsOptions,
-		Entry: logging.Entry{
-			Labels:    sl.commonLabels,
-			Payload:   data,
-			Severity:  severity,
-			Timestamp: time.Now(),
-			Trace:     sl.traceContext,
-		},
+	entry := logging.Entry{
+		Labels:    sl.commonLabels,
+		Payload:   data,
+		Severity:  severity,
+		Timestamp: time.Now(),
+		Trace:     sl.traceContext,
 	}
-	go func() {
-		sl.logCh <- logMessage
-	}()
+
+	sl.childLogger.Log(entry)
 
 	if sl.maxSeverity < severity {
 		sl.maxSeverity = severity
@@ -154,56 +152,39 @@ func (sl *StackdriverLogging) processLog(severity logging.Severity, data interfa
 }
 
 // Close will close the logger and log request and response information to the parent logger
-//
-// Close is only needed when creating a request log entry.  If the current logger does not include
-// a request object then there is no need to call this function.
 func (sl StackdriverLogging) Close(w http.ResponseWriter) {
+	defer sl.childLogger.Flush()
+	defer sl.parentLogger.Flush()
 	if sl.request == nil {
 		return
 	}
 
-	labelsOptions := logging.CommonLabels(map[string]string{
-		traceIdPath: sl.traceContext,
-	})
-
+	var entry logging.Entry
 	if martiniWriter, ok := w.(martini.ResponseWriter); ok {
-		logMessage := LogMessage{
-			LogName:      requestLogPath,
-			CommonLabels: labelsOptions,
-			Entry: logging.Entry{
-				HTTPRequest: &logging.HTTPRequest{
-					Latency:      time.Now().Sub(sl.start),
-					ResponseSize: int64(martiniWriter.Size()),
-					Request:      sl.request,
-					Status:       martiniWriter.Status(),
-				},
-				Labels:    sl.commonLabels,
-				Severity:  sl.maxSeverity,
-				Timestamp: time.Now(),
-				Trace:     sl.traceContext,
+		entry = logging.Entry{
+			HTTPRequest: &logging.HTTPRequest{
+				Latency:      time.Now().Sub(sl.start),
+				ResponseSize: int64(martiniWriter.Size()),
+				Request:      sl.request,
+				Status:       martiniWriter.Status(),
 			},
+			Labels:    sl.commonLabels,
+			Severity:  sl.maxSeverity,
+			Timestamp: time.Now(),
+			Trace:     sl.traceContext,
 		}
-		go func() {
-			sl.logCh <- logMessage
-		}()
 
 	} else {
-		logMessage := LogMessage{
-			LogName:      requestLogPath,
-			CommonLabels: labelsOptions,
-			Entry: logging.Entry{
-				HTTPRequest: &logging.HTTPRequest{
-					Latency: time.Now().Sub(sl.start),
-					Request: sl.request,
-				},
-				Labels:    sl.commonLabels,
-				Severity:  sl.maxSeverity,
-				Timestamp: time.Now(),
-				Trace:     sl.traceContext,
+		entry = logging.Entry{
+			HTTPRequest: &logging.HTTPRequest{
+				Latency: time.Now().Sub(sl.start),
+				Request: sl.request,
 			},
+			Labels:    sl.commonLabels,
+			Severity:  sl.maxSeverity,
+			Timestamp: time.Now(),
+			Trace:     sl.traceContext,
 		}
-		go func() {
-			sl.logCh <- logMessage
-		}()
 	}
+	sl.parentLogger.Log(entry)
 }

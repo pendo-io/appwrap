@@ -13,12 +13,6 @@ import (
 
 type LogName string
 
-type LogMessage struct {
-	LogName      LogName
-	CommonLabels logging.LoggerOption
-	Entry        logging.Entry
-}
-
 type LoggerClientInterface interface {
 	Logger(logID string, opts ...logging.LoggerOption) LoggerInterface
 	Close() error
@@ -35,7 +29,7 @@ type StackdriverClient struct {
 	client *logging.Client
 }
 
-func NewStackdriverClient(client *logging.Client) LoggerClientInterface {
+func newStackdriverClient(client *logging.Client) LoggerClientInterface {
 	return &StackdriverClient{
 		client: client,
 	}
@@ -93,12 +87,11 @@ type StackdriverLoggingService struct {
 	appInfo         AppengineInfo
 	client          LoggerClientInterface
 	log             Logging
-	logCh           chan LogMessage
 	resourceOptions logging.LoggerOption
 }
 
 // NewStackdriverLogging will return a new logger set up to work with an App Engine flexible environment
-func newStackdriverLoggingService(client LoggerClientInterface, appInfo AppengineInfo, logCh chan LogMessage, log Logging) LoggingServiceInterface {
+func newStackdriverLoggingService(client LoggerClientInterface, appInfo AppengineInfo, log Logging) LoggingServiceInterface {
 	client.SetUpOnError()
 
 	projectId := appInfo.AppID()
@@ -110,16 +103,7 @@ func newStackdriverLoggingService(client LoggerClientInterface, appInfo Appengin
 		appInfo:         appInfo,
 		client:          client,
 		log:             log,
-		logCh:           logCh,
 		resourceOptions: basicAppEngineOptions(moduleName, projectId, versionId),
-	}
-}
-
-// ProcessLogEntries will create a new log entry with a logger
-func (sl *StackdriverLoggingService) processLogEntries() {
-	for logMessage := range sl.logCh {
-		logger := sl.client.Logger(string(logMessage.LogName), logMessage.CommonLabels, sl.resourceOptions)
-		logger.Log(logMessage.Entry)
 	}
 }
 
@@ -137,7 +121,7 @@ func (sl *StackdriverLoggingService) Close() {
 // a child/parent relationship in the Stackdriver UI. However, not all logs include a request object.  In that
 // instance we will fallback to the provided traceId
 func (sl *StackdriverLoggingService) CreateLog(labels map[string]string, logName LogName, r *http.Request, traceId string) Logging {
-	return NewStackdriverLogging(labels, logName, sl.logCh, r, traceId)
+	return sl.newStackdriverLogging(labels, logName, r, traceId)
 }
 
 // basicAppEngineOptions creates labels that will map the correct app engine instance to Stackdriver
