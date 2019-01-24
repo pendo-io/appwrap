@@ -6,13 +6,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/logging"
 	"github.com/pendo-io/appwrap"
 	"github.com/stretchr/testify/mock"
 	. "gopkg.in/check.v1"
-
-	"pendo.io/goisms"
 )
 
 type AppengineInfoMock struct {
@@ -89,7 +88,7 @@ func (m LoggerMock) Flush() error {
 
 type LoggingServiceTestFixture struct {
 	appInfoMock *AppengineInfoMock
-	log         goisms.SimpleLogging
+	log         Logging
 	clientMock  *ClientMock
 }
 
@@ -122,8 +121,7 @@ func (s *StackdriverLoggingServiceTests) TestLogImplementsSimpleLogging(c *C) {
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
 	f.appInfoMock.On("AppID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version").Once()
-	logCh := make(chan LogMessage)
-	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
+	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
 	c.Assert(service, NotNil)
 	c.Assert(service.resourceOptions, DeepEquals, basicAppEngineOptions("my-module", "my-project", "my-version"))
@@ -139,8 +137,7 @@ func (s *StackdriverLoggingServiceTests) TestLogCommonAppEngineLabels(c *C) {
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
 	f.appInfoMock.On("AppID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
-	logCh := make(chan LogMessage)
-	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
+	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
 	c.Assert(service, NotNil)
 	c.Assert(service.resourceOptions, DeepEquals, basicAppEngineOptions("my-module", "my-project", "my-version"))
@@ -157,8 +154,7 @@ func (s *StackdriverLoggingServiceTests) TestLogBaseVersion(c *C) {
 	f.appInfoMock.On("AppID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 
-	logCh := make(chan LogMessage)
-	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
+	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
 	c.Assert(service, NotNil)
 	c.Assert(service.resourceOptions, DeepEquals, basicAppEngineOptions("my-module", "my-project", "my-version"))
@@ -168,36 +164,43 @@ func (s *StackdriverLoggingServiceTests) TestLogBaseVersion(c *C) {
 func (s *StackdriverLoggingServiceTests) TestLogServiceProcessLogAndClose(c *C) {
 	f := s.SetUpFixture(c)
 
+	start := time.Now()
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
 	f.appInfoMock.On("AppID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 
-	log1 := LogMessage{LogName: LogName("test1"), Entry: logging.Entry{Severity: logging.Critical}}
 	loggerMock1 := &LoggerMock{}
-	f.clientMock.On("Logger", "test1", mock.Anything, mock.Anything).Return(loggerMock1).Once()
-	loggerMock1.On("Log", log1.Entry).Return().Once()
-
-	log2 := LogMessage{LogName: LogName("test2"), Entry: logging.Entry{Severity: logging.Error}}
-	loggerMock2 := &LoggerMock{}
-	f.clientMock.On("Logger", "test2", mock.Anything, mock.Anything).Return(loggerMock2).Once()
-	loggerMock2.On("Log", log2.Entry).Return().Once()
+	f.clientMock.On("Logger", "test1", mock.AnythingOfType("[]logging.LoggerOption")).Return(loggerMock1).Once()
+	f.clientMock.On("Logger", requestLogPath, mock.AnythingOfType("[]logging.LoggerOption")).Return(loggerMock1).Once()
+	loggerMock1.On("Log", mock.MatchedBy(func(log logging.Entry) bool {
+		if log.Timestamp.Before(start) {
+			return false
+		}
+		if log.Severity != logging.Info {
+			return false
+		}
+		if log.Payload != "test1-message" {
+			return false
+		}
+		if log.Trace != "test1-trace" {
+			return false
+		}
+		return true
+	})).Return().Once()
 
 	f.clientMock.On("Close").Return(nil).Once()
 
-	logCh := make(chan LogMessage)
-	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
-
-	go service.processLogEntries()
-
-	logCh <- log1
-	logCh <- log2
-
+	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
+	logger := service.CreateLog(nil, "test1", nil, "test1-trace").(*StackdriverLogging)
+	logger.Infof("test1-message")
+	logger.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
+	logger.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
+	logger.Close(nil)
 	service.Close()
 
 	f.assertMocks(c)
 	loggerMock1.AssertExpectations(c)
-	loggerMock2.AssertExpectations(c)
 }
 
 func (s *StackdriverLoggingServiceTests) TestLogServiceClose(c *C) {
@@ -209,10 +212,8 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceClose(c *C) {
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 	f.clientMock.On("Close").Return(nil).Once()
 
-	logCh := make(chan LogMessage)
-	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, logCh, f.log).(*StackdriverLoggingService)
+	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
-	go service.processLogEntries()
 	service.Close()
 
 	f.assertMocks(c)

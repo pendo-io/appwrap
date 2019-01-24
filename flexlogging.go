@@ -39,11 +39,9 @@ func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Log
 	if err != nil {
 		panic(fmt.Sprintf("unable to configure stackdriver logger: %s", err.Error()))
 	}
-	
-	stackdriverClient := NewStackdriverClient(client)
-	logCh := make(chan LogMessage)
-	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, logCh, log).(*StackdriverLoggingService)
-	go loggingService.processLogEntries()
+
+	stackdriverClient := newStackdriverClient(client)
+	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, log).(*StackdriverLoggingService)
 
 	return loggingService
 }
