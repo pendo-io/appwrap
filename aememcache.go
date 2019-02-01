@@ -1,3 +1,5 @@
+//+build !memorystore
+
 package appwrap
 
 import (
