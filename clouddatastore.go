@@ -77,7 +77,8 @@ type CloudDatastore struct {
 var NewDatastore = NewCloudDatastore
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
-	if client, err := datastore.NewClient(c, "pendo-dev"); err != nil {
+	aeInfo := NewAppengineInfoFromContext(c)
+	if client, err := datastore.NewClient(c, aeInfo.AppID()); err != nil {
 		return nil, err
 	} else {
 		return CloudDatastore{
