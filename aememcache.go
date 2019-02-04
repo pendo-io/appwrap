@@ -6,6 +6,13 @@ import (
 	"google.golang.org/appengine/memcache"
 )
 
+type MemcacheItem = memcache.Item
+
+var MemcacheErrNotStored = memcache.ErrNotStored
+var MemcacheErrCacheMiss = memcache.ErrCacheMiss
+var MemcacheErrCASConflict = memcache.ErrCASConflict
+var MemcacheErrServerError = memcache.ErrServerError
+
 type AppengineMemcache struct {
 	c context.Context
 }
