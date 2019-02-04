@@ -282,11 +282,11 @@ func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
 	first, last, err := ds.AllocateIDs("simple", nil, 10)
 	c.Assert(err, IsNil)
 	c.Assert(first > 10000, Equals, true)
-	c.Assert(last-first+1, Equals, int64(10))
+	c.Assert(last-first, Equals, int64(10))
 
 	first, last, err = ds.AllocateIDs("simple", nil, 5)
 	c.Assert(err, IsNil)
-	c.Assert(last-first+1, Equals, int64(5))
+	c.Assert(last-first, Equals, int64(5))
 }
 
 func (dsit *AppengineInterfacesTest) TestKinds(c *C) {

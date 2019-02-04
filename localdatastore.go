@@ -311,7 +311,7 @@ func emulateAllocateIDSet(d LegacyDatastore, incompleteKeys []*DatastoreKey) ([]
 
 	if low, high, err := d.AllocateIDs(kind, parent, len(incompleteKeys)); err != nil {
 		return nil, nil
-	} else if int(high-low+1) != len(incompleteKeys) {
+	} else if int(high-low) != len(incompleteKeys) {
 		return nil, errors.New("high/low mismatch in emulateAllocateIDSet()")
 	} else {
 		newKeys := make([]*DatastoreKey, len(incompleteKeys))
@@ -326,7 +326,7 @@ func emulateAllocateIDSet(d LegacyDatastore, incompleteKeys []*DatastoreKey) ([]
 func (ds *LocalDatastore) AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error) {
 	first := ds.lastId
 	ds.lastId += int64(n)
-	return first, first + int64(n) - 1, nil
+	return first, first + int64(n), nil
 }
 
 func (ds *LocalDatastore) delete(keyStr string) {
