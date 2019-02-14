@@ -2,11 +2,11 @@ package appwrap
 
 import (
 	"fmt"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/memcache"
 	"strconv"
 	"sync"
 	"time"
+
+	"google.golang.org/appengine"
 )
 
 type cachedItem struct {
@@ -26,9 +26,9 @@ func NewLocalMemcache() Memcache {
 	return l
 }
 
-func (mc *LocalMemcache) Add(item *memcache.Item) error {
+func (mc *LocalMemcache) Add(item *CacheItem) error {
 	if _, exists := mc.get(item.Key); exists {
-		return memcache.ErrNotStored
+		return CacheErrNotStored
 	} else {
 		return mc.Set(item)
 	}
@@ -36,7 +36,7 @@ func (mc *LocalMemcache) Add(item *memcache.Item) error {
 	return nil
 }
 
-func (mc *LocalMemcache) AddMulti(items []*memcache.Item) error {
+func (mc *LocalMemcache) AddMulti(items []*CacheItem) error {
 	errList := make(appengine.MultiError, len(items))
 	errors := false
 
@@ -54,16 +54,16 @@ func (mc *LocalMemcache) AddMulti(items []*memcache.Item) error {
 	return nil
 }
 
-func (mc *LocalMemcache) CompareAndSwap(item *memcache.Item) error {
-	if entry, err := mc.Get(item.Key); err != nil && err == memcache.ErrCacheMiss {
-		return memcache.ErrNotStored
+func (mc *LocalMemcache) CompareAndSwap(item *CacheItem) error {
+	if entry, err := mc.Get(item.Key); err != nil && err == ErrCacheMiss {
+		return CacheErrNotStored
 	} else if err != nil {
 		return err
 	} else if !entry.Object.(time.Time).Equal(item.Object.(time.Time)) {
-		return memcache.ErrCASConflict
+		return CacheErrCASConflict
 	}
 
-	return mc.SetMulti([]*memcache.Item{item})
+	return mc.SetMulti([]*CacheItem{item})
 }
 
 func (mc *LocalMemcache) delete(key string) {
@@ -74,7 +74,7 @@ func (mc *LocalMemcache) delete(key string) {
 
 func (mc *LocalMemcache) Delete(key string) error {
 	if _, exists := mc.get(key); !exists {
-		return memcache.ErrCacheMiss
+		return ErrCacheMiss
 	}
 
 	mc.delete(key)
@@ -86,7 +86,7 @@ func (mc *LocalMemcache) DeleteMulti(keys []string) error {
 	multiError := make(appengine.MultiError, len(keys))
 	for i, key := range keys {
 		if _, exists := mc.get(key); !exists {
-			multiError[i] = memcache.ErrCacheMiss
+			multiError[i] = ErrCacheMiss
 			errors = true
 		} else {
 			delete(mc.items, key)
@@ -114,19 +114,19 @@ func (mc *LocalMemcache) get(key string) (item cachedItem, found bool) {
 	return
 }
 
-func (mc *LocalMemcache) Get(key string) (*memcache.Item, error) {
+func (mc *LocalMemcache) Get(key string) (*CacheItem, error) {
 	if item, exists := mc.get(key); !exists {
-		return nil, memcache.ErrCacheMiss
+		return nil, ErrCacheMiss
 	} else if !item.expires.IsZero() && item.expires.Before(time.Now()) {
 		mc.delete(key)
-		return nil, memcache.ErrCacheMiss
+		return nil, ErrCacheMiss
 	} else {
-		return &memcache.Item{Key: key, Value: item.value, Object: item.addedAt}, nil
+		return &CacheItem{Key: key, Value: item.value, Object: item.addedAt}, nil
 	}
 }
 
-func (mc *LocalMemcache) GetMulti(keys []string) (map[string]*memcache.Item, error) {
-	results := make(map[string]*memcache.Item)
+func (mc *LocalMemcache) GetMulti(keys []string) (map[string]*CacheItem, error) {
+	results := make(map[string]*CacheItem)
 
 	for _, key := range keys {
 		if item, err := mc.Get(key); err == nil {
@@ -148,7 +148,7 @@ func (mc *LocalMemcache) IncrementExisting(key string, amount int64) (uint64, er
 
 func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64) (uint64, error) {
 	if item, exists := mc.get(key); !exists && initialValue == nil {
-		return 0, memcache.ErrCacheMiss
+		return 0, ErrCacheMiss
 	} else {
 		var oldValue uint64
 		if !exists {
@@ -182,7 +182,7 @@ func (mc *LocalMemcache) set(key string, cachedItem cachedItem) {
 	mc.items[key] = cachedItem
 }
 
-func (mc *LocalMemcache) Set(item *memcache.Item) error {
+func (mc *LocalMemcache) Set(item *CacheItem) error {
 	var expires time.Time
 
 	if item.Expiration > 0 {
@@ -194,7 +194,7 @@ func (mc *LocalMemcache) Set(item *memcache.Item) error {
 	return nil
 }
 
-func (mc *LocalMemcache) SetMulti(items []*memcache.Item) error {
+func (mc *LocalMemcache) SetMulti(items []*CacheItem) error {
 	for _, item := range items {
 		mc.Set(item)
 	}

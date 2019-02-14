@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/logging"
-	"github.com/pendo-io/appwrap"
 	"github.com/stretchr/testify/mock"
 	. "gopkg.in/check.v1"
 )
@@ -107,7 +106,7 @@ func (s *StackdriverLoggingServiceTests) SetUpTest(c *C) {
 func (s *StackdriverLoggingServiceTests) SetUpFixture(c *C) LoggingServiceTestFixture {
 	return LoggingServiceTestFixture{
 		appInfoMock: &AppengineInfoMock{},
-		log:         appwrap.NewWriterLogger(os.Stdout),
+		log:         NewWriterLogger(os.Stdout),
 		clientMock:  &ClientMock{},
 	}
 }
