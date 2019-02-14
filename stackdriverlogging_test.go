@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/logging"
-	"github.com/pendo-io/appwrap"
 	"github.com/stretchr/testify/mock"
 	. "gopkg.in/check.v1"
 )
@@ -24,7 +23,7 @@ type StackdriverLoggingTests struct {
 var _ = Suite(&StackdriverLoggingTests{})
 
 func (s *StackdriverLoggingTests) SetUpTest(c *C) {
-	s.ctx = appwrap.StubContext()
+	s.ctx = StubContext()
 	s.clientMock = &ClientMock{}
 	s.appInfoMock = &AppengineInfoMock{}
 
