@@ -3,6 +3,7 @@
 package appwrap
 
 import (
+	"sync"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -76,16 +77,27 @@ type CloudDatastore struct {
 
 var NewDatastore = NewCloudDatastore
 
+var dsClient *datastore.Client = nil
+var clientMtx = &sync.Mutex{}
+
 func NewCloudDatastore(c context.Context) (Datastore, error) {
 	aeInfo := NewAppengineInfoFromContext(c)
-	if client, err := datastore.NewClient(c, aeInfo.AppID()); err != nil {
-		return nil, err
-	} else {
-		return CloudDatastore{
-			client: client,
-			ctx:    c,
-		}, nil
+	var err error
+	if dsClient == nil {
+		clientMtx.Lock()
+		defer clientMtx.Unlock()
+		if dsClient == nil {
+			if dsClient, err = datastore.NewClient(c, aeInfo.AppID()); err != nil {
+				return nil, err
+			}
+		}
 	}
+
+	return CloudDatastore{
+		client: dsClient,
+		ctx:    c,
+	}, nil
+
 }
 
 func (cds CloudDatastore) Deadline(t time.Time) Datastore {
