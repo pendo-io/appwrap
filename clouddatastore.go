@@ -81,12 +81,12 @@ var dsClient *datastore.Client = nil
 var clientMtx = &sync.Mutex{}
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
-	aeInfo := NewAppengineInfoFromContext(c)
 	var err error
 	if dsClient == nil {
 		clientMtx.Lock()
 		defer clientMtx.Unlock()
 		if dsClient == nil {
+			aeInfo := NewAppengineInfoFromContext(c)
 			if dsClient, err = datastore.NewClient(c, aeInfo.AppID()); err != nil {
 				return nil, err
 			}
