@@ -102,7 +102,7 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 
 func (cds CloudDatastore) Deadline(t time.Time) Datastore {
 	c, _ := context.WithDeadline(cds.ctx, t)
-	return CloudDatastore{ctx: c}
+	return CloudDatastore{client: cds.client, ctx: c}
 }
 
 func (cds CloudDatastore) Namespace(ns string) Datastore {
