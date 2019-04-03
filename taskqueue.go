@@ -1,5 +1,3 @@
-// +build !cloudtasks
-
 package appwrap
 
 import (
@@ -17,4 +15,8 @@ type Taskqueue interface {
 	ModifyLease(c context.Context, task *Task, queueName string, leaseTime int) error
 	NewPOSTTask(path string, params url.Values) *Task
 	QueueStats(c context.Context, queueNames []string) ([]QueueStatistics, error)
+}
+
+func NewTask() *Task {
+	return &Task{}
 }
