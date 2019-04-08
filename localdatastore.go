@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/appengine"
 )
 
 type dsItem struct {
@@ -375,7 +376,7 @@ func (ds *LocalDatastore) GetMulti(keys []*DatastoreKey, dstIntf interface{}) er
 
 	dstValue := reflect.ValueOf(dstIntf)
 	errors := false
-	multiError := make(MultiError, len(keys))
+	multiError := make(appengine.MultiError, len(keys))
 	for i, k := range keys {
 		if err := ds.Get(k, dstValue.Index(i).Addr().Interface()); err != nil {
 			multiError[i] = err
