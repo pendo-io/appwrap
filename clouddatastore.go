@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
+	"google.golang.org/appengine"
 )
 
 type DatastoreKey = datastore.Key
@@ -17,7 +18,6 @@ type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
 type DatastoreTransactionOptions datastore.TransactionOption
 type GeoPoint = datastore.GeoPoint
-type MultiError = datastore.MultiError
 type PendingKey = datastore.PendingKey
 
 var DatastoreDone = iterator.Done
@@ -69,6 +69,15 @@ func newKey(ctx context.Context, kind string, sId string, iId int64, parent *Dat
 	return key
 }
 
+// Since appengine.MultiError is used by the calling code to apply to memcache, datastore, and cloud tasks,
+// we have to convert datastore.MultiError into appengine.MultiError.
+func convertIfMultiError(err error) error {
+	if mErr, ok := err.(datastore.MultiError); ok {
+		return appengine.MultiError(mErr)
+	}
+	return err
+}
+
 type CloudDatastore struct {
 	ctx       context.Context
 	client    *datastore.Client
@@ -88,7 +97,7 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 		if dsClient == nil {
 			aeInfo := NewAppengineInfoFromContext(c)
 			if dsClient, err = datastore.NewClient(c, aeInfo.AppID()); err != nil {
-				return nil, err
+				return nil, convertIfMultiError(err)
 			}
 		}
 	}
@@ -112,19 +121,23 @@ func (cds CloudDatastore) Namespace(ns string) Datastore {
 }
 
 func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
-	return cds.client.AllocateIDs(cds.ctx, incompleteKeys)
+	res, err := cds.client.AllocateIDs(cds.ctx, incompleteKeys)
+	return res, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
-	return cds.client.DeleteMulti(cds.ctx, keys)
+	err := cds.client.DeleteMulti(cds.ctx, keys)
+	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
-	return cds.client.Get(cds.ctx, key, dst)
+	err := cds.client.Get(cds.ctx, key, dst)
+	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	return cds.client.GetMulti(cds.ctx, keys, dst)
+	err := cds.client.GetMulti(cds.ctx, keys, dst)
+	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
@@ -135,11 +148,13 @@ func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 }
 
 func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
-	return cds.client.Put(cds.ctx, key, src)
+	res, err := cds.client.Put(cds.ctx, key, src)
+	return res, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
-	return cds.client.PutMulti(cds.ctx, keys, src)
+	res, err := cds.client.PutMulti(cds.ctx, keys, src)
+	return res, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
@@ -157,7 +172,7 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 		return f(ct)
 	})
 
-	return CloudDatastoreCommit{ctx: cds.ctx, commit: commit}, err
+	return CloudDatastoreCommit{ctx: cds.ctx, commit: commit}, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
@@ -177,15 +192,18 @@ type CloudTransaction struct {
 }
 
 func (ct CloudTransaction) DeleteMulti(keys []*DatastoreKey) error {
-	return ct.transaction.DeleteMulti(keys)
+	err := ct.transaction.DeleteMulti(keys)
+	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) Get(key *DatastoreKey, dst interface{}) error {
-	return ct.transaction.Get(key, dst)
+	err := ct.transaction.Get(key, dst)
+	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	return ct.transaction.GetMulti(keys, dst)
+	err := ct.transaction.GetMulti(keys, dst)
+	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
@@ -206,11 +224,13 @@ func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
 }
 
 func (ct CloudTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
-	return ct.transaction.Put(key, src)
+	res, err := ct.transaction.Put(key, src)
+	return res, convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
-	return ct.transaction.PutMulti(keys, src)
+	res, err := ct.transaction.PutMulti(keys, src)
+	return res, convertIfMultiError(err)
 }
 
 type CloudDatastoreCommit struct {
@@ -288,7 +308,7 @@ func (cdq CloudDatastoreQuery) Run() DatastoreIterator {
 
 func (cdq CloudDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
 	keys, err := cdq.client.GetAll(cdq.ctx, cdq.q, dst)
-	return keys, err
+	return keys, convertIfMultiError(err)
 }
 
 type cloudDatastoreIterator struct {
@@ -297,11 +317,12 @@ type cloudDatastoreIterator struct {
 
 func (i cloudDatastoreIterator) Next(dst interface{}) (*DatastoreKey, error) {
 	key, err := i.iter.Next(dst)
-	return key, err
+	return key, convertIfMultiError(err)
 }
 
 func (i cloudDatastoreIterator) Cursor() (DatastoreCursor, error) {
-	return i.iter.Cursor()
+	res, err := i.iter.Cursor()
+	return res, convertIfMultiError(err)
 }
 
 func ToAppwrapPropertyList(l []DatastoreProperty) []AppwrapProperty {
