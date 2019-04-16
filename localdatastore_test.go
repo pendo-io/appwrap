@@ -299,3 +299,17 @@ func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 	sort.Sort(sort.StringSlice(kinds))
 	c.Assert(kinds, DeepEquals, []string{"kind1", "kind2"})
 }
+
+func (dsit *AppengineInterfacesTest) TestPanicOnDatastoreEntitySave(c *C) {
+	mem := dsit.newDatastore().(*LocalDatastore)
+
+	v := &dsItem{
+		key: mem.NewKey("kind", "theKey", 0, nil),
+		props: []AppwrapProperty{
+			{Name: "shouldPanic", Value: &DatastoreEntity{}},
+		},
+	}
+	c.Assert(func() {
+		mem.put("key", v)
+	}, PanicMatches, "cannot save non-flattened structs.*")
+}

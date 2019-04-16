@@ -582,6 +582,7 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 
 	var (
 		_ = AppwrapProperty{}
+		_ = DatastoreEntity{}
 		_ = DatastoreKey{}
 		_ = DatastoreProperty{}
 		_ = DatastorePropertyList{}

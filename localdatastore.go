@@ -408,6 +408,15 @@ func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
 	for i, prop := range item.props {
+		switch prop.Value.(type) {
+		case time.Time:
+			item.props[i].Value = prop.Value.(time.Time).UTC()
+		case *DatastoreEntity:
+			// All structs must be flattened before saving to datastore.  This can be achieved by adding
+			// `datastore:",flatten"` to struct fields that represent a nested struct.
+			panic("cannot save non-flattened structs.  See https://godoc.org/cloud.google.com/go/datastore#hdr-Properties")
+		}
+
 		if timeVal, ok := prop.Value.(time.Time); ok {
 			item.props[i].Value = timeVal.UTC()
 		}

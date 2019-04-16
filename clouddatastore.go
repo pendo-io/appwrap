@@ -12,6 +12,7 @@ import (
 	"google.golang.org/appengine"
 )
 
+type DatastoreEntity = datastore.Entity
 type DatastoreKey = datastore.Key
 type DatastoreProperty = datastore.Property
 type DatastorePropertyList = datastore.PropertyList
