@@ -150,7 +150,7 @@ var (
 	redisAddr      = ""
 )
 
-func getRedisAddr(c context.Context) string {
+func getRedisAddr(c context.Context, loc CacheLocation, name CacheName) string {
 	if redisAddr != "" {
 		return redisAddr
 	}
@@ -162,11 +162,9 @@ func getRedisAddr(c context.Context) string {
 	defer client.Close()
 
 	projectId := appInfo.AppID()
-	locationId := c.Value(KeyCacheLocation)
-	instanceId := c.Value(KeyCacheName)
 
 	instance, err := client.GetInstance(c, &redispb.GetInstanceRequest{
-		Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s", projectId, locationId, instanceId),
+		Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s", projectId, loc, name),
 	})
 	if err != nil {
 		panic(err)
@@ -176,7 +174,7 @@ func getRedisAddr(c context.Context) string {
 	return redisAddr
 }
 
-func NewAppengineMemcache(c context.Context) Memcache {
+func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName) Memcache {
 	if redisClient == nil {
 		redisClientMtx.Lock()
 		defer redisClientMtx.Unlock()
@@ -184,7 +182,7 @@ func NewAppengineMemcache(c context.Context) Memcache {
 		// Check again, because another goroutine could have beaten us here while we were checking the first time
 		if redisClient == nil {
 			client := redis.NewClient(&redis.Options{
-				Addr:     getRedisAddr(c),
+				Addr:     getRedisAddr(c, loc, name),
 				Password: "",
 				DB:       0,
 			}).WithContext(c)
