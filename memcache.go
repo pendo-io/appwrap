@@ -16,13 +16,5 @@ type Memcache interface {
 	SetMulti(item []*CacheItem) error
 }
 
-type keyStruct struct {
-	idx int
-}
-
-// Used to pass location/name of memorystore on the context
-// Using a private struct guarantees that these keys cannot be overwritten by the caller
-var (
-	KeyCacheLocation = keyStruct{1}
-	KeyCacheName     = keyStruct{2}
-)
+type CacheLocation string
+type CacheName string

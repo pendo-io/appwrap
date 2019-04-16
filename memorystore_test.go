@@ -137,7 +137,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 			defer wg.Done()
 			// Start all goroutines at once
 			<-startingLine
-			clients[i] = NewAppengineMemcache(context.Background()).(Memorystore)
+			clients[i] = NewAppengineMemcache(context.Background(), "", "").(Memorystore)
 		}()
 	}
 	close(startingLine)
@@ -151,13 +151,13 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 }
 
 func (s *MemorystoreTest) TestBuildNamespacedKey(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	fullKey := ms.buildNamespacedKey("banana")
 	c.Assert(fullKey, Equals, "test-ns:banana")
 }
 
 func (s *MemorystoreTest) TestAdd(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -191,7 +191,7 @@ func (s *MemorystoreTest) TestAdd(c *C) {
 }
 
 func (s *MemorystoreTest) TestAddMulti(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 	pipeMock := &redisPipelineMock{}
 	resultMock0 := &boolCmdMock{}
@@ -263,7 +263,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 	checkMocks := func() {
 		clientMock.AssertExpectations(c)
@@ -296,7 +296,7 @@ func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 	pipeMock := &redisPipelineMock{}
 	checkMocks := func() {
@@ -350,7 +350,7 @@ func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDelete(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -374,7 +374,7 @@ func (s *MemorystoreTest) TestDelete(c *C) {
 }
 
 func (s *MemorystoreTest) TestDeleteMulti(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -400,7 +400,7 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestFlush(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -422,7 +422,7 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -454,7 +454,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 }
 
 func (s *MemorystoreTest) TestGetMulti(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -501,7 +501,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrement(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	calledResultMock := &intCmdMock{}
 	clientMock := ms.client.(*redisClientMock)
 	pipeMock := &redisPipelineMock{}
@@ -545,7 +545,7 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrementExisting(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -588,7 +588,7 @@ func (s *MemorystoreTest) TestIncrementExisting(c *C) {
 }
 
 func (s *MemorystoreTest) TestSet(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 
 	checkMocks := func() {
@@ -618,7 +618,7 @@ func (s *MemorystoreTest) TestSet(c *C) {
 }
 
 func (s *MemorystoreTest) TestSetMulti(c *C) {
-	ms := NewAppengineMemcache(context.Background()).Namespace("test-ns").(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").Namespace("test-ns").(Memorystore)
 	clientMock := ms.client.(*redisClientMock)
 	pipeMock := &redisPipelineMock{}
 
@@ -666,7 +666,7 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestNamespace(c *C) {
-	ms := NewAppengineMemcache(context.Background()).(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), "", "").(Memorystore)
 	msNewNamespace := ms.Namespace("test-ns").(Memorystore)
 	// original ns not modified
 	c.Assert(ms.namespace, Equals, "")
