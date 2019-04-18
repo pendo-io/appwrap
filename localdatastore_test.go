@@ -130,7 +130,7 @@ func (dsit *AppengineInterfacesTest) TestFilter(c *C) {
 
 	v := &dsItem{
 		key: mem.NewKey("kind", "theKey", 0, nil),
-		props: DatastorePropertyList{
+		props: []AppwrapProperty{
 			{Name: "colSingle", Value: 123},
 			{Name: "colMulti", Value: 100, Multiple: true},
 			{Name: "colMulti", Value: 200, Multiple: true},
