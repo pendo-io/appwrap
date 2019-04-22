@@ -83,9 +83,14 @@ func (ai AppengineInfoFlex) NumInstances(moduleName, version string) (int, error
 }
 
 func webClient(c context.Context) *http.Client {
+	src, err := google.DefaultTokenSource(c, googleScopes...)
+	if err != nil {
+		panic("failed to create token source: " + err.Error())
+	}
+
 	return &http.Client{
 		Transport: &oauth2.Transport{
-			Source: google.AppEngineTokenSource(c, googleScopes...),
+			Source: src,
 		},
 	}
 
