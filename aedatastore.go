@@ -16,7 +16,6 @@ type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
 type DatastoreTransactionOptions = datastore.TransactionOptions
 type GeoPoint = appengine.GeoPoint
-type MultiError = appengine.MultiError
 type PendingKey struct{ key *datastore.Key }
 
 var DatastoreDone = datastore.Done

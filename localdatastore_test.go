@@ -1,5 +1,3 @@
-// +build !clouddatastore
-
 package appwrap
 
 import (
@@ -8,10 +6,6 @@ import (
 
 	. "gopkg.in/check.v1"
 )
-
-func (s *AppengineInterfacesTest) newDatastore() Datastore {
-	return NewLocalDatastore(false, nil)
-}
 
 func (dsit *AppengineInterfacesTest) TestFieldInjection(c *C) {
 	mem := NewLocalDatastore(true, nil)
