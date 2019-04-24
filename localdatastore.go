@@ -16,7 +16,7 @@ import (
 )
 
 type dsItem struct {
-	props DatastorePropertyList
+	props []AppwrapProperty
 	key   *DatastoreKey
 }
 
@@ -199,7 +199,7 @@ func (a dsItemListSorter) less(i, j int) bool {
 func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) error {
 	props := item.props
 	if fields != nil {
-		props := make([]DatastoreProperty, 0, len(fields))
+		props := make([]AppwrapProperty, 0, len(fields))
 		for _, prop := range item.props {
 			if fields[prop.Name] {
 				props = append(props, prop)
@@ -210,7 +210,7 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 	if addField {
 		// if you hit an error on this field not being defined you probably want to add a customer Load/Saver
 		// that ignores unknown fields
-		props = append(props, DatastoreProperty{Name: "_debug_added_field", Value: true})
+		props = append(props, AppwrapProperty{Name: "_debug_added_field", Value: true})
 	}
 
 	//fmt.Printf("%T <- %+v (%d)\n", dst, props, len(item.props))
@@ -218,11 +218,11 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 		//fmt.Printf("\tload saver\n")
 		//fmt.Printf("FILLED %+v\n", dst)
 		// Load() may mess with the array; don't let it break our stored data
-		propsCopy := make([]DatastoreProperty, len(props))
+		propsCopy := make([]AppwrapProperty, len(props))
 		copy(propsCopy, props)
-		return loadSaver.Load(propsCopy)
+		return loadSaver.Load(ToDatastorePropertyList(propsCopy))
 	} else {
-		return LoadStruct(dst, props)
+		return LoadStruct(dst, ToDatastorePropertyList(props))
 	}
 }
 
@@ -408,6 +408,15 @@ func (ds *LocalDatastore) put(keyStr string, item *dsItem) {
 	ds.mtx.Lock()
 	defer ds.mtx.Unlock()
 	for i, prop := range item.props {
+		switch prop.Value.(type) {
+		case time.Time:
+			item.props[i].Value = prop.Value.(time.Time).UTC()
+		case *DatastoreEntity:
+			// All structs must be flattened before saving to datastore.  This can be achieved by adding
+			// `datastore:",flatten"` to struct fields that represent a nested struct.
+			panic("cannot save non-flattened structs.  See https://godoc.org/cloud.google.com/go/datastore#hdr-Properties")
+		}
+
 		if timeVal, ok := prop.Value.(time.Time); ok {
 			item.props[i].Value = timeVal.UTC()
 		}
@@ -429,13 +438,13 @@ func (ds *LocalDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey
 			return nil, err
 		} else {
 			k := *finalKey
-			ds.put(finalKey.String(), &dsItem{props: item, key: &k})
+			ds.put(finalKey.String(), &dsItem{props: ToAppwrapPropertyList(item), key: &k})
 		}
 	} else if item, err := SaveStruct(src); err != nil {
 		return nil, err
 	} else {
 		k := *finalKey
-		ds.put(finalKey.String(), &dsItem{props: item, key: &k})
+		ds.put(finalKey.String(), &dsItem{props: ToAppwrapPropertyList(item), key: &k})
 	}
 
 	return finalKey, nil

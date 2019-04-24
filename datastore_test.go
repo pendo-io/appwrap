@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"google.golang.org/appengine"
 	. "gopkg.in/check.v1"
 )
 
@@ -144,7 +145,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 	// make sure we can't get them
 	multiErr := mem.GetMulti(keys[0:2], items[0:2])
 	c.Assert(multiErr, NotNil)
-	for _, err := range multiErr.(MultiError) {
+	for _, err := range multiErr.(appengine.MultiError) {
 		c.Assert(err, Equals, ErrNoSuchEntity)
 	}
 }
@@ -581,11 +582,11 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 
 	var (
 		_ = AppwrapProperty{}
+		_ = DatastoreEntity{}
 		_ = DatastoreKey{}
 		_ = DatastoreProperty{}
 		_ = DatastorePropertyList{}
 		_ = GeoPoint{}
-		_ = MultiError{}
 		_ = PendingKey{}
 	)
 

@@ -1,5 +1,3 @@
-// +build !clouddatastore
-
 package appwrap
 
 import (
@@ -8,10 +6,6 @@ import (
 
 	. "gopkg.in/check.v1"
 )
-
-func (s *AppengineInterfacesTest) newDatastore() Datastore {
-	return NewLocalDatastore(false, nil)
-}
 
 func (dsit *AppengineInterfacesTest) TestFieldInjection(c *C) {
 	mem := NewLocalDatastore(true, nil)
@@ -136,7 +130,7 @@ func (dsit *AppengineInterfacesTest) TestFilter(c *C) {
 
 	v := &dsItem{
 		key: mem.NewKey("kind", "theKey", 0, nil),
-		props: DatastorePropertyList{
+		props: []AppwrapProperty{
 			{Name: "colSingle", Value: 123},
 			{Name: "colMulti", Value: 100, Multiple: true},
 			{Name: "colMulti", Value: 200, Multiple: true},
@@ -304,4 +298,18 @@ func (dsit *AppengineInterfacesTest) TestKinds(c *C) {
 	c.Assert(err, IsNil)
 	sort.Sort(sort.StringSlice(kinds))
 	c.Assert(kinds, DeepEquals, []string{"kind1", "kind2"})
+}
+
+func (dsit *AppengineInterfacesTest) TestPanicOnDatastoreEntitySave(c *C) {
+	mem := dsit.newDatastore().(*LocalDatastore)
+
+	v := &dsItem{
+		key: mem.NewKey("kind", "theKey", 0, nil),
+		props: []AppwrapProperty{
+			{Name: "shouldPanic", Value: &DatastoreEntity{}},
+		},
+	}
+	c.Assert(func() {
+		mem.put("key", v)
+	}, PanicMatches, "cannot save non-flattened structs.*")
 }

@@ -10,13 +10,13 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
+type DatastoreEntity = datastore.Entity
 type DatastoreKey = datastore.Key
 type DatastoreProperty = datastore.Property
 type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
 type DatastoreTransactionOptions = datastore.TransactionOptions
 type GeoPoint = appengine.GeoPoint
-type MultiError = appengine.MultiError
 type PendingKey struct{ key *datastore.Key }
 
 var DatastoreDone = datastore.Done
