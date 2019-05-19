@@ -61,8 +61,10 @@ func LoadIndex(data []byte) (DatastoreIndex, error) {
 	for _, spec := range indexConfig.Indexes {
 		if spec.Kind == "" {
 			return nil, fmt.Errorf("missing entity kind")
-		} else if len(spec.Properties) < 2 && !spec.Ancestor {
-			return nil, fmt.Errorf("< 2 properties for index for kind " + spec.Kind)
+		} else if len(spec.Properties) < 1 && !spec.Ancestor {
+			return nil, fmt.Errorf("< 1 properties for index for kind " + spec.Kind)
+		} else if len(spec.Properties) < 2 && !spec.Ancestor && !(spec.Properties[0].Name == "__key__" && spec.Properties[0].Direction == "desc") {
+			return nil, fmt.Errorf("< 2 properties for index for kind %s", spec.Kind)
 		}
 
 		entIndex := entityIndex{ancestor: spec.Ancestor, fields: make(map[string]fieldIndex, len(spec.Properties))}
