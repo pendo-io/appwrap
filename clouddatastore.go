@@ -4,6 +4,7 @@ package appwrap
 
 import (
 	"sync"
+	"reflect"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -263,6 +264,14 @@ func (cdq CloudDatastoreQuery) Distinct() DatastoreQuery {
 
 func (cdq CloudDatastoreQuery) Filter(how string, what interface{}) DatastoreQuery {
 	q := cdq
+
+	if reflect.ValueOf(what).Kind() == reflect.String {
+		switch what.(type) {
+		case string:
+		default:
+			what = reflect.ValueOf(what).String()
+		}
+	}
 	q.q = cdq.q.Filter(how, what)
 	return q
 }
