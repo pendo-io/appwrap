@@ -70,21 +70,22 @@ type AppengineDatastoreTransaction struct {
 }
 
 func NewDatastore(c context.Context) (Datastore, error) {
-	return AppengineDatastore{c}, nil
+	return NewAppengineDatastore(c), nil
 }
 
 func NewAppengineDatastore(c context.Context) Datastore {
+	datastore.EnableKeyConversion(c)
 	return AppengineDatastore{c}
 }
 
 func (cds AppengineDatastore) Deadline(t time.Time) Datastore {
 	c, _ := context.WithDeadline(cds.c, t)
-	return AppengineDatastore{c}
+	return NewAppengineDatastore(c)
 }
 
 func (cds AppengineDatastore) Namespace(ns string) Datastore {
 	c, _ := appengine.Namespace(cds.c, ns)
-	return AppengineDatastore{c}
+	return NewAppengineDatastore(c)
 }
 
 func (cds AppengineDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
