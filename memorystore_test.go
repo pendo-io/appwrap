@@ -462,7 +462,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 	}
 
 	// success case
-	keys := []string{"apple", "banana", "pear"}
+	keys := []string{"apple", "banana", "pear", "pineapple"}
 	fullKeys := make([]string, len(keys))
 	for i, key := range keys {
 		fullKeys[i] = ms.buildNamespacedKey(key)
@@ -471,6 +471,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 		[]byte("apple tree"),
 		nil, // indicates not found
 		[]byte("pear tree"),
+		"pineapple shrub thing", // getMulti can return strings instead of byte slices
 	}
 	clientMock.On("MGet", fullKeys).Return(vals, nil).Once()
 	results, err := ms.GetMulti(keys)
@@ -485,6 +486,11 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 			Key:            keys[2],
 			Value:          vals[2].([]byte),
 			valueOnLastGet: vals[2].([]byte),
+		},
+		"pineapple": {
+			Key:            keys[3],
+			Value:          []byte(vals[3].(string)),
+			valueOnLastGet: []byte(vals[3].(string)),
 		},
 	})
 	c.Assert(results["apple"].Value, Not(brace.SameMemoryAs), results["apple"].valueOnLastGet)
