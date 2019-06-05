@@ -328,7 +328,7 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 			// Not found
 			continue
 		}
-		valBytes := val.([]byte)
+		valBytes := ms.convertToByteSlice(val)
 		valCopy := make([]byte, len(valBytes))
 		copy(valCopy, valBytes)
 		results[keys[i]] = &CacheItem{
@@ -339,6 +339,17 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 	}
 
 	return results, nil
+}
+
+func (ms Memorystore) convertToByteSlice(v interface{}) []byte {
+	switch v.(type) {
+	case string:
+		return []byte(v.(string))
+	case []byte:
+		return v.([]byte)
+	default:
+		panic(fmt.Sprintf("unsupported type for convert: %T, %+v", v, v))
+	}
 }
 
 func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (incr uint64, err error) {
