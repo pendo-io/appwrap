@@ -1,5 +1,3 @@
-// +build cloudtasks
-
 package appwrap
 
 import (
@@ -14,55 +12,73 @@ import (
 	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/appengine"
-	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2beta3"
+	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	. "gopkg.in/check.v1"
 )
 
-func (s *AppengineInterfacesTest) TestTaskCopy(c *C) {
-	task := &taskImpl{
+type CloudTasksTest struct{}
+
+var _ = Suite(&CloudTasksTest{})
+
+func (s *CloudTasksTest) SetUpTest(c *C) {
+	tqClient = &tqClientMock{}
+	useCloudTasks = true
+}
+
+func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
+	task := &cloudTaskImpl{
 		task: &taskspb.Task{
-			PayloadType: &taskspb.Task_HttpRequest{
-				HttpRequest: &taskspb.HttpRequest{
-					Url:        "url",
+			MessageType: &taskspb.Task_AppEngineHttpRequest{
+				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+					AppEngineRouting: &taskspb.AppEngineRouting{
+						Service:  "service",
+						Version:  "version",
+						Instance: "instance",
+						Host:     "host",
+					},
 					HttpMethod: taskspb.HttpMethod_GET,
 					Headers: map[string]string{
 						"key": "value",
 					},
-					Body:                []byte("body"),
-					AuthorizationHeader: nil,
+					Body:        []byte("body"),
+					RelativeUri: "/path",
 				},
 			},
 		},
 	}
 
-	taskCopy := task.Copy().(*taskImpl)
+	taskCopy := task.Copy().(*cloudTaskImpl)
 	c.Assert(task, DeepEquals, taskCopy)
 	// verify that all pointers and slices are different locations in memory
 	c.Assert(task, Not(Equals), taskCopy)
 	c.Assert(task.task, Not(Equals), taskCopy.task)
-	c.Assert(task.task.PayloadType, Not(Equals), taskCopy.task.PayloadType)
-	c.Assert(task.task.GetHttpRequest(), Not(Equals), taskCopy.task.GetHttpRequest())
-	c.Assert(task.task.GetHttpRequest().Headers, Not(Equals), taskCopy.task.GetHttpRequest().Headers)
-	c.Assert(task.task.GetHttpRequest().Body, Not(Equals), taskCopy.task.GetHttpRequest().Body)
+	c.Assert(task.task.MessageType, Not(Equals), taskCopy.task.MessageType)
+	c.Assert(task.task.GetAppEngineHttpRequest(), Not(Equals), taskCopy.task.GetAppEngineHttpRequest())
+	c.Assert(task.task.GetAppEngineHttpRequest().Headers, Not(Equals), taskCopy.task.GetAppEngineHttpRequest().Headers)
+	c.Assert(task.task.GetAppEngineHttpRequest().Body, Not(Equals), taskCopy.task.GetAppEngineHttpRequest().Body)
+	c.Assert(task.task.GetAppEngineHttpRequest().GetAppEngineRouting(), Not(Equals), taskCopy.task.GetAppEngineHttpRequest().GetAppEngineRouting())
 
 	// modifying one shouldn't touch the other
-	task.task.GetHttpRequest().Body[0] = 'a'
-	c.Assert(task.task.GetHttpRequest().Body, DeepEquals, []byte("aody"))
-	c.Assert(taskCopy.task.GetHttpRequest().Body, DeepEquals, []byte("body"))
+	task.task.GetAppEngineHttpRequest().Body[0] = 'a'
+	c.Assert(task.task.GetAppEngineHttpRequest().Body, DeepEquals, []byte("aody"))
+	c.Assert(taskCopy.task.GetAppEngineHttpRequest().Body, DeepEquals, []byte("body"))
 }
 
-func (s *AppengineInterfacesTest) TestNewTask(c *C) {
-	task := NewTask().(*taskImpl)
+func (s *CloudTasksTest) TestNewTask(c *C) {
+	task := NewTask().(*cloudTaskImpl)
 	c.Assert(task.task, DeepEquals, &taskspb.Task{
-		PayloadType: &taskspb.Task_HttpRequest{
-			HttpRequest: &taskspb.HttpRequest{},
+		MessageType: &taskspb.Task_AppEngineHttpRequest{
+			AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+				AppEngineRouting: &taskspb.AppEngineRouting{},
+			},
 		}},
 	)
-	c.Assert(task.task.GetHttpRequest(), DeepEquals, &taskspb.HttpRequest{})
+	c.Assert(task.task.GetAppEngineHttpRequest(), DeepEquals, &taskspb.AppEngineHttpRequest{AppEngineRouting: &taskspb.AppEngineRouting{}})
+	c.Assert(task.task.GetAppEngineHttpRequest().GetAppEngineRouting(), DeepEquals, &taskspb.AppEngineRouting{})
 }
 
-func (s *AppengineInterfacesTest) TestTaskDelay(c *C) {
-	task := NewTask().(*taskImpl)
+func (s *CloudTasksTest) TestTaskDelay(c *C) {
+	task := NewTask().(*cloudTaskImpl)
 
 	storedDelay := task.Delay()
 	c.Assert(storedDelay, Equals, time.Duration(0))
@@ -86,7 +102,7 @@ func (s *AppengineInterfacesTest) TestTaskDelay(c *C) {
 	c.Assert(task.Delay(), Equals, time.Duration(0))
 }
 
-func (s *AppengineInterfacesTest) TestTaskHeader(c *C) {
+func (s *CloudTasksTest) TestTaskHeader(c *C) {
 	task := NewTask()
 
 	storedHeader := task.Header()
@@ -115,54 +131,7 @@ func (s *AppengineInterfacesTest) TestTaskHeader(c *C) {
 	c.Assert(storedHeader, DeepEquals, expectedHeader)
 }
 
-func (s *AppengineInterfacesTest) TestTaskHost(c *C) {
-	task := NewTask().(*taskImpl)
-
-	storedHost := task.Host()
-	c.Assert(storedHost, Equals, "")
-
-	task.SetHost("pendo.io")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "pendo.io")
-	// should set scheme to https as well
-	storedRawUrl := task.task.GetHttpRequest().GetUrl()
-	u, err := url.Parse(storedRawUrl)
-	c.Assert(err, IsNil)
-	c.Assert(u.Scheme, Equals, "https")
-
-	task.SetHost("not-the-best.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "not-the-best.com")
-	// scheme should still be https
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	u, err = url.Parse(storedRawUrl)
-	c.Assert(err, IsNil)
-	c.Assert(u.Scheme, Equals, "https")
-
-	// if you do this, you're gonna have a bad time
-	shouldPanic := func() {
-		task.SetHost("https://all-the-special-ch@racters.com")
-	}
-	c.Assert(shouldPanic, PanicMatches, "invalid host: https://all-the-special-ch@racters.com")
-	// shouldn't have changed
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "not-the-best.com")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	u, err = url.Parse(storedRawUrl)
-	c.Assert(err, IsNil)
-	c.Assert(u.Scheme, Equals, "https")
-
-	// scheme should be cleared when host is cleared, to allow for relative paths
-	task.SetHost("")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	u, err = url.Parse(storedRawUrl)
-	c.Assert(err, IsNil)
-	c.Assert(u.Scheme, Equals, "")
-}
-
-func (s *AppengineInterfacesTest) TestTaskMethod(c *C) {
+func (s *CloudTasksTest) TestTaskMethod(c *C) {
 	task := NewTask()
 
 	storedMethod := task.Method()
@@ -183,7 +152,7 @@ func (s *AppengineInterfacesTest) TestTaskMethod(c *C) {
 	c.Assert(storedMethod, Equals, "OPTIONS")
 }
 
-func (s *AppengineInterfacesTest) TestTaskName(c *C) {
+func (s *CloudTasksTest) TestTaskName(c *C) {
 	task := NewTask()
 
 	storedName := task.Name()
@@ -194,7 +163,7 @@ func (s *AppengineInterfacesTest) TestTaskName(c *C) {
 	c.Assert(storedName, Equals, "names are hard")
 }
 
-func (s *AppengineInterfacesTest) TestTaskPath(c *C) {
+func (s *CloudTasksTest) TestTaskPath(c *C) {
 	task := NewTask()
 
 	storedPath := task.Path()
@@ -224,98 +193,7 @@ func (s *AppengineInterfacesTest) TestTaskPath(c *C) {
 	c.Assert(storedPath, Equals, "")
 }
 
-func (s *AppengineInterfacesTest) TestTaskHostAndPath(c *C) {
-	// this test focuses on making sure Host and Path don't clobber each other,
-	// since they're modifying the same underlying url string
-
-	// set host, then path
-	task := NewTask().(*taskImpl)
-	task.SetHost("potato.com")
-	task.SetPath("/harvest")
-	storedHost := task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath := task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl := task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-
-	// set path, then host
-	task = NewTask().(*taskImpl)
-	task.SetPath("/harvest")
-	task.SetHost("potato.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-
-	// set path and host, then modify path
-	task = NewTask().(*taskImpl)
-	task.SetPath("/harvest")
-	task.SetHost("potato.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-	task.SetPath("/plant")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/plant")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/plant")
-
-	// set path and host, then modify host
-	task = NewTask().(*taskImpl)
-	task.SetPath("/harvest")
-	task.SetHost("potato.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-	task.SetHost("blueberry.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "blueberry.com")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://blueberry.com/harvest")
-
-	// set path and host, clear host
-	task = NewTask().(*taskImpl)
-	task.SetPath("/harvest")
-	task.SetHost("potato.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-	task.SetHost("")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "/harvest")
-
-	// set path and host, clear path
-	task = NewTask().(*taskImpl)
-	task.SetPath("/harvest")
-	task.SetHost("potato.com")
-	storedHost = task.Host()
-	c.Assert(storedHost, Equals, "potato.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/harvest")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com/harvest")
-	task.SetPath("")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "")
-	storedRawUrl = task.task.GetHttpRequest().GetUrl()
-	c.Assert(storedRawUrl, Equals, "https://potato.com")
-}
-
-func (s *AppengineInterfacesTest) TestTaskPayload(c *C) {
+func (s *CloudTasksTest) TestTaskPayload(c *C) {
 	task := NewTask()
 
 	storedPayload := task.Payload()
@@ -326,7 +204,7 @@ func (s *AppengineInterfacesTest) TestTaskPayload(c *C) {
 	c.Assert(bytes.Equal(storedPayload, []byte("buzz buzz I'm a bee")), IsTrue)
 }
 
-func (s *AppengineInterfacesTest) TestTaskRetryCount(c *C) {
+func (s *CloudTasksTest) TestTaskRetryCount(c *C) {
 	task := NewTask()
 
 	storedCount := task.RetryCount()
@@ -346,26 +224,19 @@ func (m *tqClientMock) CreateTask(ctx context.Context, req *taskspb.CreateTaskRe
 	return args.Get(0).(*taskspb.Task), args.Error(1)
 }
 
-type CloudTasksTest struct{}
-
-var _ = Suite(&CloudTasksTest{})
-
-func (s *CloudTasksTest) SetUpTest(c *C) {
-	tqClient = &tqClientMock{}
-}
-
 func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
 	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
-	c.Assert(task, DeepEquals, &taskImpl{
+	c.Assert(task, DeepEquals, &cloudTaskImpl{
 		task: &taskspb.Task{
-			PayloadType: &taskspb.Task_HttpRequest{
-				HttpRequest: &taskspb.HttpRequest{
-					Url:        "/vegetables/potato",
-					HttpMethod: taskspb.HttpMethod_POST,
+			MessageType: &taskspb.Task_AppEngineHttpRequest{
+				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+					AppEngineRouting: &taskspb.AppEngineRouting{},
+					RelativeUri:      "/vegetables/potato",
+					HttpMethod:       taskspb.HttpMethod_POST,
 					Headers: map[string]string{
 						"Content-Type": "application/x-www-form-urlencoded",
 					},
@@ -389,7 +260,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*taskImpl)
+	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskImpl)
 	taskCopy := task.Copy()
 
 	expectedInnerTask := *task.task
@@ -398,7 +269,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 		Task:   &expectedInnerTask,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return(&expectedInnerTask, nil).Once()
-	expectedTask := &taskImpl{
+	expectedTask := &cloudTaskImpl{
 		task: &expectedInnerTask,
 	}
 
@@ -418,7 +289,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
 	added, err = tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, DeepEquals, &taskImpl{})
+	c.Assert(added, DeepEquals, &cloudTaskImpl{})
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(task, DeepEquals, taskCopy)
 	checkMocks()
@@ -448,17 +319,17 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	}
 
 	expectedInnerTasks := []taskspb.Task{
-		*tasks[0].(*taskImpl).task,
-		*tasks[1].(*taskImpl).task,
+		*tasks[0].(*cloudTaskImpl).task,
+		*tasks[1].(*cloudTaskImpl).task,
 	}
 	expectedInnerTasks[0].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/1123914753"
 	expectedInnerTasks[1].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/2144551360"
 
 	expectedTasks := []Task{
-		&taskImpl{
+		&cloudTaskImpl{
 			task: &expectedInnerTasks[0],
 		},
-		&taskImpl{
+		&cloudTaskImpl{
 			task: &expectedInnerTasks[1],
 		},
 	}
@@ -496,7 +367,7 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 
 	expectedTasks = []Task{
 		expectedTasks[0],
-		&taskImpl{},
+		&cloudTaskImpl{},
 	}
 
 	expectedErr := appengine.MultiError{

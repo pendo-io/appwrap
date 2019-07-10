@@ -3,6 +3,7 @@ package appwrap
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
@@ -30,8 +31,6 @@ type Task interface {
 	SetDelay(delay time.Duration)
 	Header() http.Header
 	SetHeader(header http.Header)
-	Host() string
-	SetHost(host string)
 	Method() string
 	SetMethod(method string)
 	Name() string
@@ -42,8 +41,33 @@ type Task interface {
 	SetPayload(payload []byte)
 	RetryCount() int32
 	SetRetryCount(count int32)
+	Service() string
+	SetService(service string)
 	Tag() string
 	SetTag(tag string)
+	Version() string
+	SetVersion(version string)
 }
 
 type CloudTasksLocation string
+
+var useCloudTasks bool
+
+func NewTask() Task {
+	if useCloudTasks {
+		return newCloudTask()
+	} else if loc := os.Getenv("cloud_tasks_location"); loc != "" {
+		return newCloudTask()
+	} else {
+		return newAeTask()
+	}
+}
+
+func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
+	if loc == "" {
+		return newAeTaskqueue(c, loc)
+	} else {
+		useCloudTasks = true
+		return newCloudTaskqueue(c, loc)
+	}
+}

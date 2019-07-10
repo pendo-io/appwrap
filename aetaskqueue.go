@@ -1,8 +1,7 @@
-// +build !cloudtasks
-
 package appwrap
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -11,13 +10,15 @@ import (
 	"google.golang.org/appengine/taskqueue"
 )
 
-type taskImpl struct {
-	task *taskqueue.Task
+type aeTaskImpl struct {
+	task    *taskqueue.Task
+	service string
+	version string
 }
 
-func (t *taskImpl) isTask() {}
+func (t *aeTaskImpl) isTask() {}
 
-func (t *taskImpl) Copy() Task {
+func (t *aeTaskImpl) Copy() Task {
 	payloadCopy := make([]byte, len(t.task.Payload))
 	copy(payloadCopy, t.task.Payload)
 
@@ -35,7 +36,7 @@ func (t *taskImpl) Copy() Task {
 		retryCopy := *t.task.RetryOptions
 		retryOptions = &retryCopy
 	}
-	return &taskImpl{
+	return &aeTaskImpl{
 		task: &taskqueue.Task{
 			Path:         t.task.Path,
 			Payload:      payloadCopy,
@@ -48,32 +49,34 @@ func (t *taskImpl) Copy() Task {
 			Tag:          t.task.Tag,
 			RetryOptions: retryOptions,
 		},
+		service: t.service,
+		version: t.version,
 	}
 }
 
 type QueueStatistics = taskqueue.QueueStatistics
 
-func (t *taskImpl) Delay() time.Duration {
+func (t *aeTaskImpl) Delay() time.Duration {
 	return t.task.Delay
 }
 
-func (t *taskImpl) SetDelay(delay time.Duration) {
+func (t *aeTaskImpl) SetDelay(delay time.Duration) {
 	t.task.Delay = delay
 }
 
-func (t *taskImpl) Header() http.Header {
+func (t *aeTaskImpl) Header() http.Header {
 	return t.task.Header
 }
 
-func (t *taskImpl) SetHeader(header http.Header) {
+func (t *aeTaskImpl) SetHeader(header http.Header) {
 	t.task.Header = header
 }
 
-func (t *taskImpl) Host() string {
+func (t *aeTaskImpl) host() string {
 	return t.task.Header.Get("Host")
 }
 
-func (t *taskImpl) SetHost(hostname string) {
+func (t *aeTaskImpl) setHost(hostname string) {
 	innerTask := t.task
 	if innerTask.Header == nil {
 		innerTask.Header = make(http.Header)
@@ -81,56 +84,72 @@ func (t *taskImpl) SetHost(hostname string) {
 	innerTask.Header.Set("Host", hostname)
 }
 
-func (t *taskImpl) Method() string {
+func (t *aeTaskImpl) Method() string {
 	return t.task.Method
 }
 
-func (t *taskImpl) SetMethod(method string) {
+func (t *aeTaskImpl) SetMethod(method string) {
 	t.task.Method = method
 }
 
-func (t *taskImpl) Name() string {
+func (t *aeTaskImpl) Name() string {
 	return t.task.Name
 }
 
-func (t *taskImpl) SetName(name string) {
+func (t *aeTaskImpl) SetName(name string) {
 	t.task.Name = name
 }
 
-func (t *taskImpl) Path() string {
+func (t *aeTaskImpl) Path() string {
 	return t.task.Path
 }
 
-func (t *taskImpl) SetPath(path string) {
+func (t *aeTaskImpl) SetPath(path string) {
 	t.task.Path = path
 }
 
-func (t *taskImpl) Payload() []byte {
+func (t *aeTaskImpl) Payload() []byte {
 	return t.task.Payload
 }
 
-func (t *taskImpl) SetPayload(payload []byte) {
+func (t *aeTaskImpl) SetPayload(payload []byte) {
 	t.task.Payload = payload
 }
 
-func (t *taskImpl) RetryCount() int32 {
+func (t *aeTaskImpl) RetryCount() int32 {
 	return t.task.RetryCount
 }
 
-func (t *taskImpl) SetRetryCount(count int32) {
+func (t *aeTaskImpl) SetRetryCount(count int32) {
 	t.task.RetryCount = count
 }
 
-func (t *taskImpl) Tag() string {
+func (t *aeTaskImpl) Service() string {
+	return t.service
+}
+
+func (t *aeTaskImpl) SetService(service string) {
+	t.service = service
+}
+
+func (t *aeTaskImpl) Tag() string {
 	return t.task.Tag
 }
 
-func (t *taskImpl) SetTag(tag string) {
+func (t *aeTaskImpl) SetTag(tag string) {
 	t.task.Tag = tag
 }
 
-func NewTask() Task {
-	return &taskImpl{
+func (t *aeTaskImpl) Version() string {
+	return t.version
+}
+
+func (t *aeTaskImpl) SetVersion(version string) {
+	t.version = version
+}
+
+func newAeTask() Task {
+	return &aeTaskImpl{
 		task: &taskqueue.Task{},
 	}
 }
@@ -139,13 +158,31 @@ type appengineTaskqueue struct {
 	c context.Context
 }
 
-func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
+func newAeTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 	return appengineTaskqueue{c}
 }
 
+func (t appengineTaskqueue) populateTaskHosts(tasks []Task) {
+	appInfo := NewAppengineInfoFromContext(t.c)
+	project := appInfo.AppID()
+	u := fmt.Sprintf("%s.appspot.com", project)
+	for _, tIntf := range tasks {
+		u := u
+		task := tIntf.(*aeTaskImpl)
+		if task.service != "" {
+			u = task.service + "." + u
+		}
+		if task.version != "" {
+			u = task.version + "." + u
+		}
+		task.setHost(u)
+	}
+}
+
 func (t appengineTaskqueue) Add(c context.Context, task Task, queueName string) (Task, error) {
-	innerTask, err := taskqueue.Add(c, task.(*taskImpl).task, queueName)
-	return &taskImpl{
+	t.populateTaskHosts([]Task{task})
+	innerTask, err := taskqueue.Add(c, task.(*aeTaskImpl).task, queueName)
+	return &aeTaskImpl{
 		task: innerTask,
 	}, err
 }
@@ -153,7 +190,7 @@ func (t appengineTaskqueue) Add(c context.Context, task Task, queueName string) 
 func (t appengineTaskqueue) getInnerTasks(tasks []Task) []*taskqueue.Task {
 	innerTasks := make([]*taskqueue.Task, len(tasks))
 	for i, t := range tasks {
-		innerTasks[i] = t.(*taskImpl).task
+		innerTasks[i] = t.(*aeTaskImpl).task
 	}
 	return innerTasks
 }
@@ -161,7 +198,7 @@ func (t appengineTaskqueue) getInnerTasks(tasks []Task) []*taskqueue.Task {
 func (t appengineTaskqueue) wrapTasks(tasks []*taskqueue.Task) []Task {
 	wrappedTasks := make([]Task, len(tasks))
 	for i, t := range tasks {
-		wrappedTasks[i] = &taskImpl{
+		wrappedTasks[i] = &aeTaskImpl{
 			task: t,
 		}
 	}
@@ -169,6 +206,7 @@ func (t appengineTaskqueue) wrapTasks(tasks []*taskqueue.Task) []Task {
 }
 
 func (t appengineTaskqueue) AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error) {
+	t.populateTaskHosts(tasks)
 	innerTasks := t.getInnerTasks(tasks)
 	newTasks, err := taskqueue.AddMulti(c, innerTasks, queueName)
 	return t.wrapTasks(newTasks), err
@@ -190,11 +228,11 @@ func (t appengineTaskqueue) LeaseByTag(c context.Context, maxTasks int, queueNam
 }
 
 func (t appengineTaskqueue) ModifyLease(c context.Context, task Task, queueName string, leaseTime int) error {
-	return taskqueue.ModifyLease(c, task.(*taskImpl).task, queueName, leaseTime)
+	return taskqueue.ModifyLease(c, task.(*aeTaskImpl).task, queueName, leaseTime)
 }
 
 func (t appengineTaskqueue) NewPOSTTask(path string, params url.Values) Task {
-	return &taskImpl{
+	return &aeTaskImpl{
 		task: taskqueue.NewPOSTTask(path, params),
 	}
 }
