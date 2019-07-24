@@ -3,8 +3,8 @@
 package appwrap
 
 import (
-	"sync"
 	"reflect"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -46,6 +46,14 @@ func KeyStringID(key *DatastoreKey) string {
 
 func KeyNamespace(key *DatastoreKey) string {
 	return key.Namespace
+}
+
+// SetKeyNamespace recursively sets the namespace for a key and its parents, returning a new key.
+func SetKeyNamespace(key *DatastoreKey, ns string) *DatastoreKey {
+	for ; key != nil; key = key.Parent {
+		key.Namespace = ns
+	}
+	return key
 }
 
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
