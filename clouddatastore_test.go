@@ -4,6 +4,8 @@ package appwrap
 
 import (
 	"fmt"
+
+	"cloud.google.com/go/datastore"
 	. "gopkg.in/check.v1"
 )
 
@@ -42,4 +44,24 @@ func (s *AppengineInterfacesTest) TestToDatastorePropertyList(c *C) {
 		{Name: "boolList", Value: []interface{}{true, false}, NoIndex: true},
 		{Name: "int", Value: int64(17)},
 	})
+}
+
+func (s *AppengineInterfacesTest) TestSetKeyNamespace(c *C) {
+
+	ck := func(k *datastore.Key, expectedNs string) {
+		for thisKey := k; thisKey != nil; thisKey = thisKey.Parent {
+			c.Assert(thisKey.Namespace, Equals, expectedNs)
+		}
+	}
+
+	mem := NewLocalDatastore(true, nil)
+
+	keyWithNoParent := mem.NewKey("Test", "NumberOne", 0, nil)
+	ck(SetKeyNamespace(keyWithNoParent, "NewNamespace"), "NewNamespace")
+
+	keyWithOneParent := mem.NewKey("Test", "NumberTwo", 0, mem.NewKey("Test", "NumberTwoParent", 0, nil))
+	ck(SetKeyNamespace(keyWithOneParent, "NewNamespace"), "NewNamespace")
+
+	keyWithTwoParents := mem.NewKey("Test", "NumberThree", 0, mem.NewKey("Test", "NumberThreeParent", 0, mem.NewKey("Test", "NumberThreeGrandparent", 0, nil)))
+	ck(SetKeyNamespace(keyWithTwoParents, "NewNamespace"), "NewNamespace")
 }
