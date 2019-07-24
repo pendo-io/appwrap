@@ -45,6 +45,12 @@ func KeyNamespace(key *DatastoreKey) string {
 	return key.Namespace()
 }
 
+// SetKeyNamespace is only supported on GRPC-based APIs and will panic() if used with
+// the legacy appengine datastore.
+func SetKeyNamespace(key *DatastoreKey, ns string) *DatastoreKey {
+	panic("Cannot set a key's namespace using old APIs")
+}
+
 func LoadStruct(dest interface{}, props DatastorePropertyList) error {
 	return datastore.LoadStruct(dest, props)
 }
