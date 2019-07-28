@@ -50,8 +50,8 @@ func KeyNamespace(key *DatastoreKey) string {
 
 // SetKeyNamespace recursively sets the namespace for a key and its parents, returning a new key.
 func SetKeyNamespace(key *DatastoreKey, ns string) *DatastoreKey {
-	for ; key != nil; key = key.Parent {
-		key.Namespace = ns
+	for k := key; k != nil; k = k.Parent {
+		k.Namespace = ns
 	}
 	return key
 }

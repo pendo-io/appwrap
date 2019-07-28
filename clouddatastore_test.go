@@ -57,11 +57,18 @@ func (s *AppengineInterfacesTest) TestSetKeyNamespace(c *C) {
 	mem := NewLocalDatastore(true, nil)
 
 	keyWithNoParent := mem.NewKey("Test", "NumberOne", 0, nil)
-	ck(SetKeyNamespace(keyWithNoParent, "NewNamespace"), "NewNamespace")
+	newKey := SetKeyNamespace(keyWithNoParent, "NewNamespace")
+	c.Assert(newKey, NotNil)
+	ck(newKey, "NewNamespace")
 
 	keyWithOneParent := mem.NewKey("Test", "NumberTwo", 0, mem.NewKey("Test", "NumberTwoParent", 0, nil))
-	ck(SetKeyNamespace(keyWithOneParent, "NewNamespace"), "NewNamespace")
+	newKey = SetKeyNamespace(keyWithOneParent, "NewNamespace")
+	c.Assert(newKey, NotNil)
+	ck(newKey, "NewNamespace")
 
 	keyWithTwoParents := mem.NewKey("Test", "NumberThree", 0, mem.NewKey("Test", "NumberThreeParent", 0, mem.NewKey("Test", "NumberThreeGrandparent", 0, nil)))
-	ck(SetKeyNamespace(keyWithTwoParents, "NewNamespace"), "NewNamespace")
+	newKey = SetKeyNamespace(keyWithTwoParents, "NewNamespace")
+	c.Assert(newKey, NotNil)
+	ck(newKey, "NewNamespace")
+
 }
