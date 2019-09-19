@@ -5,7 +5,18 @@ package appwrap
 import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/log"
+	"net/http"
 )
+
+func NewStackDriverLogging(r *http.Request, c context.Context) (CloseableLogger, func(w http.ResponseWriter)) {
+	logger := NewAppengineLogging(c).(CloseableLogger)
+	stackDriverService := StandardLoggingService{}
+
+	closeLogger := func(w http.ResponseWriter) {
+		// Empty method exists for flexlogging compatibility
+	}
+	return logger, closeLogger
+}
 
 func NewAppengineLogging(c context.Context) Logging {
 	return appengineLogging{c}
@@ -42,4 +53,8 @@ func (al appengineLogging) Criticalf(format string, args ...interface{}) {
 
 func (al appengineLogging) Request(method, url, format string, args ...interface{}) {
 	// this is logged automatically by appengine
+}
+
+func (al appengineLogging) Close(w http.ResponseWriter) {
+	// Empty method exists for flexlogging compatibility
 }

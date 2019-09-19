@@ -27,6 +27,11 @@ type Logging interface {
 	Request(request, url, format string, args ...interface{}) // This is conditionally implemented
 }
 
+type CloseableLogger interface {
+	Logging
+	Close(http.ResponseWriter)
+}
+
 // DataLogging for system logging that can accept json, strings, or structs
 type DataLogging interface {
 	Logging

@@ -3,8 +3,10 @@
 package appwrap
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,6 +14,9 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	logName = LogName("stackdriver-logging")
+)
 func NewAppengineLogging(c context.Context) Logging {
 
 	nonce := fmt.Sprintf("%016x", rand.Uint64())
@@ -44,6 +49,32 @@ func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Log
 	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, log).(*StackdriverLoggingService)
 
 	return loggingService
+}
+
+func NewStackDriverLogging(r *http.Request, fakeCtx context.Context) (CloseableLogger, func(w http.ResponseWriter)) {
+	ctx := context.Background()
+	log := NewAppengineLogging(ctx)
+	appinfo := NewAppengineInfoFromContext(ctx)
+	stackDriverService := NewAppEngineLoggingService(ctx, appinfo, log).(*StackdriverLoggingService)
+	logger := stackDriverService.CreateLog(map[string]string{
+		"module_id": appinfo.ModuleName(),
+	},
+		logName,
+		r,
+		getTraceId()).(CloseableLogger)
+
+	closeLogger := func (w http.ResponseWriter) {
+		stackDriverService.Close()
+		logger.Close(w)
+	}
+
+	return logger, closeLogger
+}
+
+func getTraceId() string {
+	traceBytes := make([]byte, 30)
+	rand.Read(traceBytes)
+	return base64.StdEncoding.EncodeToString(traceBytes)
 }
 
 func init() {
