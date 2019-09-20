@@ -18,3 +18,4 @@ type Memcache interface {
 
 type CacheLocation string
 type CacheName string
+type CacheShards int64
