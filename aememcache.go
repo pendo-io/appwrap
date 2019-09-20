@@ -19,7 +19,7 @@ type AppengineMemcache struct {
 	c context.Context
 }
 
-func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName) Memcache {
+func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
 	return AppengineMemcache{c}
 }
 
