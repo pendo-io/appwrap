@@ -13,7 +13,6 @@ import (
 )
 
 func NewAppengineLogging(c context.Context) Logging {
-
 	nonce := fmt.Sprintf("%016x", rand.Uint64())
 	stdout := FormatLogger{
 		Logf: func(format string, args ...interface{}) {
@@ -34,7 +33,8 @@ func NewAppengineLogging(c context.Context) Logging {
 	}
 }
 
-func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Logging) LoggingServiceInterface {
+func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo) LoggingServiceInterface {
+	log := NewAppengineLogging(c)
 	client, err := logging.NewClient(c, aeInfo.AppID())
 	if err != nil {
 		panic(fmt.Sprintf("unable to configure stackdriver logger: %s", err.Error()))
@@ -44,6 +44,38 @@ func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Log
 	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, log).(*StackdriverLoggingService)
 
 	return loggingService
+}
+
+func NewStackdriverLogging(c context.Context) Logging {
+	return stackdriverLogging{c}
+}
+
+type stackdriverLogging struct {
+	c context.Context
+}
+
+func (al stackdriverLogging) Debugf(format string, args ...interface{}) {
+	Debugf(al.c, format, args...)
+}
+
+func (al stackdriverLogging) Infof(format string, args ...interface{}) {
+	Infof(al.c, format, args...)
+}
+
+func (al stackdriverLogging) Warningf(format string, args ...interface{}) {
+	Warningf(al.c, format, args...)
+}
+
+func (al stackdriverLogging) Errorf(format string, args ...interface{}) {
+	Errorf(al.c, format, args...)
+}
+
+func (al stackdriverLogging) Criticalf(format string, args ...interface{}) {
+	Criticalf(al.c, format, args...)
+}
+
+func (al stackdriverLogging) Request(method, url, format string, args ...interface{}) {
+	// this is logged automatically by stackdriver logger
 }
 
 func init() {

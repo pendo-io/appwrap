@@ -3,7 +3,10 @@
 package appwrap
 
 import (
+	"net/http"
+
 	"golang.org/x/net/context"
+	"google.golang.org/api/option"
 	"google.golang.org/appengine/log"
 )
 
@@ -11,9 +14,13 @@ func NewAppengineLogging(c context.Context) Logging {
 	return appengineLogging{c}
 }
 
-func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo, log Logging) LoggingServiceInterface {
-	loggingService := newStandardLoggingService(log)
+func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo) LoggingServiceInterface {
+	loggingService := newStandardLoggingService(NewAppengineLogging(c))
 	return loggingService
+}
+
+func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...option.ClientOption) http.Handler {
+	return h
 }
 
 type appengineLogging struct {
@@ -42,4 +49,8 @@ func (al appengineLogging) Criticalf(format string, args ...interface{}) {
 
 func (al appengineLogging) Request(method, url, format string, args ...interface{}) {
 	// this is logged automatically by appengine
+}
+
+func NewStackdriverLogging(c context.Context) Logging {
+	return appengineLogging{c}
 }
