@@ -17,6 +17,10 @@ const (
 	LogLevelSilence
 )
 
+const (
+	ChildLogName = "pendo.io/child_log"
+)
+
 // Interface for system logging using printf() style strings
 type Logging interface {
 	Debugf(format string, args ...interface{})                // Debug message
