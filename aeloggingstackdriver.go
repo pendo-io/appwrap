@@ -48,6 +48,42 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// for use in flex services with long-running tasks that don't handle http requests
+func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) (context.Context, func()) {
+	aeInfo := NewAppengineInfoFromContext(c)
+
+	project := aeInfo.AppID()
+	if project == "" {
+		panic("aelog: no GCP project set in environment")
+	}
+	parent := "projects/" + project
+	lc, err := logging.NewClient(c, parent)
+	if err != nil {
+		panic(err)
+	}
+	if logName == "" {
+		logName = ChildLogName
+	}
+	logger := lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
+		Type: "gae_app",
+		Labels: map[string]string{
+			"module_id":  aeInfo.ModuleName(),
+			"version_id": aeInfo.VersionID(),
+			"project_id": project,
+		},
+	}))
+	logCtxVal := &loggingCtxValue{
+		parent: parent,
+		logger: logger,
+		trace:  parent + "/traces/" + fmt.Sprintf("%d", rand.Int63()),
+	}
+
+	ctx := context.WithValue(c, loggingCtxKey, logCtxVal)
+	return ctx, func() {
+		lc.Close()
+	}
+}
+
 func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...option.ClientOption) http.Handler {
 	if IsDevAppServer {
 		return h
