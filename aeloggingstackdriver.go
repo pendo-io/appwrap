@@ -158,6 +158,10 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 	})
 }
 
+func IsValidLoggingContext(ctx context.Context) bool {
+	return ctx.Value(loggingCtxKey) != nil
+}
+
 func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format string, args ...interface{}) {
 	ctxVal := ctx.Value(loggingCtxKey)
 	if ctxVal == nil {
