@@ -46,6 +46,11 @@ func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo) Logging
 }
 
 func NewStackdriverLogging(c context.Context) Logging {
+	if !IsValidLoggingContext(c) {
+		l := NewWriterLogger(os.Stderr)
+		l.Criticalf("attempt to wrap non-Stackdriver-enabled context for logging; falling back to stderr")
+		return l
+	}
 	return stackdriverLogging{c}
 }
 
