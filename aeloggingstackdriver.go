@@ -3,6 +3,7 @@
 package appwrap
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -19,9 +20,10 @@ import (
 var loggingCtxKey = struct{ k string }{"hlog context key"}
 
 type loggingCtxValue struct {
-	parent string
+	aeInfo AppengineInfo
 	hreq   *http.Request
 	logger *logging.Logger
+	parent string
 	sev    logtypepb.LogSeverity
 	trace  string
 }
@@ -48,6 +50,34 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *logging.Logger {
+	return lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
+		Type: "gae_app",
+		Labels: map[string]string{
+			"module_id":  aeInfo.ModuleName(),
+			"version_id": aeInfo.VersionID(),
+			"project_id": aeInfo.AppID(),
+		},
+	}), logging.DelayThreshold(2*time.Second))
+}
+
+func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, parent, trace string) *loggingCtxValue {
+	return &loggingCtxValue{
+		aeInfo: aeInfo,
+		hreq:   hreq,
+		logger: logger,
+		parent: parent,
+		trace:  trace,
+	}
+}
+
+func logLabels(logCtxVal *loggingCtxValue) map[string]string {
+	return map[string]string{
+		"appengine.googleapis.com/instance_name": logCtxVal.aeInfo.InstanceID(),
+		"pendo.io/request_url":                   logCtxVal.hreq.URL.String(),
+	}
+}
+
 // for use in flex services with long-running tasks that don't handle http requests
 func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) (context.Context, func()) {
 	aeInfo := NewAppengineInfoFromContext(c)
@@ -64,19 +94,12 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 	if logName == "" {
 		logName = ChildLogName
 	}
-	logger := lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
-		Type: "gae_app",
-		Labels: map[string]string{
-			"module_id":  aeInfo.ModuleName(),
-			"version_id": aeInfo.VersionID(),
-			"project_id": project,
-		},
-	}))
-	logCtxVal := &loggingCtxValue{
-		parent: parent,
-		logger: logger,
-		trace:  parent + "/traces/" + fmt.Sprintf("%d", rand.Int63()),
+	req, err := http.NewRequest("GET", "pendo.io/background", bytes.NewReader([]byte{}))
+	if err != nil {
+		panic(err)
 	}
+	logger := getLogger(aeInfo, lc, logName)
+	logCtxVal := getLogCtxVal(aeInfo, req, logger, parent, parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
 
 	ctx := context.WithValue(c, loggingCtxKey, logCtxVal)
 	return ctx, func() {
@@ -106,30 +129,12 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 		logName = ChildLogName
 	}
 
-	logger := lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
-		Type: "gae_app",
-		Labels: map[string]string{
-			"module_id":  aeInfo.ModuleName(),
-			"version_id": aeInfo.VersionID(),
-			"project_id": project,
-		},
-	}))
+	logger := getLogger(aeInfo, lc, logName)
 
-	parentLogger := lc.Logger(requestLogPath, logging.CommonResource(&mrpb.MonitoredResource{
-		Type: "gae_app",
-		Labels: map[string]string{
-			"module_id":  aeInfo.ModuleName(),
-			"version_id": aeInfo.VersionID(),
-			"project_id": project,
-		},
-	}))
+	parentLogger := getLogger(aeInfo, lc, requestLogPath)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logCtxVal := &loggingCtxValue{
-			parent: parent,
-			hreq:   r,
-			logger: logger,
-		}
+		logCtxVal := getLogCtxVal(aeInfo, r, logger, parent, "")
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
 		if traceHeader != "" {
 			logCtxVal.trace = parent + "/traces/" + strings.Split(traceHeader, "/")[0]
@@ -144,15 +149,16 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 		h.ServeHTTP(sw, r.WithContext(ctx))
 
 		e := logging.Entry{
-			Timestamp: time.Now(),
-			Severity:  logging.Severity(logCtxVal.sev),
 			HTTPRequest: &logging.HTTPRequest{
 				Latency:      time.Now().Sub(start),
 				ResponseSize: int64(sw.length),
 				Request:      r,
 				Status:       sw.status,
 			},
-			Trace: logCtxVal.trace,
+			Labels:    logLabels(logCtxVal),
+			Severity:  logging.Severity(logCtxVal.sev),
+			Timestamp: time.Now(),
+			Trace:     logCtxVal.trace,
 		}
 		parentLogger.Log(e)
 	})
@@ -171,9 +177,10 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	logCtxVal := ctxVal.(*loggingCtxValue)
 
 	e := logging.Entry{
-		Timestamp: time.Now(),
-		Severity:  logging.Severity(sev),
+		Labels:    logLabels(logCtxVal),
 		Payload:   fmt.Sprintf(format, args...),
+		Severity:  logging.Severity(sev),
+		Timestamp: time.Now(),
 		Trace:     logCtxVal.trace,
 	}
 	logCtxVal.logger.Log(e)
