@@ -230,7 +230,7 @@ func (ms Memorystore) namespacedKeyAndShard(key string) (string, int) {
 		panic("redis: blank key")
 	}
 	namespacedKey := ms.namespace + ":" + key
-	shard := int(xxhash.Sum64([]byte(namespacedKey))) % len(ms.clients)
+	shard := int(xxhash.Sum64String(namespacedKey) % uint64(len(ms.clients)))
 	return namespacedKey, shard
 }
 
