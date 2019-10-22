@@ -166,6 +166,10 @@ func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
 	fullKey, shard = ms.namespacedKeyAndShard("banana")
 	c.Assert(fullKey, Equals, "test-ns:banana")
 	c.Assert(shard, Equals, 1)
+
+	// this value tests that our sharding algorithm connects for negative number results from the mod operator.
+	_, shard = ms.namespacedKeyAndShard(":asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdfasdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf")
+	c.Assert(shard, Equals, 1)
 }
 
 func (s *MemorystoreTest) TestAdd(c *C) {
