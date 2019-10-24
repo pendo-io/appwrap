@@ -4,13 +4,17 @@ package appwrap
 
 import (
 	"reflect"
+	"runtime"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/datastore"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 	"google.golang.org/appengine"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 type DatastoreEntity = datastore.Entity
@@ -106,7 +110,14 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 		defer clientMtx.Unlock()
 		if dsClient == nil {
 			aeInfo := NewAppengineInfoFromContext(c)
-			if dsClient, err = datastore.NewClient(c, aeInfo.AppID()); err != nil {
+			o := []option.ClientOption{
+				// Options borrowed from construction of the pubsub client
+				option.WithGRPCConnectionPool(runtime.GOMAXPROCS(0)),
+				option.WithGRPCDialOption(grpc.WithKeepaliveParams(keepalive.ClientParameters{
+					Time: 5 * time.Minute,
+				})),
+			}
+			if dsClient, err = datastore.NewClient(c, aeInfo.AppID(), o...); err != nil {
 				return nil, convertIfMultiError(err)
 			}
 		}
