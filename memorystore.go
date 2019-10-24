@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -195,6 +196,7 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 					Addr:     addrs[i],
 					Password: "",
 					DB:       0,
+					PoolSize: 2 * runtime.GOMAXPROCS(0),
 				}).WithContext(c)
 				clients[i] = &redisClientImplementation{client, client}
 			}
