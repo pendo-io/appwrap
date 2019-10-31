@@ -14,7 +14,9 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/appengine"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 )
 
 type DatastoreEntity = datastore.Entity
@@ -96,12 +98,17 @@ type CloudDatastore struct {
 	ctx       context.Context
 	client    *datastore.Client
 	namespace string
+	timeout   time.Duration
 }
 
 var NewDatastore = NewCloudDatastore
 
 var dsClient *datastore.Client = nil
 var clientMtx = &sync.Mutex{}
+
+func newCloudDatastore(c context.Context, client *datastore.Client, namespace string, timeout time.Duration) Datastore {
+	return CloudDatastore{client: client, ctx: c, namespace: namespace, timeout: timeout}
+}
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
 	var err error
@@ -123,16 +130,29 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 		}
 	}
 
-	return CloudDatastore{
-		client: dsClient,
-		ctx:    c,
-	}, nil
+	return newCloudDatastore(c, dsClient, "", 5*time.Second), nil
+}
 
+func withTimeout(parent context.Context, timeout time.Duration, f func(context.Context) error) error {
+	return withDeadline(parent, time.Now().Add(timeout), f)
+}
+
+func withDeadline(parent context.Context, time time.Time, f func(context.Context) error) error {
+	tctx, cancel := context.WithDeadline(parent, time)
+	defer cancel()
+	err := f(tctx)
+	if err != nil && tctx.Err() != nil && parent.Err() == nil {
+		// This means the individual datastore request timed out, but the parent request is still alive
+		// So we can return a retryable error to the caller
+		return status.Error(codes.DeadlineExceeded, "datastore timeout")
+	}
+	// otherwise, just return whatever error we got
+	return err
 }
 
 func (cds CloudDatastore) Deadline(t time.Time) Datastore {
 	c, _ := context.WithDeadline(cds.ctx, t)
-	return CloudDatastore{client: cds.client, ctx: c}
+	return newCloudDatastore(c, cds.client, cds.namespace, cds.timeout)
 }
 
 func (cds CloudDatastore) Namespace(ns string) Datastore {
@@ -142,22 +162,33 @@ func (cds CloudDatastore) Namespace(ns string) Datastore {
 }
 
 func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
-	res, err := cds.client.AllocateIDs(cds.ctx, incompleteKeys)
+	var res []*DatastoreKey
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		var err error
+		res, err = cds.client.AllocateIDs(tctx, incompleteKeys)
+		return err
+	})
 	return res, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
-	err := cds.client.DeleteMulti(cds.ctx, keys)
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		return cds.client.DeleteMulti(tctx, keys)
+	})
 	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
-	err := cds.client.Get(cds.ctx, key, dst)
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		return cds.client.Get(tctx, key, dst)
+	})
 	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	err := cds.client.GetMulti(cds.ctx, keys, dst)
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		return cds.client.GetMulti(tctx, keys, dst)
+	})
 	return convertIfMultiError(err)
 }
 
@@ -169,12 +200,23 @@ func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 }
 
 func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
-	res, err := cds.client.Put(cds.ctx, key, src)
+	var res *DatastoreKey
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		var err error
+		res, err = cds.client.Put(tctx, key, src)
+		return err
+	})
+
 	return res, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
-	res, err := cds.client.PutMulti(cds.ctx, keys, src)
+	var res []*DatastoreKey
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		var err error
+		res, err = cds.client.PutMulti(tctx, keys, src)
+		return err
+	})
 	return res, convertIfMultiError(err)
 }
 
@@ -183,21 +225,27 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 		panic("transaction options not supported")
 	}
 
-	commit, err := cds.client.RunInTransaction(cds.ctx, func(transaction *datastore.Transaction) error {
-		ct := CloudTransaction{
-			client:      cds.client,
-			ctx:         cds.ctx,
-			namespace:   cds.namespace,
-			transaction: transaction,
-		}
-		return f(ct)
+	var commit *datastore.Commit
+	err := withTimeout(cds.ctx, cds.timeout, func(tctx context.Context) error {
+		var err error
+		commit, err = cds.client.RunInTransaction(tctx, func(transaction *datastore.Transaction) error {
+			ct := CloudTransaction{
+				client:      cds.client,
+				ctx:         tctx,
+				deadline:    time.Now().Add(cds.timeout),
+				namespace:   cds.namespace,
+				transaction: transaction,
+			}
+			return f(ct)
+		})
+		return err
 	})
 
 	return CloudDatastoreCommit{ctx: cds.ctx, commit: commit}, convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
-	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, q: datastore.NewQuery(kind)}
+	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, deadline: time.Now().Add(cds.timeout), q: datastore.NewQuery(kind)}
 	if cds.namespace != "" {
 		q.q = q.q.Namespace(cds.namespace)
 	}
@@ -208,6 +256,7 @@ func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
 type CloudTransaction struct {
 	ctx         context.Context
 	client      *datastore.Client
+	deadline    time.Time
 	namespace   string
 	transaction *datastore.Transaction
 }
@@ -235,7 +284,7 @@ func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *Da
 }
 
 func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
-	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, q: datastore.NewQuery(kind)}
+	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, deadline: ct.deadline, q: datastore.NewQuery(kind)}
 	q.q = q.q.Transaction(ct.transaction)
 	if ct.namespace != "" {
 		q.q = q.q.Namespace(ct.namespace)
@@ -264,9 +313,10 @@ func (cdc CloudDatastoreCommit) Key(pending *PendingKey) *DatastoreKey {
 }
 
 type CloudDatastoreQuery struct {
-	ctx    context.Context
-	client *datastore.Client
-	q      *datastore.Query
+	ctx      context.Context
+	client   *datastore.Client
+	deadline time.Time
+	q        *datastore.Query
 }
 
 func (cdq CloudDatastoreQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
@@ -336,7 +386,12 @@ func (cdq CloudDatastoreQuery) Run() DatastoreIterator {
 }
 
 func (cdq CloudDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
-	keys, err := cdq.client.GetAll(cdq.ctx, cdq.q, dst)
+	var keys []*DatastoreKey
+	err := withDeadline(cdq.ctx, cdq.deadline, func(tctx context.Context) error {
+		var err error
+		keys, err = cdq.client.GetAll(tctx, cdq.q, dst)
+		return err
+	})
 	return keys, convertIfMultiError(err)
 }
 

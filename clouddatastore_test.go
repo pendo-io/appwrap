@@ -3,9 +3,14 @@
 package appwrap
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"cloud.google.com/go/datastore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	. "gopkg.in/check.v1"
 )
 
@@ -71,4 +76,33 @@ func (s *AppengineInterfacesTest) TestSetKeyNamespace(c *C) {
 	c.Assert(newKey, NotNil)
 	ck(newKey, "NewNamespace")
 
+}
+
+func (s *AppengineInterfacesTest) TestDatastoreDeadlineTimeout(c *C) {
+	testErr := errors.New("aaah")
+	called := 0
+	testFunc := func(c context.Context) error {
+		called++
+		return testErr
+	}
+
+	// timeout exceeded
+	err := withTimeout(context.Background(), time.Duration(-10), testFunc)
+	c.Assert(status.Convert(err).Code(), Equals, codes.DeadlineExceeded)
+	c.Assert(called, Equals, 1)
+
+	// timeout not exceeded
+	err = withTimeout(context.Background(), 20*time.Second, testFunc)
+	c.Assert(err, Equals, testErr)
+	c.Assert(called, Equals, 2)
+
+	// deadline exceeded
+	err = withDeadline(context.Background(), time.Now().Add(-10), testFunc)
+	c.Assert(status.Convert(err).Code(), Equals, codes.DeadlineExceeded)
+	c.Assert(called, Equals, 3)
+
+	// deadline not exceeded
+	err = withDeadline(context.Background(), time.Now().Add(20*time.Second), testFunc)
+	c.Assert(err, Equals, testErr)
+	c.Assert(called, Equals, 4)
 }
