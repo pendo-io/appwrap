@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/googleapis/gax-go/v2"
+	"google.golang.org/api/option"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sync"
 	"time"
 
@@ -214,7 +216,11 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 		tqClientMtx.Lock()
 		defer tqClientMtx.Unlock()
 		if tqClient == nil {
-			if tqClient, err = cloudtasks.NewClient(c); err != nil {
+			o := []option.ClientOption{
+				// Options borrowed from construction of the datastore client
+				option.WithGRPCConnectionPool(runtime.GOMAXPROCS(0)),
+			}
+			if tqClient, err = cloudtasks.NewClient(c, o...); err != nil {
 				panic(fmt.Sprintf("creating taskqueue client: %s", err))
 			}
 		}
