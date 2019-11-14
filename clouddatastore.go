@@ -3,8 +3,11 @@
 package appwrap
 
 import (
+	"fmt"
+	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -106,6 +109,8 @@ var NewDatastore = NewCloudDatastore
 var (
 	dsClientMtx sync.Mutex
 	dsClient    *datastore.Client
+
+	dsClientTimeout time.Duration = 0 // default: no timeout
 )
 
 func newCloudDatastore(c context.Context, client *datastore.Client, namespace string, timeout time.Duration) Datastore {
@@ -129,10 +134,18 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 			if dsClient, err = datastore.NewClient(c, aeInfo.AppID(), o...); err != nil {
 				return nil, convertIfMultiError(err)
 			}
+
+			if timeoutStr := os.Getenv("cloud_datastore_timeout_ms"); timeoutStr != "" {
+				if d, err := strconv.ParseUint(timeoutStr, 10, 64); err != nil {
+					panic(fmt.Errorf("invalid timeout %s in cloud_datastore_timeoutms: %s", timeoutStr, err))
+				} else {
+					dsClientTimeout = time.Duration(d) * time.Millisecond
+				}
+			}
 		}
 	}
 
-	return newCloudDatastore(c, dsClient, "", 0), nil
+	return newCloudDatastore(c, dsClient, "", dsClientTimeout), nil
 }
 
 func withDeadline(parent context.Context, time time.Time, f func(context.Context) error) error {
