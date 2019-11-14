@@ -3,9 +3,14 @@
 package appwrap
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"cloud.google.com/go/datastore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	. "gopkg.in/check.v1"
 )
 
@@ -71,4 +76,90 @@ func (s *AppengineInterfacesTest) TestSetKeyNamespace(c *C) {
 	c.Assert(newKey, NotNil)
 	ck(newKey, "NewNamespace")
 
+}
+
+type deadlineCheck struct {
+	C              *C
+	ExpectDeadline time.Time
+	ExpectErr      error
+	ReturnErr      error
+
+	Called bool
+}
+
+func (c *deadlineCheck) Func(ctx context.Context) error {
+	dl, hasDL := ctx.Deadline()
+
+	if c.ExpectDeadline.IsZero() {
+		c.C.Assert(hasDL, IsFalse)
+	} else {
+		c.C.Assert(hasDL, IsTrue)
+		c.C.Assert(dl.Equal(c.ExpectDeadline), IsTrue)
+	}
+
+	ctxErr := ctx.Err()
+	if c.ExpectErr == nil {
+		c.C.Assert(ctxErr, IsNil)
+	} else {
+		c.C.Assert(ctxErr, Equals, c.ExpectErr)
+	}
+
+	c.Called = true
+	return c.ReturnErr
+}
+
+func (s *AppengineInterfacesTest) TestDatastoreWithDeadline(c *C) {
+	testErr := errors.New("aaah")
+
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Deadline in future, no func error
+	{
+		deadline := time.Now().Add(time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline}
+		err := withDeadline(context.Background(), deadline, ck.Func)
+		c.Assert(err, IsNil)
+		c.Assert(ck.Called, IsTrue)
+	}
+	// Deadline in past, no func error
+	{
+		deadline := time.Now().Add(-time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.DeadlineExceeded}
+		err := withDeadline(context.Background(), deadline, ck.Func)
+		c.Assert(err, IsNil)
+		c.Assert(ck.Called, IsTrue)
+	}
+	// Deadline in future, parent context cancelled, no func error
+	{
+		deadline := time.Now().Add(time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.Canceled}
+		err := withDeadline(cancelledCtx, deadline, ck.Func)
+		c.Assert(err, IsNil)
+		c.Assert(ck.Called, IsTrue)
+	}
+	// Deadline in future, func error
+	{
+		deadline := time.Now().Add(time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ReturnErr: testErr}
+		err := withDeadline(context.Background(), deadline, ck.Func)
+		c.Assert(err, Equals, testErr)
+		c.Assert(ck.Called, IsTrue)
+	}
+	// Deadline in past, func error
+	{
+		deadline := time.Now().Add(-time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.DeadlineExceeded, ReturnErr: testErr}
+		err := withDeadline(context.Background(), deadline, ck.Func)
+		c.Assert(status.Code(err), Equals, codes.DeadlineExceeded)
+		c.Assert(ck.Called, IsTrue)
+	}
+	// Deadline in future, parent context cancelled, func error
+	{
+		deadline := time.Now().Add(-time.Hour)
+		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.Canceled, ReturnErr: testErr}
+		err := withDeadline(cancelledCtx, deadline, ck.Func)
+		c.Assert(err, Equals, testErr)
+		c.Assert(ck.Called, IsTrue)
+	}
 }
