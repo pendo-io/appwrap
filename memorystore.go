@@ -189,6 +189,10 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 
 		// Check again, because another goroutine could have beaten us here while we were checking the first time
 		if redisClients == nil {
+			if shards == 0 {
+				panic("cannot use Memorystore with zero shards")
+			}
+
 			clients := make([]redisClientInterface, shards)
 			addrs := getRedisAddr(c, loc, name, shards)
 			for i := range addrs {
