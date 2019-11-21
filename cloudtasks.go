@@ -15,6 +15,8 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/appengine"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"math/rand"
 	"strconv"
 )
@@ -204,8 +206,8 @@ var tqClientMtx = &sync.Mutex{}
 
 const (
 	concurrentReq = 12
-	queuePathFmt = "projects/%s/locations/%s/queues/%s"
-	taskNameFmt  = "projects/%s/locations/%s/queues/%s/tasks/%s"
+	queuePathFmt  = "projects/%s/locations/%s/queues/%s"
+	taskNameFmt   = "projects/%s/locations/%s/queues/%s/tasks/%s"
 )
 
 func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
@@ -221,6 +223,9 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 			o := []option.ClientOption{
 				// Options borrowed from construction of the datastore client
 				option.WithGRPCConnectionPool(totalConnPool),
+				option.WithGRPCDialOption(grpc.WithKeepaliveParams(keepalive.ClientParameters{
+					Time: 5 * time.Minute,
+				})),
 			}
 			if tqClient, err = cloudtasks.NewClient(c, o...); err != nil {
 				panic(fmt.Sprintf("creating taskqueue client: %s", err))
