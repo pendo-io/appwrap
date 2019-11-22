@@ -3,20 +3,19 @@ package appwrap
 import (
 	"context"
 	"fmt"
-	"github.com/googleapis/gax-go/v2"
-	"google.golang.org/api/option"
 	"net/http"
 	"net/url"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/googleapis/gax-go/v2"
+	"google.golang.org/api/option"
+
 	"cloud.google.com/go/cloudtasks/apiv2"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/appengine"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
-	"math/rand"
-	"strconv"
 )
 
 type cloudTaskImpl struct {
@@ -204,8 +203,8 @@ var tqClientMtx = &sync.Mutex{}
 
 const (
 	concurrentReq = 12
-	queuePathFmt = "projects/%s/locations/%s/queues/%s"
-	taskNameFmt  = "projects/%s/locations/%s/queues/%s/tasks/%s"
+	queuePathFmt  = "projects/%s/locations/%s/queues/%s"
+	taskNameFmt   = "projects/%s/locations/%s/queues/%s/tasks/%s"
 )
 
 func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
@@ -246,15 +245,8 @@ func (t cloudTaskqueue) getFullQueueName(queueName string) string {
 	return fmt.Sprintf(queuePathFmt, t.project, t.location, queueName)
 }
 
-func (t cloudTaskqueue) getTaskName(queueName string) string {
-	taskName := strconv.Itoa(rand.Intn(1 << 31))
-	return fmt.Sprintf(taskNameFmt, t.project, t.location, queueName, taskName)
-}
-
 func (t cloudTaskqueue) Add(c context.Context, task Task, queueName string) (Task, error) {
 	taskCopy := task.Copy().(*cloudTaskImpl)
-	taskName := t.getTaskName(queueName)
-	taskCopy.SetName(taskName)
 	newTask, err := t.client.CreateTask(c, &taskspb.CreateTaskRequest{
 		Task:   taskCopy.task,
 		Parent: t.getFullQueueName(queueName),

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -248,7 +247,6 @@ func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
 }
 
 func (s *CloudTasksTest) TestAdd(c *C) {
-	rand.Seed(0)
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 
@@ -261,42 +259,21 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 	}
 
 	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskImpl)
-	taskCopy := task.Copy()
+	expectTask := task.Copy().(*cloudTaskImpl)
 
-	expectedInnerTask := *task.task
-	expectedInnerTask.Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/1123914753"
 	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTask,
+		Task:   task.task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(&expectedInnerTask, nil).Once()
-	expectedTask := &cloudTaskImpl{
-		task: &expectedInnerTask,
-	}
+	}, []gax.CallOption(nil)).Return(task.task, nil).Once()
 
 	added, err := tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, DeepEquals, expectedTask)
+	c.Assert(added, Not(Equals), expectTask) // not same pointer (copied)...
+	c.Assert(added, DeepEquals, expectTask)  // ...but has same content
 	c.Assert(err, IsNil)
-	// make sure task wasn't modified during add
-	c.Assert(task, DeepEquals, taskCopy)
-	checkMocks()
-
-	expectedInnerTask = *task.task
-	expectedInnerTask.Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/2144551360"
-	fatalErr := errors.New("disney land < disney world")
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTask,
-		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
-
-	added, err = tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, DeepEquals, &cloudTaskImpl{})
-	c.Assert(err, Equals, fatalErr)
-	c.Assert(task, DeepEquals, taskCopy)
 	checkMocks()
 }
 
 func (s *CloudTasksTest) TestAddMulti(c *C) {
-	rand.Seed(0)
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 
@@ -312,61 +289,41 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
 		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
 	}
-
-	tasksCopy := []Task{
-		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
-		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
-	}
-
-	expectedInnerTasks := []taskspb.Task{
-		*tasks[0].(*cloudTaskImpl).task,
-		*tasks[1].(*cloudTaskImpl).task,
-	}
-	expectedInnerTasks[0].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/1123914753"
-	expectedInnerTasks[1].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/2144551360"
-
-	expectedTasks := []Task{
-		&cloudTaskImpl{
-			task: &expectedInnerTasks[0],
-		},
-		&cloudTaskImpl{
-			task: &expectedInnerTasks[1],
-		},
+	expectTasks := []Task{
+		tasks[0].Copy(),
+		tasks[1].Copy(),
 	}
 
 	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTasks[0],
+		Task:   tasks[0].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(&expectedInnerTasks[0], nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
 	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTasks[1],
+		Task:   tasks[1].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(&expectedInnerTasks[1], nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[1].(*cloudTaskImpl).task, nil).Once()
 
 	added, err := tq.AddMulti(ctx, tasks, "grocery-store")
-	c.Assert(added, DeepEquals, expectedTasks)
+	c.Assert(added[0], Not(Equals), expectTasks[0]) // not same pointer (copied)...
+	c.Assert(added[1], Not(Equals), expectTasks[1]) //...
+	c.Assert(added, DeepEquals, expectTasks)        // ...but have same content
 	c.Assert(err, IsNil)
-	// make sure task wasn't modified during add
-	c.Assert(tasks, DeepEquals, tasksCopy)
 	checkMocks()
 
 	// error case on one task
 	fatalErr := errors.New("disney land < disney world")
 
-	expectedInnerTasks[0].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/1332660339"
-	expectedInnerTasks[1].Name = "projects/shopping/locations/disney-world/queues/grocery-store/tasks/1760470370"
-
 	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTasks[0],
+		Task:   tasks[0].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(&expectedInnerTasks[0], nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
 	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
-		Task:   &expectedInnerTasks[1],
+		Task:   tasks[1].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
-	expectedTasks = []Task{
-		expectedTasks[0],
+	expectTasks = []Task{
+		tasks[0].Copy(),
 		&cloudTaskImpl{},
 	}
 
@@ -375,9 +332,8 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		fatalErr,
 	}
 	added, err = tq.AddMulti(ctx, tasks, "grocery-store")
-	c.Assert(added, DeepEquals, expectedTasks)
+	c.Assert(added[0], Not(Equals), expectTasks[0])
+	c.Assert(added, DeepEquals, expectTasks)
 	c.Assert(err, DeepEquals, expectedErr)
-	// make sure task wasn't modified during add
-	c.Assert(tasks, DeepEquals, tasksCopy)
 	checkMocks()
 }
