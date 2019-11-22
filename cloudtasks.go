@@ -258,8 +258,8 @@ func (t cloudTaskqueue) getTaskName(queueName string) string {
 
 func (t cloudTaskqueue) Add(c context.Context, task Task, queueName string) (Task, error) {
 	taskCopy := task.Copy().(*cloudTaskImpl)
-	taskName := t.getTaskName(queueName)
-	taskCopy.SetName(taskName)
+	// taskName := t.getTaskName(queueName)
+	// taskCopy.SetName(taskName)
 	newTask, err := t.client.CreateTask(c, &taskspb.CreateTaskRequest{
 		Task:   taskCopy.task,
 		Parent: t.getFullQueueName(queueName),
