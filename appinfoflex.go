@@ -1,4 +1,4 @@
-// +build appenginevm go1.11
+// +build appenginevm go1.12
 
 package appwrap
 
