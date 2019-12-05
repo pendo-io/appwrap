@@ -198,8 +198,11 @@ type cloudTasksClient interface {
 	CreateTask(ctx context.Context, req *taskspb.CreateTaskRequest, opts ...gax.CallOption) (*taskspb.Task, error)
 }
 
-var tqClient cloudTasksClient = nil
-var tqClientMtx = &sync.Mutex{}
+var (
+	// This needs to be a pointer to guarantee atomic reads/writes to the value inside newCloudTaskqueue
+	tqClient    *cloudTasksClient
+	tqClientMtx sync.Mutex
+)
 
 const (
 	concurrentReq = 12
@@ -211,7 +214,6 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 	if c == nil {
 		return newDevTaskqueue()
 	}
-	var err error
 	if tqClient == nil {
 		tqClientMtx.Lock()
 		defer tqClientMtx.Unlock()
@@ -221,8 +223,11 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 				// Options borrowed from construction of the datastore client
 				option.WithGRPCConnectionPool(totalConnPool),
 			}
-			if tqClient, err = cloudtasks.NewClient(c, o...); err != nil {
+			if rawClient, err := cloudtasks.NewClient(c, o...); err != nil {
 				panic(fmt.Sprintf("creating taskqueue client: %s", err))
+			} else {
+				var client cloudTasksClient = rawClient // convert to cloudTasksClient interface
+				tqClient = &client
 			}
 		}
 	}
@@ -230,7 +235,7 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 	aeInfo := NewAppengineInfoFromContext(c)
 
 	return cloudTaskqueue{
-		client:   tqClient,
+		client:   *tqClient,
 		ctx:      c,
 		project:  aeInfo.AppID(),
 		location: loc,
