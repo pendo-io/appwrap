@@ -20,7 +20,8 @@ type CloudTasksTest struct{}
 var _ = Suite(&CloudTasksTest{})
 
 func (s *CloudTasksTest) SetUpTest(c *C) {
-	tqClient = &tqClientMock{}
+	var client cloudTasksClient = &tqClientMock{}
+	tqClient = &client
 	useCloudTasks = true
 }
 
