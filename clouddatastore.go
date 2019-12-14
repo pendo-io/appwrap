@@ -212,6 +212,17 @@ func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error 
 	return convertIfMultiError(err)
 }
 
+func (cds CloudDatastore) Kinds() (kinds []string, err error) {
+	keys, err := cds.NewQuery("__kind__").KeysOnly().GetAll(nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		kinds = append(kinds, k.Name)
+	}
+	return kinds, nil
+}
+
 func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
 	key := newKey(nil, kind, sId, iId, parent)
 	key.Namespace = cds.namespace
