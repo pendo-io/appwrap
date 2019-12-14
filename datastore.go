@@ -41,6 +41,7 @@ type Datastore interface {
 	DeleteMulti(keys []*DatastoreKey) error
 	Get(keys *DatastoreKey, dst interface{}) error
 	GetMulti(keys []*DatastoreKey, dst interface{}) error
+	Kinds() ([]string, error)
 	Namespace(ns string) Datastore
 	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
 	NewQuery(kind string) DatastoreQuery
@@ -55,7 +56,6 @@ type Commit interface {
 
 type LegacyDatastore interface {
 	AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error)
-	Kinds() ([]string, error)
 	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
 }
 
