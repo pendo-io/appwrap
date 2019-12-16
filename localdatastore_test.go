@@ -197,76 +197,254 @@ indexes:
      - name: A
 `
 
-func (dsit *AppengineInterfacesTest) TestCheckIndex(c *C) {
-	// we can query a full entity w/o an index
+// These are the queries that don't require an index
+func (dsit *AppengineInterfacesTest) TestCheckIndexNoIndexNeeded(c *C) {
 	mem := NewLocalDatastore(false, DatastoreIndex{})
-	key := mem.NewKey("someKey", "", 10, nil)
-	q := mem.NewQuery("someKind")
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	testKey := mem.NewKey("foo", "", 1, nil)
+	noIndex := func(q DatastoreQuery) {
+		c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	}
 
-	// a single field is fine
-	q = mem.NewQuery("someKind").Filter("singleField =", 0)
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// Kindless queries using only ancestor and key filters
+	// (these are scary though, so we don't use them)
+	noIndex(mem.NewQuery("").Filter("__key__ >", testKey).Ancestor(testKey))
 
-	// even if it's an ancestor
-	q = mem.NewQuery("someKind").Filter("singleField =", 0).Ancestor(mem.NewKey("foo", "", 1, nil))
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// Queries using only ancestor and equality filters
+	noIndex(mem.NewQuery("testKindNoIndex"))
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField =", 0))
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField =", 0).Ancestor(testKey))
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField =", 0).Filter("otherField =", 1).Ancestor(testKey))
 
-	// even if it's ordered
-	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("singleField")
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
-	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("-singleField")
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// Queries using only inequality filters (which are limited to a single property)
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField >", 0))
+	// Even if there's two on the same field.
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField >", 0).Filter("singleField <", 200))
 
-	// but if it's ordered by a different field we're out of luck
-	q = mem.NewQuery("someKind").Filter("singleField =", 0).Order("otherField")
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	// Queries using only ancestor filters, equality filters on properties, and inequality filters on keys
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField =", 0).Filter("__key__ >", testKey).Ancestor(testKey))
 
-	index, err := LoadIndex([]byte(checkIndexIndex))
-	c.Assert(err, IsNil)
-	mem = NewLocalDatastore(false, index)
+	// Queries with no filters and only one sort order on a property, either ascending or descending
+	// (unless descending key)
+	noIndex(mem.NewQuery("testKindNoIndex").Order("singleField"))
+	noIndex(mem.NewQuery("testKindNoIndex").Order("-singleField"))
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456) // works
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// Also with a filter on the ordered property (undocumented)
+	// (Ordering of query results is undefined when no sort order is specified)
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField >", 0).Order("singleField"))
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField >", 0).Filter("singleField <", 0).Order("-singleField"))
 
-	q = mem.NewQuery("entityKind").Filter("B =", 123).Filter("A =", 456) // order doesn't matter
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// If a query does not need an index, making it keys-only does not make you need one.
+	noIndex(mem.NewQuery("testKindNoIndex").KeysOnly())
+	noIndex(mem.NewQuery("testKindNoIndex").Filter("singleField >", 0).KeysOnly())
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("D =", 456) // no index on D
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	// Projecting once and ordering once is AOK
+	noIndex(mem.NewQuery("testKindNoIndex").Project("A").Order("-A"))
+}
 
-	q = mem.NewQuery("entityKind").Filter("E =", 123).Filter("C =", 456) // works
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+func (dsit *AppengineInterfacesTest) TestCheckIndexNeedIndexFor(c *C) {
+	mem := NewLocalDatastore(false, DatastoreIndex{})
+	testKey := mem.NewKey("foo", "", 1, nil)
+	indexSatisfies := func(query func(Datastore) DatastoreQuery, index string, satisfies bool) {
+		// If queried without index, error about a missing index
+		c.Check(query(mem).(*memoryQuery).checkIndexes(false), ErrorMatches, "(?s:missing index.*)")
 
-	q = mem.NewQuery("entityKind").Filter("B =", 123).Filter("C =", 456) // we can't skip A
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+		// Create a datastore with only the provided index
+		loadedIndex, err := LoadIndex([]byte("indexes:\n" + index))
+		c.Assert(err, IsNil)
+		indexedDs := NewLocalDatastore(false, loadedIndex)
+		if satisfies {
+			// If the provided index is supposed to satisfy, verify no error
+			c.Assert(query(indexedDs).(*memoryQuery).checkIndexes(false), IsNil)
+		} else {
+			// Otherwise, verify index is still required.
+			c.Assert(query(indexedDs).(*memoryQuery).checkIndexes(false), ErrorMatches, "(?s:missing index.*)")
+		}
+	}
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("C =", 456) // we can't skip B
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	iAbC := `
+- kind: testKindWithIndex
+  properties:
+     - name: A
+     - name: B
+       direction: desc
+     - name: C`
 
-	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Order("A") // order matches
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	iDCA := `
+- kind: testKindWithIndex
+  ancestor: yes
+  properties:
+     - name: D
+     - name: C
+     - name: A`
 
-	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Order("-A") // order mismatch
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	iDAncestor := `
+- kind: testKindWithIndex
+  ancestor: yes
+  properties:
+    - name: D`
 
-	q = mem.NewQuery("entityKind").Filter("E =", 123).Filter("C =", 456).Order("E") // can't sort by earlier item
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	iKeyDesc := `
+- kind: testKindWithIndex
+  properties:
+    - name: __key__
+      direction: desc`
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456).Order("-B") // an intermediate one works though
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	iZigzag := `
+- kind: testKindWithIndex
+  properties:
+    - name: zigzag
+    - name: merge
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B <", 456) // inequality is trailing
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+- kind: testKindWithIndex
+  properties:
+    - name: join
+    - name: merge
+`
 
-	q = mem.NewQuery("entityKind").Filter("A <", 123).Filter("B =", 456) // inequality isn't trailing
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	const (
+		satisfies               = true  // works in datastore and passes checkIndexes
+		doesNotSatisfy          = false // does not work in datastore and fails checkIndexes
+		unsupportedButSatisfies = false // works on datastore but we don't support it in appwrap
+	)
 
-	q = mem.NewQuery("entityKind").Filter("C =", 123).Filter("E =", 456).Ancestor(key) // this has an ancestor index
-	c.Assert(q.(*memoryQuery).checkIndexes(false), IsNil)
+	// Queries with ancestor and inequality filters
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("D >", 0).Ancestor(testKey)
+	}, iDAncestor, satisfies)
 
-	q = mem.NewQuery("entityKind").Filter("A =", 123).Filter("B =", 456).Ancestor(key) // this doesn't have an ancestor
-	c.Assert(q.(*memoryQuery).checkIndexes(false), NotNil)
+	// If you've got an ancestor index...
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("D =", 0).Filter("C =", 0).Filter("A >", 0).Ancestor(testKey)
+	}, iDCA, satisfies)
+
+	// ...it won't satisfy non-ancestor queries.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("D =", 0).Filter("C =", 0).Filter("A >", 0)
+	}, iDCA, doesNotSatisfy)
+
+	// Queries with one or more inequality filters on a property and one or more equality filters on other properties
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Filter("C >", 0)
+	}, iAbC, satisfies)
+
+	// No index on D
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Filter("D >", 0)
+	}, iAbC, doesNotSatisfy)
+
+	// Sub-indexes do not work as prefix
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B >", 0)
+	}, iAbC, doesNotSatisfy)
+
+	// ...or when skipping
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("C >", 0)
+	}, iAbC, doesNotSatisfy)
+
+	// ...or postfix. Or at all.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("B =", 0).Filter("C >", 0)
+	}, iAbC, doesNotSatisfy)
+
+	// Declared order of filters does not matter
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("C >", 0).Filter("B =", 0).Filter("A =", 0)
+	}, iAbC, satisfies)
+
+	// ...but, inequality must be on last indexed field
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("C =", 0).Filter("B >", 0)
+	}, iAbC, doesNotSatisfy)
+
+	// ...unless there's an order on a later field
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B >", 0).Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	// Queries with a sort order on keys in descending order
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Order("-__key__")
+	}, iKeyDesc, satisfies)
+
+	// Queries with multiple sort orders
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Order("A").Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	// Queries with one or more filters and one or more sort orders (on a different field)
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Order("C")
+	}, iAbC, satisfies)
+
+	// Yes you can have an inequality and sort order on the same property! This can even be
+	// useful for reasons of e.g. re-using an index.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B <", 0).Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	// If the sort descends, so must the index.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Order("B").Order("C")
+	}, iAbC, doesNotSatisfy)
+
+	// Queries whose earlier properties ( (In)Equality filters ) are the same as a later property,
+	// consistnt with the index. If you have a valid order-only query, prefixing it with an (in)equality
+	// filter on the first indexed property does not invalidate it.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Order("A").Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	// ...but not if you use a later property.
+	// This query parses as [Filter(B) Order(A, C)] as sort order on quality filter is ignored.
+	// And we don't have an index for that.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("B =", 0).Order("A").Order("-B").Order("C")
+	}, iAbC, doesNotSatisfy)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A >", 0).Order("A").Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Order("A").Order("-B").Order("C")
+	}, iAbC, satisfies)
+
+	// All properties in projection queries must be specified
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Filter("C >", 0).Project("C")
+	}, iAbC, satisfies)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Filter("C >", 0).Project("D")
+	}, iAbC, doesNotSatisfy)
+
+	// If a property is projected on, it doesn't need to be filtered on.
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B >", 0).Project("B", "C")
+	}, iAbC, satisfies)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Project("B", "C")
+	}, iAbC, satisfies)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Project("A", "B", "C")
+	}, iAbC, satisfies)
+
+	// This is a simplified query we actually use
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Project("C").Order("C")
+	}, iAbC, satisfies)
+
+	// Zigzag merge join algorithm
+	// https://web.archive.org/web/20181026092431/https://cloud.google.com/appengine/articles/indexselection
+	// This page is no longer linked to, and "zigzag merge join algorithm site:cloud.google.com" returns 0 results
+	// It was introduced at Google I/O in 2010. It is still valid for queries.
+	// Summary thusly: Index(A, C) && Index(B, C) satisfies Query(A, B, C)
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Filter("zigzag =", 0).Filter("join =", 0).Order("merge")
+	}, iZigzag, unsupportedButSatisfies)
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {

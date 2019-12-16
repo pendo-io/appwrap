@@ -669,10 +669,160 @@ type memoryQuery struct {
 	addEntityFields bool
 }
 
+type orderField struct {
+	field        string
+	isDescending bool
+}
+
+func (mq memoryQuery) orderFields() []orderField {
+	equalityFields := mq.equalityFields()
+	orderFields := []orderField{}
+	for _, f := range mq.order {
+		var of orderField
+		if f[0] == '-' {
+			of.field = f[1:]
+			of.isDescending = true
+		} else {
+			of.field = f
+			of.isDescending = false
+		}
+		isAlsoEquality := false
+		for _, fieldName := range equalityFields {
+			if fieldName == of.field {
+				isAlsoEquality = true
+			}
+		}
+		if !isAlsoEquality {
+			orderFields = append(orderFields, of)
+		}
+	}
+	return orderFields
+}
+
+func (mq memoryQuery) equalityFields() []string {
+	equalityFields := []string{}
+	for field, filter := range mq.filters {
+		if len(filter.ineq.ops) == 0 {
+			equalityFields = append(equalityFields, field)
+		}
+	}
+	return equalityFields
+}
+
+func (mq memoryQuery) inequalityField() (string, error) {
+	inequalityField := ""
+	for field, filter := range mq.filters {
+		if len(filter.ineq.ops) > 0 {
+			if inequalityField == "" {
+				inequalityField = field
+			} else {
+				return "", errors.New("multiple inequalities specified")
+			}
+		}
+	}
+	return inequalityField, nil
+}
+
+func (mq memoryQuery) needsIndex(debug func(string, ...interface{})) (bool, error) {
+	// A simple sort order (only one one field that's not [key descending]
+	// is treated differently.
+	complicatedOrder := false
+	if len(mq.order) > 1 {
+		complicatedOrder = true
+	} else if len(mq.order) == 1 && mq.order[0] == "-__key__" {
+		complicatedOrder = true
+	}
+
+	projecting := len(mq.project) > 0
+	isOrdered := len(mq.order) > 0
+	hasAncestor := mq.ancestor != nil
+
+	orderFields := mq.orderFields()
+	equalityFields := mq.equalityFields()
+	inequalityField, err := mq.inequalityField()
+	if err != nil {
+		return false, err
+	}
+	hasInequality := inequalityField != ""
+	hasEquality := len(equalityFields) > 0
+
+	if mq.localDs.index == nil {
+		debug("    no index defined")
+		return false, nil
+	} else if len(mq.filters) == 0 && !complicatedOrder && !projecting {
+		debug("    no index needed for no filters")
+		return false, nil
+	} else if len(mq.filters) == 1 && !isOrdered && !hasAncestor && !projecting {
+		debug("    no index needed on single field")
+		return false, nil
+	} else if len(mq.filters) == 1 && len(orderFields) == 1 {
+		field := ""
+		for f := range mq.filters {
+			field = f
+		}
+		if orderFields[0].field == field {
+			debug("    single field with order that matches field name")
+			return false, nil
+		}
+	}
+
+	if !hasInequality && !isOrdered && !projecting {
+		debug("    only using equality and ancestor filters")
+		return false, nil
+	} else if hasInequality && !hasEquality && !isOrdered && !hasAncestor && !projecting {
+		debug("    only using inequality filter")
+		return false, nil
+	} else if !isOrdered && inequalityField == "__key__" {
+		debug("    only using ancestor filters, equality filters on properties, and inequality filters on keys")
+		return false, nil
+	}
+
+	if len(mq.filters) == 0 && len(mq.project) == 1 && len(orderFields) < 2 {
+		if len(orderFields) == 0 {
+			debug("    only projecting on single field")
+			return false, nil
+		}
+		for field := range mq.project {
+			if field == orderFields[0].field {
+				debug("    single field only projecting and ordering")
+				return false, nil
+			}
+		}
+	}
+
+	debug("    needs index")
+	return true, nil
+}
+
+func (mq memoryQuery) neededFields(debug func(string, ...interface{})) []string {
+	neededFields := make(map[string]bool)
+	for field := range mq.filters {
+		neededFields[field] = true
+	}
+
+	for field := range mq.project {
+		debug("    project %v", field)
+		neededFields[field] = true
+	}
+
+	for _, field := range mq.orderFields() {
+		neededFields[field.field] = true
+	}
+
+	fields := make([]string, 0, len(neededFields))
+	for f := range neededFields {
+		fields = append(fields, f)
+	}
+
+	sort.Sort(sort.StringSlice(fields))
+	debug("    needed fields: %+v", fields)
+	return fields
+}
+
 func (mq *memoryQuery) checkIndexes(trace bool) error {
 	debugMsgs := []string{}
 	debug := func(format string, vars ...interface{}) {
-		debugMsgs = append(debugMsgs, fmt.Sprintf(format, vars))
+		debugMsgs = append(debugMsgs, fmt.Sprintf(format, vars...))
 		if trace {
 			fmt.Printf(format+"\n", vars...)
 		}
@@ -680,68 +830,32 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 
 	debug("looking for index for kind %s", mq.kind)
 
-	if mq.localDs.index == nil {
-		debug("    no index defined")
+	if needs, err := mq.needsIndex(debug); err != nil {
+		return err
+	} else if !needs {
 		return nil
-	} else if len(mq.filters) == 0 {
-		debug("    no index needed for no filters")
-		return nil
-	} else if len(mq.filters) == 1 && len(mq.order) == 0 {
-		debug("    no index needed on single field")
-		return nil
-	} else if len(mq.filters) == 1 && len(mq.order) == 1 {
-		field := ""
-		for f := range mq.filters {
-			field = f
-		}
-		if mq.order[0] == field || mq.order[0] == "-"+field {
-			debug("    single field with order that matches field name")
-			return nil
-		}
 	}
 
-	neededFields := []string{}
-	inequalityField := ""
-	for field, filter := range mq.filters {
-		neededFields = append(neededFields, field)
-
-		if len(filter.ineq.ops) > 0 {
-			debug("    inequality needed %+v", filter.ineq)
-			if inequalityField == "" {
-				inequalityField = field
-			} else {
-				return errors.New("multiple inequalities specified")
-			}
-		}
-	}
-	sort.Sort(sort.StringSlice(neededFields))
-
-	debug("    needed fields: %+v", neededFields)
-
-	orderField := ""
-	orderDescending := false
-	switch len(mq.order) {
-	case 0:
-	case 1:
-		if mq.order[0][0] == '-' {
-			orderField = mq.order[0][1:]
-			orderDescending = true
-		} else {
-			orderField = mq.order[0]
-		}
-	default:
-		return errors.New("only a single Order() field is supported")
+	orderFields := mq.orderFields()
+	equalityFields := mq.equalityFields()
+	inequalityField, err := mq.inequalityField()
+	if err != nil {
+		return err
 	}
 
-	if orderField != "" {
-		debug("    order %s %t", orderField, orderDescending)
-		// we need orderField too, but don't duplicate it
-		if _, already := mq.filters[orderField]; !already {
-			neededFields = append(neededFields, orderField)
-		}
+	neededFields := mq.neededFields(debug)
+
+	if len(orderFields) > 0 {
+		debug("    order %v", orderFields)
 	}
+
 	if inequalityField != "" {
 		debug("    inequality %s", inequalityField)
+
+		if len(orderFields) > 0 && inequalityField != orderFields[0].field {
+			debug("    inequality field property and first sort order must be the same")
+			return fmt.Errorf("invalid query: %s\n", strings.Join(debugMsgs, "\n"))
+		}
 	}
 
 	for _, index := range mq.localDs.index[mq.kind] {
@@ -749,14 +863,72 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 		if len(neededFields) > len(index.fields) {
 			debug("       too short")
 			continue
+		} else if len(neededFields) < len(index.fields) {
+			debug("       too long") // no subindexes!
+			continue
 		} else if mq.ancestor != nil && !index.ancestor {
 			debug("       no ancestor")
 			continue
+		} else if mq.ancestor == nil && index.ancestor {
+			debug("       needs ancestor")
+			continue
+		}
+
+		indexFields := make([]string, len(index.fields), len(index.fields))
+		for fieldName, fieldData := range index.fields {
+			indexFields[fieldData.index] = fieldName
 		}
 
 		matches := true
+
+		indexEqualityFields := indexFields[:len(equalityFields)]
+		debug("        eq fields: %v", indexEqualityFields)
+		for _, field := range equalityFields {
+			hasField := false
+			for _, indexField := range indexEqualityFields {
+				if field == indexField {
+					hasField = true
+				}
+			}
+			if !hasField {
+				matches = false
+				debug("        eq fields in wrong order: %s", field)
+				break
+			}
+		}
+
+		indexInequalityField := indexFields[len(equalityFields)]
+		if inequalityField != "" && indexInequalityField != inequalityField {
+			debug("        ineq fields in wrong order: %s", inequalityField)
+			matches = false
+		}
+
+		indexOrderFields := indexFields[len(equalityFields):]
+		for _, field := range orderFields {
+			hasField := false
+			for _, indexField := range indexOrderFields {
+				if field.field == indexField {
+					hasField = true
+				}
+			}
+			if !hasField {
+				matches = false
+				debug("        order fields in wrong order: %s", field)
+				break
+			}
+			if field.isDescending != index.fields[field.field].descending {
+				matches = false
+				debug("       wrong descencion on %s", field.field)
+				break
+			}
+		}
+
+		if !matches {
+			debug("        field mismatch")
+			continue
+		}
+
 		fieldIndexes := make([]int, len(neededFields))
-		lastField := "" // this tracks the name of the last field in the index yaml which we need
 		for i := range neededFields {
 			if field, exists := index.fields[neededFields[i]]; !exists {
 				debug("        field %s not indexed", neededFields[i])
@@ -764,9 +936,6 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 				break
 			} else {
 				fieldIndexes[i] = field.index
-				if index.fields[lastField].index < field.index {
-					lastField = neededFields[i]
-				}
 			}
 		}
 
@@ -788,22 +957,6 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 			debug("        field mismatch")
 			continue
 		}
-
-		if orderField != "" {
-			if lastField != orderField {
-				debug("        order field mismatch (got %s, needed %s)", lastField, orderField)
-				continue
-			} else if index.fields[lastField].descending != orderDescending {
-				debug("        order field sorting mismatch needed descending == %t", orderDescending)
-				continue
-			}
-		}
-
-		if inequalityField != "" && lastField != inequalityField {
-			debug("        inequality field mismatch (got %s, needed %s)", lastField, inequalityField)
-			continue
-		}
-
 		debug("        matched")
 
 		return nil
