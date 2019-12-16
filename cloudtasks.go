@@ -271,10 +271,10 @@ func (t cloudTaskqueue) AddMulti(c context.Context, tasks []Task, queueName stri
 			haveErr = true
 		}
 	}
-	if !haveErr {
-		errList = nil
+	if haveErr {
+		return addedTasks, errList
 	}
-	return addedTasks, errList
+	return addedTasks, nil
 }
 
 func (t cloudTaskqueue) DeleteMulti(c context.Context, tasks []Task, queueName string) error {
