@@ -224,8 +224,16 @@ func (cds CloudDatastore) Kinds() (kinds []string, err error) {
 }
 
 func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+
+	var namespace string
+	if parent != nil {
+		namespace = parent.Namespace
+	} else {
+		namespace = cds.namespace
+	}
+
 	key := newKey(nil, kind, sId, iId, parent)
-	key.Namespace = cds.namespace
+	key.Namespace = namespace
 
 	return key
 }
@@ -490,7 +498,15 @@ func ToDatastorePropertyList(l []AppwrapProperty) []DatastoreProperty {
 
 // namespace handling for this is slightly different based on appengine datastore keys vs cloud datastore keys
 func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+	var namespace string
+	if parent != nil {
+		namespace = parent.Namespace
+	} else {
+		namespace = "s~memds" // this mirrors StubContext
+	}
+
 	key := newKey(ds.emptyContext, kind, sId, iId, parent)
-	key.Namespace = "s~memds" // this mirrors StubContext
+	key.Namespace = namespace
+
 	return key
 }

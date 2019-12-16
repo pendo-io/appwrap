@@ -78,6 +78,37 @@ func (s *AppengineInterfacesTest) TestSetKeyNamespace(c *C) {
 
 }
 
+func (s *AppengineInterfacesTest) TestNewKey(c *C) {
+
+	ck := func(k *datastore.Key, expectedNs string) {
+		for thisKey := k; thisKey != nil; thisKey = thisKey.Parent {
+			c.Assert(thisKey.Namespace, Equals, expectedNs)
+		}
+	}
+
+	defaultNamespace := "s~memds"
+	mem := NewLocalDatastore(true, nil)
+
+	keyWithNoParent := mem.NewKey("Test", defaultNamespace, 0, nil)
+	c.Assert(keyWithNoParent, NotNil)
+	ck(keyWithNoParent, "s~memds")
+
+	parent := mem.NewKey("Test", "Parent", 0, nil)
+	parent.Namespace = ""
+
+	keyWithParentNoNamespace := mem.NewKey("Test", "NumberTwo", 0, parent)
+	c.Assert(keyWithParentNoNamespace, NotNil)
+	ck(keyWithParentNoNamespace, "")
+
+	parent = mem.NewKey("Test", "Parent", 0, nil)
+	parent.Namespace = "Name SPACE"
+
+	keyWithParentNamespaced := mem.NewKey("Test", "NumberThree", 0, parent)
+	c.Assert(keyWithParentNamespaced, NotNil)
+	ck(keyWithParentNamespaced, "Name SPACE")
+}
+
+
 type deadlineCheck struct {
 	C              *C
 	ExpectDeadline time.Time
