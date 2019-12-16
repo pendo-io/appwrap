@@ -158,6 +158,7 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 	if redisAddrs != nil {
 		return redisAddrs
 	}
+
 	appInfo := NewAppengineInfoFromContext(c)
 	client, err := cloudms.NewCloudRedisClient(context.Background())
 	if err != nil {
@@ -167,8 +168,8 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 
 	projectId := appInfo.AppID()
 
-	redisAddrs = make([]string, shards)
-	for shard := range redisAddrs {
+	addrs := make([]string, shards)
+	for shard := range addrs {
 		instance, err := client.GetInstance(c, &redispb.GetInstanceRequest{
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
@@ -176,8 +177,10 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 			panic(err)
 		}
 
-		redisAddrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
+		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
+
+	redisAddrs = addrs
 	return redisAddrs
 }
 
@@ -204,6 +207,7 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 				}).WithContext(c)
 				clients[i] = &redisClientImplementation{client, client}
 			}
+
 			redisClients = &clients
 		}
 	}
