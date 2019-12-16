@@ -57,6 +57,7 @@ type Commit interface {
 type LegacyDatastore interface {
 	AllocateIDs(kind string, parent *DatastoreKey, n int) (int64, int64, error)
 	NewKey(string, string, int64, *DatastoreKey) *DatastoreKey
+	Kinds() ([]string, error)
 }
 
 type AppwrapProperty struct {

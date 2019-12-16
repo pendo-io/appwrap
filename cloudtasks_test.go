@@ -309,6 +309,8 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	c.Assert(added[1], Not(Equals), expectTasks[1]) //...
 	c.Assert(added, DeepEquals, expectTasks)        // ...but have same content
 	c.Assert(err, IsNil)
+	// IsNil isn't enough - need to make sure it's not a nil slice (since MultiError is a slice type)
+	c.Assert(err, Equals, nil)
 	checkMocks()
 
 	// error case on one task
