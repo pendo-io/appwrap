@@ -1,0 +1,35 @@
+indexes:
+
+- kind: testKindWithIndex
+  properties:
+     - name: A
+     - name: B
+       direction: desc
+     - name: C
+
+- kind: testKindWithIndex
+  ancestor: yes
+  properties:
+     - name: D
+     - name: C
+     - name: A
+
+- kind: testKindWithIndex
+  ancestor: yes
+  properties:
+    - name: D
+
+- kind: testKindWithIndex
+  properties:
+    - name: __key__
+      direction: desc
+
+- kind: testKindWithIndex
+  properties:
+    - name: zigzag
+    - name: merge
+
+- kind: testKindWithIndex
+  properties:
+    - name: join
+    - name: merge
