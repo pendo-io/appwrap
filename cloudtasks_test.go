@@ -262,7 +262,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskImpl)
 	expectTask := task.Copy().(*cloudTaskImpl)
 
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
+	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   task.task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, []gax.CallOption(nil)).Return(task.task, nil).Once()
@@ -295,11 +295,11 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		tasks[1].Copy(),
 	}
 
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
+	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   tasks[0].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
+	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   tasks[1].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return(tasks[1].(*cloudTaskImpl).task, nil).Once()
@@ -316,11 +316,11 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	// error case on one task
 	fatalErr := errors.New("disney land < disney world")
 
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
+	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   tasks[0].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
-	clientMock.On("CreateTask", ctx, &taskspb.CreateTaskRequest{
+	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   tasks[1].(*cloudTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
