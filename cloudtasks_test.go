@@ -22,7 +22,6 @@ var _ = Suite(&CloudTasksTest{})
 func (s *CloudTasksTest) SetUpTest(c *C) {
 	var client cloudTasksClient = &tqClientMock{}
 	tqClient = &client
-	useCloudTasks = true
 }
 
 func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
