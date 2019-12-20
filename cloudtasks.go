@@ -303,7 +303,3 @@ func (t cloudTaskqueue) NewPOSTTask(path string, params url.Values) Task {
 	task.SetPath(path)
 	return task
 }
-
-func (t cloudTaskqueue) QueueStats(c context.Context, queueNames []string) ([]QueueStatistics, error) {
-	panic("not implemented for CloudTasks")
-}

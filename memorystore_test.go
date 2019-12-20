@@ -1,5 +1,3 @@
-//+build memorystore go1.12
-
 package appwrap
 
 import (

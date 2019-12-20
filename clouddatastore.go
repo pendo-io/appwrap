@@ -1,5 +1,3 @@
-// +build clouddatastore go1.12
-
 package appwrap
 
 import (

@@ -3,7 +3,6 @@ package appwrap
 import (
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"golang.org/x/net/context"
@@ -17,7 +16,6 @@ type Taskqueue interface {
 	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]Task, error)
 	ModifyLease(c context.Context, task Task, queueName string, leaseTime int) error
 	NewPOSTTask(path string, params url.Values) Task
-	QueueStats(c context.Context, queueNames []string) ([]QueueStatistics, error)
 }
 
 // This is so the calling code cannot create task structs directly.
@@ -51,23 +49,10 @@ type Task interface {
 
 type CloudTasksLocation string
 
-var useCloudTasks bool
-
 func NewTask() Task {
-	if useCloudTasks {
-		return newCloudTask()
-	} else if loc := os.Getenv("cloud_tasks_location"); loc != "" {
-		return newCloudTask()
-	} else {
-		return newAeTask()
-	}
+	return newCloudTask()
 }
 
 func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
-	if loc == "" {
-		return newAeTaskqueue(c, loc)
-	} else {
-		useCloudTasks = true
-		return newCloudTaskqueue(c, loc)
-	}
+	return newCloudTaskqueue(c, loc)
 }

@@ -1,5 +1,3 @@
-// +build clouddatastore go1.12
-
 package appwrap
 
 import (
@@ -107,7 +105,6 @@ func (s *AppengineInterfacesTest) TestNewKey(c *C) {
 	c.Assert(keyWithParentNamespaced, NotNil)
 	ck(keyWithParentNamespaced, "Name SPACE")
 }
-
 
 type deadlineCheck struct {
 	C              *C
