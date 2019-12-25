@@ -106,10 +106,6 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 }
 
 func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...option.ClientOption) http.Handler {
-	if IsDevAppServer {
-		return h
-	}
-
 	ctx := context.Background()
 	aeInfo := NewAppengineInfoFromContext(ctx)
 

@@ -10,5 +10,3 @@ type AppengineInfo interface {
 	VersionID() string
 	Zone() string
 }
-
-var IsDevAppServer = false
