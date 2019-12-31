@@ -8,6 +8,7 @@ type AppengineInfo interface {
 	ModuleName() string
 	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
+	Zone() string
 }
 
 var IsDevAppServer = false
