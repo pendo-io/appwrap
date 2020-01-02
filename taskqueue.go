@@ -54,5 +54,8 @@ func NewTask() Task {
 }
 
 func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
+	if IsDevAppServer {
+		return cloudTaskqueue{}
+	}
 	return newCloudTaskqueue(c, loc)
 }
