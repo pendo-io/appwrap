@@ -48,6 +48,13 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+const (
+	// thresholds that, when reached, cause a flush of logs to be sent over grpc
+	loggingFlushTimeTrigger  = 5 * time.Second
+	loggingFlushSizeTrigger  = 5 << 20
+	loggingFlushCountTrigger = 5000
+)
+
 func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *logging.Logger {
 	return lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
 		Type: "gae_app",
@@ -56,7 +63,7 @@ func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *loggin
 			"version_id": aeInfo.VersionID(),
 			"project_id": aeInfo.AppID(),
 		},
-	}), logging.DelayThreshold(2*time.Second))
+	}), logging.DelayThreshold(loggingFlushTimeTrigger), logging.EntryByteThreshold(loggingFlushSizeTrigger), logging.EntryCountThreshold(loggingFlushCountTrigger))
 }
 
 func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, parent, trace string) *loggingCtxValue {
