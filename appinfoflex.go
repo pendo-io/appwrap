@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"sync"
 
+	"cloud.google.com/go/compute/metadata"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	appengine "google.golang.org/api/appengine/v1"
@@ -42,6 +44,26 @@ func (ai AppengineInfoFlex) ModuleName() string {
 
 func (ai AppengineInfoFlex) VersionID() string {
 	return os.Getenv("GAE_VERSION")
+}
+
+var (
+	zone    string
+	zoneMtx sync.Mutex
+)
+
+func (ai AppengineInfoFlex) Zone() string {
+	zoneMtx.Lock()
+	defer zoneMtx.Unlock()
+
+	if zone == "" {
+		z, err := metadata.Zone()
+		if err != nil {
+			panic(err)
+		}
+		zone = z
+	}
+
+	return zone
 }
 
 func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, error) {
