@@ -17,9 +17,12 @@ import (
 
 var loggingCtxKey = struct{ k string }{"hlog context key"}
 
+const IPListHeader = "X-Forwarded-For"
+
 type loggingCtxValue struct {
 	aeInfo AppengineInfo
 	hreq   *http.Request
+	labels map[string]string
 	logger *logging.Logger
 	parent string
 	sev    logtypepb.LogSeverity
@@ -67,19 +70,25 @@ func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *loggin
 }
 
 func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, parent, trace string) *loggingCtxValue {
+	var remoteIp string
+	if addr := hreq.Header.Get(IPListHeader); addr != "" {
+		remoteIp = strings.Split(addr, ",")[0]
+	}
+
 	return &loggingCtxValue{
 		aeInfo: aeInfo,
 		hreq:   hreq,
+		labels: map[string]string{
+			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+			"pendo.io/request_host":                  hreq.Host,
+			"pendo.io/request_method":                hreq.Method,
+			"pendo.io/request_url":                   hreq.URL.String(),
+			"pendo.io/remote_ip":                     remoteIp,
+			"pendo.io/useragent":                     hreq.UserAgent(),
+		},
 		logger: logger,
 		parent: parent,
 		trace:  trace,
-	}
-}
-
-func logLabels(logCtxVal *loggingCtxValue) map[string]string {
-	return map[string]string{
-		"appengine.googleapis.com/instance_name": logCtxVal.aeInfo.InstanceID(),
-		"pendo.io/request_url":                   logCtxVal.hreq.URL.String(),
 	}
 }
 
@@ -160,7 +169,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 				Request:      r,
 				Status:       sw.status,
 			},
-			Labels:    logLabels(logCtxVal),
+			Labels:    logCtxVal.labels,
 			Severity:  logging.Severity(logCtxVal.sev),
 			Timestamp: time.Now(),
 			Trace:     logCtxVal.trace,
@@ -182,7 +191,7 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	logCtxVal := ctxVal.(*loggingCtxValue)
 
 	e := logging.Entry{
-		Labels:    logLabels(logCtxVal),
+		Labels:    logCtxVal.labels,
 		Payload:   fmt.Sprintf(format, args...),
 		Severity:  logging.Severity(sev),
 		Timestamp: time.Now(),
