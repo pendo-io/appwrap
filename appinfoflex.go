@@ -3,8 +3,10 @@ package appwrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/compute/metadata"
@@ -35,7 +37,7 @@ func (ai AppengineInfoFlex) InstanceID() string {
 }
 
 func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string, error) {
-	return "", errors.New("ModuleHostname() isn't supported on flex")
+	return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", strings.Split(ai.VersionID(), ".")[0], ai.ModuleName(), ai.AppID()), nil
 }
 
 func (ai AppengineInfoFlex) ModuleName() string {
