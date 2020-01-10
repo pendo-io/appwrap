@@ -377,17 +377,20 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 }
 
 func (ms Memorystore) Flush() error {
-	errs := make([]error, 0, len(ms.clients))
-	for _, client := range ms.clients {
-		if err := client.FlushAll(); err != nil {
-			errs = append(errs, err)
+	return errors.New("please don't call this on memorystore")
+	/*
+		errs := make([]error, 0, len(ms.clients))
+		for _, client := range ms.clients {
+			if err := client.FlushAll(); err != nil {
+				errs = append(errs, err)
+			}
 		}
-	}
-	if len(errs) == 0 {
-		return nil
-	} else {
-		return appengine.MultiError(errs)
-	}
+		if len(errs) == 0 {
+			return nil
+		} else {
+			return appengine.MultiError(errs)
+		}
+	*/
 }
 
 func (ms Memorystore) Get(key string) (*CacheItem, error) {
