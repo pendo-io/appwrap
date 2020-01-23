@@ -455,27 +455,34 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestFlush(c *C) {
-	ms, clientMocks := s.newMemstore()
-
-	checkMocks := func() {
-		clientMocks[0].AssertExpectations(c)
-		clientMocks[1].AssertExpectations(c)
-	}
-
-	// success case
-	clientMocks[0].On("FlushAll").Return(nil).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
+	ms, _ := s.newMemstore()
+	fatalErr := errors.New("please don't call this on memorystore")
 	err := ms.Flush()
-	c.Assert(err, IsNil)
-	checkMocks()
+	c.Assert(err, DeepEquals, fatalErr)
 
-	// error case
-	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("FlushAll").Return(fatalErr).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
-	err = ms.Flush()
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
-	checkMocks()
+	/*
+		ms, clientMocks := s.newMemstore()
+
+		checkMocks := func() {
+			clientMocks[0].AssertExpectations(c)
+			clientMocks[1].AssertExpectations(c)
+		}
+
+		// success case
+		clientMocks[0].On("FlushAll").Return(nil).Once()
+		clientMocks[1].On("FlushAll").Return(nil).Once()
+		err := ms.Flush()
+		c.Assert(err, IsNil)
+		checkMocks()
+
+		// error case
+		fatalErr := errors.New("aaaah")
+		clientMocks[0].On("FlushAll").Return(fatalErr).Once()
+		clientMocks[1].On("FlushAll").Return(nil).Once()
+		err = ms.Flush()
+		c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
+		checkMocks()
+	 */
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
