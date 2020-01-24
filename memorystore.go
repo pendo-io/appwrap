@@ -13,7 +13,6 @@ import (
 	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/go-redis/redis"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
 
@@ -290,7 +289,7 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 	}
 
 	haveErrors := false
-	errList := make(appengine.MultiError, len(items))
+	errList := make(MultiError, len(items))
 
 	for shard, shardResults := range results {
 		for i, result := range shardResults {
@@ -354,7 +353,7 @@ func (ms Memorystore) Delete(key string) error {
 
 func (ms Memorystore) DeleteMulti(keys []string) error {
 	namespacedKeys, _ := ms.shardedNamespacedKeys(keys)
-	errList := make(appengine.MultiError, 0, len(ms.clients))
+	errList := make(MultiError, 0, len(ms.clients))
 
 	haveErrors := false
 	for i, client := range ms.clients {
@@ -388,7 +387,7 @@ func (ms Memorystore) Flush() error {
 		if len(errs) == 0 {
 			return nil
 		} else {
-			return appengine.MultiError(errs)
+			return MultiError(errs)
 		}
 	*/
 }

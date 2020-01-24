@@ -13,7 +13,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
-	"google.golang.org/appengine"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -90,7 +89,7 @@ func newKey(ctx context.Context, kind string, sId string, iId int64, parent *Dat
 // we have to convert datastore.MultiError into appengine.MultiError.
 func convertIfMultiError(err error) error {
 	if mErr, ok := err.(datastore.MultiError); ok {
-		return appengine.MultiError(mErr)
+		return MultiError(mErr)
 	}
 	return err
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/appengine"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	. "gopkg.in/check.v1"
 )
@@ -329,7 +328,7 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		&cloudTaskImpl{},
 	}
 
-	expectedErr := appengine.MultiError{
+	expectedErr := MultiError{
 		nil,
 		fatalErr,
 	}

@@ -5,8 +5,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"google.golang.org/appengine"
 )
 
 type cachedItem struct {
@@ -37,7 +35,7 @@ func (mc *LocalMemcache) Add(item *CacheItem) error {
 }
 
 func (mc *LocalMemcache) AddMulti(items []*CacheItem) error {
-	errList := make(appengine.MultiError, len(items))
+	errList := make(MultiError, len(items))
 	errors := false
 
 	for i, item := range items {
@@ -83,7 +81,7 @@ func (mc *LocalMemcache) Delete(key string) error {
 
 func (mc *LocalMemcache) DeleteMulti(keys []string) error {
 	errors := false
-	multiError := make(appengine.MultiError, len(keys))
+	multiError := make(MultiError, len(keys))
 	for i, key := range keys {
 		if _, exists := mc.get(key); !exists {
 			multiError[i] = ErrCacheMiss
