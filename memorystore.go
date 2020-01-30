@@ -378,6 +378,8 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 func (ms Memorystore) Flush() error {
 	return errors.New("please don't call this on memorystore")
 	/*
+	Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+
 		errs := make([]error, 0, len(ms.clients))
 		for _, client := range ms.clients {
 			if err := client.FlushAll(); err != nil {

@@ -460,6 +460,8 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 	c.Assert(err, DeepEquals, fatalErr)
 
 	/*
+		Leaving this here to show how you test flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+
 		ms, clientMocks := s.newMemstore()
 
 		checkMocks := func() {
