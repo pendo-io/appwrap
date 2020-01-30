@@ -1,5 +1,7 @@
 package appwrap
 
+import "google.golang.org/appengine"
+
 type AppengineInfo interface {
 	AppID() string
 	InstanceID() string
@@ -10,5 +12,9 @@ type AppengineInfo interface {
 	VersionID() string
 	Zone() string
 }
-
-var IsDevAppServer = false
+var (
+	IsDevAppServer = false
+	IsFlex      = appengine.IsFlex
+	IsSecondGen = appengine.IsSecondGen
+	IsStandard  = appengine.IsStandard
+)

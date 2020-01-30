@@ -3,7 +3,6 @@ package appwrap
 import (
 	"time"
 	//"fmt"
-	"google.golang.org/appengine"
 	. "gopkg.in/check.v1"
 )
 
@@ -40,9 +39,9 @@ func (dsit *AppengineInterfacesTest) TestMemCache(c *C) {
 
 	c.Assert(cache.SetMulti([]*CacheItem{{Key: keys[0], Value: values[0]}, {Key: keys[1], Value: values[1]}}), IsNil)
 	err = cache.AddMulti([]*CacheItem{{Key: keys[0], Value: values[0]}, {Key: keys[2], Value: values[2]}})
-	c.Assert(err, DeepEquals, appengine.MultiError{CacheErrNotStored, nil})
+	c.Assert(err, DeepEquals, MultiError{CacheErrNotStored, nil})
 	c.Assert(cache.DeleteMulti(keys[0:1]), IsNil)
-	c.Assert(cache.DeleteMulti(keys), DeepEquals, appengine.MultiError{ErrCacheMiss, nil, nil})
+	c.Assert(cache.DeleteMulti(keys), DeepEquals, MultiError{ErrCacheMiss, nil, nil})
 
 	c.Assert(cache.Add(&CacheItem{Key: keys[0], Value: values[0]}), IsNil)
 	_, err = cache.Get(keys[0])

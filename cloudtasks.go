@@ -14,7 +14,6 @@ import (
 
 	"cloud.google.com/go/cloudtasks/apiv2"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"google.golang.org/appengine"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 )
 
@@ -262,7 +261,7 @@ func (t cloudTaskqueue) Add(c context.Context, task Task, queueName string) (Tas
 }
 
 func (t cloudTaskqueue) AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error) {
-	errList := make(appengine.MultiError, len(tasks))
+	errList := make(MultiError, len(tasks))
 	addedTasks := make([]Task, len(tasks))
 	var haveErr bool
 	for i, task := range tasks {

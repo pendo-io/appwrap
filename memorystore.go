@@ -13,7 +13,6 @@ import (
 	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/go-redis/redis"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
 
@@ -290,7 +289,7 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 	}
 
 	haveErrors := false
-	errList := make(appengine.MultiError, len(items))
+	errList := make(MultiError, len(items))
 
 	for shard, shardResults := range results {
 		for i, result := range shardResults {
@@ -354,7 +353,7 @@ func (ms Memorystore) Delete(key string) error {
 
 func (ms Memorystore) DeleteMulti(keys []string) error {
 	namespacedKeys, _ := ms.shardedNamespacedKeys(keys)
-	errList := make(appengine.MultiError, 0, len(ms.clients))
+	errList := make(MultiError, 0, len(ms.clients))
 
 	haveErrors := false
 	for i, client := range ms.clients {
@@ -379,6 +378,8 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 func (ms Memorystore) Flush() error {
 	return errors.New("please don't call this on memorystore")
 	/*
+	Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+
 		errs := make([]error, 0, len(ms.clients))
 		for _, client := range ms.clients {
 			if err := client.FlushAll(); err != nil {
@@ -388,7 +389,7 @@ func (ms Memorystore) Flush() error {
 		if len(errs) == 0 {
 			return nil
 		} else {
-			return appengine.MultiError(errs)
+			return MultiError(errs)
 		}
 	*/
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/appengine"
 	. "gopkg.in/check.v1"
 )
 
@@ -145,7 +144,7 @@ func (dsit *AppengineInterfacesTest) TestMemDsPutGetDeleteMulti(c *C) {
 	// make sure we can't get them
 	multiErr := mem.GetMulti(keys[0:2], items[0:2])
 	c.Assert(multiErr, NotNil)
-	for _, err := range multiErr.(appengine.MultiError) {
+	for _, err := range multiErr.(MultiError) {
 		c.Assert(err, Equals, ErrNoSuchEntity)
 	}
 }

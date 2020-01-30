@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/appengine"
 	. "gopkg.in/check.v1"
 )
 
@@ -285,7 +284,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	resultMock0.On("Result").Return(true, nil).Once()
 	resultMock1.On("Result").Return(false, nil).Once()
 	err = ms.AddMulti(items)
-	c.Assert(err, DeepEquals, appengine.MultiError{nil, CacheErrNotStored})
+	c.Assert(err, DeepEquals, MultiError{nil, CacheErrNotStored})
 	checkMocks()
 
 	// fatal error storing first item
@@ -299,7 +298,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	resultMock0.On("Result").Return(false, fatalErr).Once()
 	resultMock1.On("Result").Return(true, nil).Once()
 	err = ms.AddMulti(items)
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr, nil})
+	c.Assert(err, DeepEquals, MultiError{fatalErr, nil})
 	checkMocks()
 
 	// error on exec
@@ -422,7 +421,7 @@ func (s *MemorystoreTest) TestDelete(c *C) {
 	fatalErr := errors.New("aaaah")
 	clientMocks[0].On("Del", []string{fullKey}).Return(fatalErr).Once()
 	err = ms.Delete(key)
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
+	c.Assert(err, DeepEquals, MultiError{fatalErr})
 	checkMocks()
 }
 
@@ -450,32 +449,41 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 	clientMocks[0].On("Del", []string{fullKey0}).Return(fatalErr).Once()
 	clientMocks[1].On("Del", []string{fullKey1}).Return(nil).Once()
 	err = ms.DeleteMulti([]string{key0, key1})
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
+	c.Assert(err, DeepEquals, MultiError{fatalErr})
 	checkMocks()
 }
 
 func (s *MemorystoreTest) TestFlush(c *C) {
-	ms, clientMocks := s.newMemstore()
-
-	checkMocks := func() {
-		clientMocks[0].AssertExpectations(c)
-		clientMocks[1].AssertExpectations(c)
-	}
-
-	// success case
-	clientMocks[0].On("FlushAll").Return(nil).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
+	ms, _ := s.newMemstore()
+	fatalErr := errors.New("please don't call this on memorystore")
 	err := ms.Flush()
-	c.Assert(err, IsNil)
-	checkMocks()
+	c.Assert(err, DeepEquals, fatalErr)
 
-	// error case
-	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("FlushAll").Return(fatalErr).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
-	err = ms.Flush()
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
-	checkMocks()
+	/*
+		Leaving this here to show how you test flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+
+		ms, clientMocks := s.newMemstore()
+
+		checkMocks := func() {
+			clientMocks[0].AssertExpectations(c)
+			clientMocks[1].AssertExpectations(c)
+		}
+
+		// success case
+		clientMocks[0].On("FlushAll").Return(nil).Once()
+		clientMocks[1].On("FlushAll").Return(nil).Once()
+		err := ms.Flush()
+		c.Assert(err, IsNil)
+		checkMocks()
+
+		// error case
+		fatalErr := errors.New("aaaah")
+		clientMocks[0].On("FlushAll").Return(fatalErr).Once()
+		clientMocks[1].On("FlushAll").Return(nil).Once()
+		err = ms.Flush()
+		c.Assert(err, DeepEquals, MultiError{fatalErr})
+		checkMocks()
+	 */
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
