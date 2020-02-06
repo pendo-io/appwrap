@@ -144,22 +144,14 @@ type Memorystore struct {
 	namespace string
 }
 
-var (
-	redisClientMtx = &sync.Mutex{}
-	// This needs to be a pointer to guarantee atomic reads/writes to the value inside NewAppengineMemcache
-	redisClients *[]redisClientInterface
-	redisAddrs   []string
-)
-
-func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) []string {
-	if redisAddrs != nil {
-		return redisAddrs
-	}
-
+// GetRedisInstanceIPs polls the Redis Admin API to retrieve the IPs of cache instances for all shards.
+// It should not be called too frequently, as there is an overall project quota on Admin API calls.
+// In particular, it should NOT be called on instance startup, as too many instances start for the quota to handle.
+func GetRedisInstanceIPs(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) ([]string, error) {
 	appInfo := NewAppengineInfoFromContext(c)
 	client, err := cloudms.NewCloudRedisClient(context.Background())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer client.Close()
 
@@ -171,17 +163,22 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
-	redisAddrs = addrs
-	return redisAddrs
+	return addrs, nil
 }
 
-func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+var (
+	redisClientMtx = &sync.Mutex{}
+	// This needs to be a pointer to guarantee atomic reads/writes to the value inside NewAppengineMemcache
+	redisClients *[]redisClientInterface
+)
+
+func NewAppengineMemcache(c context.Context, shardIPs []string) Memcache {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if redisClients == nil {
 		redisClientMtx.Lock()
@@ -189,15 +186,14 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 
 		// Check again, because another goroutine could have beaten us here while we were checking the first time
 		if redisClients == nil {
-			if shards == 0 {
+			if len(shardIPs) == 0 {
 				panic("cannot use Memorystore with zero shards")
 			}
 
-			clients := make([]redisClientInterface, shards)
-			addrs := getRedisAddr(c, loc, name, shards)
-			for i := range addrs {
+			clients := make([]redisClientInterface, len(shardIPs))
+			for i, shardIP := range shardIPs {
 				client := redis.NewClient(&redis.Options{
-					Addr:     addrs[i],
+					Addr:     shardIP,
 					Password: "",
 					DB:       0,
 					PoolSize: 2 * runtime.GOMAXPROCS(0),
@@ -208,6 +204,7 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 			redisClients = &clients
 		}
 	}
+
 	return Memorystore{c, *redisClients, ""}
 }
 
@@ -378,19 +375,19 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 func (ms Memorystore) Flush() error {
 	return errors.New("please don't call this on memorystore")
 	/*
-	Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+		Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
 
-		errs := make([]error, 0, len(ms.clients))
-		for _, client := range ms.clients {
-			if err := client.FlushAll(); err != nil {
-				errs = append(errs, err)
+			errs := make([]error, 0, len(ms.clients))
+			for _, client := range ms.clients {
+				if err := client.FlushAll(); err != nil {
+					errs = append(errs, err)
+				}
 			}
-		}
-		if len(errs) == 0 {
-			return nil
-		} else {
-			return MultiError(errs)
-		}
+			if len(errs) == 0 {
+				return nil
+			} else {
+				return MultiError(errs)
+			}
 	*/
 }
 

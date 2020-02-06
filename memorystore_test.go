@@ -116,7 +116,7 @@ func (s *MemorystoreTest) SetUpTest(c *C) {
 
 func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
 	mocks := []*redisClientMock{(*redisClients)[0].(*redisClientMock), (*redisClients)[1].(*redisClientMock)}
-	return NewAppengineMemcache(context.Background(), "", "", 2).Namespace("test-ns").(Memorystore), mocks
+	return NewAppengineMemcache(context.Background(), []string{"1.2.3.4", "5.6.7.8"}).Namespace("test-ns").(Memorystore), mocks
 }
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
@@ -138,7 +138,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 			defer wg.Done()
 			// Start all goroutines at once
 			<-startingLine
-			msClients[i] = NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+			msClients[i] = NewAppengineMemcache(context.Background(), []string{"1.2.3.4"}).(Memorystore)
 		}()
 	}
 	close(startingLine)
@@ -483,7 +483,7 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		err = ms.Flush()
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
-	 */
+	*/
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
@@ -784,7 +784,7 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestNamespace(c *C) {
-	ms := NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+	ms := NewAppengineMemcache(context.Background(), []string{"1.2.3.4"}).(Memorystore)
 	msNewNamespace := ms.Namespace("test-ns").(Memorystore)
 	// original ns not modified
 	c.Assert(ms.namespace, Equals, "")
