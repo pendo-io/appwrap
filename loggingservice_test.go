@@ -49,6 +49,11 @@ func (mock *AppengineInfoMock) AppID() string {
 	return args.String(0)
 }
 
+func (mock *AppengineInfoMock) Zone() string {
+	args := mock.Called()
+	return args.String(0)
+}
+
 type ClientMock struct {
 	mock.Mock
 }

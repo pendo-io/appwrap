@@ -117,10 +117,11 @@ func (s *MemorystoreTest) SetUpTest(c *C) {
 
 func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
 	mocks := []*redisClientMock{(*redisClients)[0].(*redisClientMock), (*redisClients)[1].(*redisClientMock)}
-	client, err := NewAppengineMemcache(context.Background(), "", "", 2).Namespace("test-ns").(Memorystore)
+	clientIntf, err := NewAppengineMemcache(context.Background(), "", "", 2)
 	if err != nil {
 		panic(err)
 	}
+	client := clientIntf.Namespace("test-ns").(Memorystore)
 	return client, mocks
 }
 
@@ -464,26 +465,9 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 
 func (s *MemorystoreTest) TestFlush(c *C) {
 	ms, clientMocks := s.newMemstore()
-
-	checkMocks := func() {
-		clientMocks[0].AssertExpectations(c)
-		clientMocks[1].AssertExpectations(c)
-	}
-
-	// success case
-	clientMocks[0].On("FlushAll").Return(nil).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
-	err := ms.Flush()
-	c.Assert(err, IsNil)
-	checkMocks()
-
-	// error case
-	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("FlushAll").Return(fatalErr).Once()
-	clientMocks[1].On("FlushAll").Return(nil).Once()
-	err = ms.Flush()
-	c.Assert(err, DeepEquals, appengine.MultiError{fatalErr})
-	checkMocks()
+	c.Assert(ms.Flush(), ErrorMatches, "please don't call this on memorystore")
+	clientMocks[0].AssertExpectations(c)
+	clientMocks[1].AssertExpectations(c)
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
