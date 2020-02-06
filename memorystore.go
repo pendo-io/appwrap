@@ -149,14 +149,16 @@ var (
 	redisClientMtx = &sync.Mutex{}
 	// This needs to be a pointer to guarantee atomic reads/writes to the value inside NewAppengineMemcache
 	redisClients *[]redisClientInterface
-	redisAddrs   []string
 
 	redisLastErr        error
 	redisDontRetryUntil time.Time
+
+	redisAddrs     []string
+	redisAddrsGood bool
 )
 
 func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) ([]string, error) {
-	if redisAddrs != nil {
+	if redisAddrsGood {
 		return redisAddrs, nil
 	}
 
@@ -169,19 +171,34 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 
 	projectId := appInfo.AppID()
 
-	addrs := make([]string, shards)
-	for shard := range addrs {
+	if len(redisAddrs) < int(shards) {
+		newRedisAddrs := make([]string, shards)
+		copy(newRedisAddrs, redisAddrs)
+		redisAddrs = newRedisAddrs
+	}
+
+	var finalErr error
+	for shard, existingAddr := range redisAddrs {
+		if existingAddr != "" {
+			continue // skip already-successful addresses
+		}
+
 		instance, err := client.GetInstance(c, &redispb.GetInstanceRequest{
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			return nil, err
+			finalErr = err
+			continue // skip failed address gets and keep trying to cache others (but consider the overall lookup failed)
 		}
 
-		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
+		redisAddrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
-	redisAddrs = addrs
+	if finalErr != nil {
+		return nil, finalErr
+	}
+
+	redisAddrsGood = true
 	return redisAddrs, nil
 }
 
