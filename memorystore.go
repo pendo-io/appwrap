@@ -152,15 +152,15 @@ var (
 	redisAddrs   []string
 )
 
-func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) []string {
+func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) ([]string, error) {
 	if redisAddrs != nil {
-		return redisAddrs
+		return redisAddrs, nil
 	}
 
 	appInfo := NewAppengineInfoFromContext(c)
 	client, err := cloudms.NewCloudRedisClient(context.Background())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer client.Close()
 
@@ -172,17 +172,17 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
 	redisAddrs = addrs
-	return redisAddrs
+	return redisAddrs, nil
 }
 
-func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if redisClients == nil {
 		redisClientMtx.Lock()
@@ -195,7 +195,11 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 			}
 
 			clients := make([]redisClientInterface, shards)
-			addrs := getRedisAddr(c, loc, name, shards)
+			addrs, err := getRedisAddr(c, loc, name, shards)
+			if err != nil {
+				return nil, err
+			}
+
 			for i := range addrs {
 				client := redis.NewClient(&redis.Options{
 					Addr:     addrs[i],
@@ -209,7 +213,7 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 			redisClients = &clients
 		}
 	}
-	return Memorystore{c, *redisClients, ""}
+	return Memorystore{c, *redisClients, ""}, nil
 }
 
 func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int) {
