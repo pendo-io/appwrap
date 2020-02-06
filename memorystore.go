@@ -164,6 +164,8 @@ type memorystoreService struct {
 
 	clients            *[]redisClientInterface
 	addrs              []string
+	addrLastErr        error
+	addrDontRetryUntil time.Time
 }
 
 var GlobalService memorystoreService
@@ -174,6 +176,17 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 	if ms.addrs != nil {
 		return ms.addrs, nil
 	}
+
+	// Handle don't-retry interval: repeat prior error if too soon after failure
+	now := time.Now()
+	if ms.addrLastErr != nil && now.Before(ms.addrDontRetryUntil) {
+		return nil, fmt.Errorf("cached error (no retry for %s): %s", ms.addrDontRetryUntil.Sub(now), ms.addrLastErr)
+	}
+	defer func() {
+		if finalErr != nil {
+			ms.addrLastErr, ms.addrDontRetryUntil = finalErr, now.Add(redisErrorDontRetryInterval)
+		}
+	}()
 
 	connectFn := ms.connectFn
 	if connectFn == nil {

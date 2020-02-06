@@ -200,8 +200,13 @@ func (s *MemorystoreTest) TestAPIConnectError(c *C) {
 	_, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
 	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
 
-	// Connection success -> return no error (valid clients)
+	// Connection success but still within don't-retry delay -> return error
 	ms.connectFn = func(context.Context) (redisAPIService, error) { return apiMock, nil }
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*cached error.*I accidentally the whole Internet.*")
+
+	// Connection success -> return no error (valid clients)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
 	apiMock.On("GetInstance",
 		mock.Anything,
 		&redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"},
@@ -238,7 +243,12 @@ func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
 	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
 	apiMock.AssertExpectations(c)
 
+	// GetInstance success but still within don't-retry delay -> return error
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
+
 	// GetInstance success -> return no error (valid clients)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
 	apiMock.On("GetInstance", mock.Anything, expectReq, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
 	apiMock.On("Close").Return(nil).Once()
 	m, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
