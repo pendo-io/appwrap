@@ -150,6 +150,9 @@ var (
 	// This needs to be a pointer to guarantee atomic reads/writes to the value inside NewAppengineMemcache
 	redisClients *[]redisClientInterface
 	redisAddrs   []string
+
+	redisLastErr        error
+	redisDontRetryUntil time.Time
 )
 
 func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) ([]string, error) {
@@ -182,11 +185,18 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 	return redisAddrs, nil
 }
 
+const redisErrorDontRetryInterval = 5 * time.Second
+
 func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if redisClients == nil {
 		redisClientMtx.Lock()
 		defer redisClientMtx.Unlock()
+
+		now := time.Now()
+		if now.Before(redisDontRetryUntil) {
+			return nil, redisLastErr
+		}
 
 		// Check again, because another goroutine could have beaten us here while we were checking the first time
 		if redisClients == nil {
@@ -197,6 +207,7 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 			clients := make([]redisClientInterface, shards)
 			addrs, err := getRedisAddr(c, loc, name, shards)
 			if err != nil {
+				redisLastErr, redisDontRetryUntil = err, now.Add(redisErrorDontRetryInterval)
 				return nil, err
 			}
 
