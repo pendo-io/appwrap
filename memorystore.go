@@ -171,10 +171,8 @@ func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards C
 
 	projectId := appInfo.AppID()
 
-	if len(redisAddrs) < int(shards) {
-		newRedisAddrs := make([]string, shards)
-		copy(newRedisAddrs, redisAddrs)
-		redisAddrs = newRedisAddrs
+	if len(redisAddrs) != int(shards) {
+		redisAddrs = make([]string, shards)
 	}
 
 	var finalErr error
