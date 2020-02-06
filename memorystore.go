@@ -173,7 +173,7 @@ var GlobalService memorystoreService
 const redisErrorDontRetryInterval = 5 * time.Second
 
 func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (_ []string, finalErr error) {
-	if ms.addrs != nil {
+	if ms.addrs != nil && ms.addrLastErr == nil {
 		return ms.addrs, nil
 	}
 
@@ -200,20 +200,30 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 
 	projectId := appInfo.AppID()
 
-	addrs := make([]string, shards)
-	for shard := range addrs {
+	if ms.addrs == nil {
+		ms.addrs = make([]string, shards)
+	}
+
+	for shard, existingAddr := range ms.addrs {
+		if existingAddr != "" {
+			continue // skip already-successful addresses
+		}
 		instance, err := client.GetInstance(c, &redispb.GetInstanceRequest{
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			return nil, err
+			finalErr = err
+			continue // skip failed address gets and keep trying to cache others (but consider the overall lookup failed)
 		}
 
-		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
+		ms.addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
-	ms.addrs = addrs
-	return addrs, nil
+	if finalErr != nil {
+		return nil, finalErr
+	}
+
+	return ms.addrs, nil
 }
 
 func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {

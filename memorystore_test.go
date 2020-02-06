@@ -3,6 +3,7 @@ package appwrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -257,6 +258,62 @@ func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
 
 	// Check that GetInstance is not called again, since setup was successful
 	m2, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, IsNil)
+	c.Assert(&m2.(Memorystore).clients[0], Equals, &m.(Memorystore).clients[0]) // same underlying clients
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestGetAddrKeepShards(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	apiMock := &redisAPIServiceMock{}
+	mockShard := func(shard int, succeeds bool) {
+		call := apiMock.On("GetInstance",
+			mock.Anything,
+			&redispb.GetInstanceRequest{Name: fmt.Sprintf("projects/pendo-devserver/locations/cacheloc/instances/cachename-%d", shard)},
+			[]gax.CallOption(nil),
+		)
+		if succeeds {
+			call.Return(&redispb.Instance{Host: "1.2.3.4", Port: 1000 + int32(shard)}, nil).Once()
+		} else {
+			call.Return(nil, fmt.Errorf("shard %d exploded into shards", shard)).Once()
+		}
+	}
+
+	conn := func(ctx context.Context) (redisAPIService, error) {
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: conn}
+
+	// Shards 0 and 2 succeed, 1 and 3 fail
+	mockShard(0, true)
+	mockShard(1, false)
+	mockShard(2, true)
+	mockShard(3, false)
+	_, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, ErrorMatches, ".*shard 3 exploded into shards.*") // last shard to explode sets the error message
+	apiMock.AssertExpectations(c)
+
+	// Shard 3 succeeds, 1 still fails
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	mockShard(1, false)
+	mockShard(3, true)
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, ErrorMatches, ".*shard 1 exploded into shards.*") // last shard to explode sets the error message
+	apiMock.AssertExpectations(c)
+
+	// Shard 1 finally succeeds (all shards now loaded)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	mockShard(1, true)
+	m, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, IsNil)
+	apiMock.AssertExpectations(c)
+
+	// Ensure that there are no further calls to GetInstance
+	m2, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
 	c.Assert(err, IsNil)
 	c.Assert(&m2.(Memorystore).clients[0], Equals, &m.(Memorystore).clients[0]) // same underlying clients
 
