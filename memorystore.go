@@ -158,19 +158,21 @@ type Memorystore struct {
 }
 
 type memorystoreService struct {
+	connectFn redisAPIConnectorFn // if nil, use "real" implementation NewRedisAPIService; non-nil used for testing
+
 	mtx sync.Mutex
 
-	clients *[]redisClientInterface
-	addrs   []string
-
-	connectFn redisAPIConnectorFn // if nil, use "real" implementation NewRedisAPIService; non-nil used for testing
+	clients            *[]redisClientInterface
+	addrs              []string
 }
 
 var GlobalService memorystoreService
 
-func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) []string {
+const redisErrorDontRetryInterval = 5 * time.Second
+
+func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (_ []string, finalErr error) {
 	if ms.addrs != nil {
-		return ms.addrs
+		return ms.addrs, nil
 	}
 
 	connectFn := ms.connectFn
@@ -179,7 +181,7 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 	}
 	client, err := connectFn(context.Background())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer client.Close()
 
@@ -191,21 +193,21 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
 	ms.addrs = addrs
-	return addrs
+	return addrs, nil
 }
 
-func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
 	return GlobalService.NewMemcache(c, appInfo, loc, name, shards)
 }
 
-func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if ms.clients == nil {
 		ms.mtx.Lock()
@@ -218,7 +220,10 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			}
 
 			clients := make([]redisClientInterface, shards)
-			addrs := ms.getRedisAddr(c, appInfo, loc, name, shards)
+			addrs, err := ms.getRedisAddr(c, appInfo, loc, name, shards)
+			if err != nil {
+				return nil, err
+			}
 			for i := range addrs {
 				client := redis.NewClient(&redis.Options{
 					Addr:     addrs[i],
@@ -232,7 +237,7 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			ms.clients = &clients
 		}
 	}
-	return Memorystore{c, *ms.clients, ""}
+	return Memorystore{c, *ms.clients, ""}, nil
 }
 
 func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int) {
