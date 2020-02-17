@@ -110,21 +110,19 @@ type MemorystoreTest struct{}
 
 var _ = Suite(&MemorystoreTest{})
 
-func (s *MemorystoreTest) SetUpTest(c *C) {
-	redisClients = &[]redisClientInterface{&redisClientMock{}, &redisClientMock{}}
-}
-
 func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
-	mocks := []*redisClientMock{(*redisClients)[0].(*redisClientMock), (*redisClients)[1].(*redisClientMock)}
-	return NewAppengineMemcache(context.Background(), "", "", 2).Namespace("test-ns").(Memorystore), mocks
+	mocks := []*redisClientMock{{}, {}}
+	ms := memorystoreService{clients: &[]redisClientInterface{mocks[0], mocks[1]}}
+	return ms.NewMemcache(context.Background(), "", "", 2).(Memorystore), mocks
+}
+func (s *MemorystoreTest) newMemstoreWithNamespace() (Memorystore, []*redisClientMock) {
+	ms, mocks := s.newMemstore()
+	return ms.Namespace("test-ns").(Memorystore), mocks
 }
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
-	// for just this test, we want redisClient to be nil
-	redisClients = nil
-
-	// don't want to instantiate GCP object, so set redisAddrs
-	redisAddrs = []string{"1.2.3.4:1234"}
+	// don't want to instantiate GCP object, so set addrs
+	ms := memorystoreService{addrs: []string{"1.2.3.4:1234"}}
 
 	wg := &sync.WaitGroup{}
 	startingLine := make(chan struct{})
@@ -138,7 +136,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 			defer wg.Done()
 			// Start all goroutines at once
 			<-startingLine
-			msClients[i] = NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+			msClients[i] = ms.NewMemcache(context.Background(), "", "", 1).(Memorystore)
 		}()
 	}
 	close(startingLine)
@@ -154,7 +152,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 }
 
 func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
-	ms, _ := s.newMemstore()
+	ms, _ := s.newMemstoreWithNamespace()
 
 	fullKey, shard := ms.namespacedKeyAndShard("banana1")
 	c.Assert(fullKey, Equals, "test-ns:banana1")
@@ -170,7 +168,7 @@ func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
 }
 
 func (s *MemorystoreTest) TestAdd(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -204,7 +202,7 @@ func (s *MemorystoreTest) TestAdd(c *C) {
 }
 
 func (s *MemorystoreTest) TestAddMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock0 := &redisPipelineMock{}
 	pipeMock1 := &redisPipelineMock{}
 	resultMock0 := &boolCmdMock{}
@@ -315,7 +313,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
 		clientMocks[1].AssertExpectations(c)
@@ -348,7 +346,7 @@ func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock := &redisPipelineMock{}
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -402,7 +400,7 @@ func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDelete(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -426,7 +424,7 @@ func (s *MemorystoreTest) TestDelete(c *C) {
 }
 
 func (s *MemorystoreTest) TestDeleteMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -454,7 +452,7 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestFlush(c *C) {
-	ms, _ := s.newMemstore()
+	ms, _ := s.newMemstoreWithNamespace()
 	fatalErr := errors.New("please don't call this on memorystore")
 	err := ms.Flush()
 	c.Assert(err, DeepEquals, fatalErr)
@@ -483,11 +481,11 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		err = ms.Flush()
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
-	 */
+	*/
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -519,7 +517,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 }
 
 func (s *MemorystoreTest) TestGetMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -601,7 +599,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrement(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	calledResultMock := &intCmdMock{}
 	pipeMock := &redisPipelineMock{}
 	uncalledResultMock := &intCmdMock{}
@@ -645,7 +643,7 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrementExisting(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -688,7 +686,7 @@ func (s *MemorystoreTest) TestIncrementExisting(c *C) {
 }
 
 func (s *MemorystoreTest) TestSet(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -718,7 +716,7 @@ func (s *MemorystoreTest) TestSet(c *C) {
 }
 
 func (s *MemorystoreTest) TestSetMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock0 := &redisPipelineMock{}
 	pipeMock1 := &redisPipelineMock{}
 
@@ -784,7 +782,7 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestNamespace(c *C) {
-	ms := NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+	ms, _ := s.newMemstore()
 	msNewNamespace := ms.Namespace("test-ns").(Memorystore)
 	// original ns not modified
 	c.Assert(ms.namespace, Equals, "")
