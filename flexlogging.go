@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -78,6 +79,20 @@ func (sl stackdriverLogging) Criticalf(format string, args ...interface{}) {
 
 func (sl stackdriverLogging) Request(method, url, format string, args ...interface{}) {
 	// this is logged automatically by stackdriver logger
+}
+
+func (sl stackdriverLogging) AddLabels(labels map[string]string) error {
+	ctxVal := (sl.c).Value(loggingCtxKey)
+	if ctxVal == nil {
+		return errors.New("failed to add log labels, needs to have a logging context")
+	}
+
+	logCtxVal := ctxVal.(*loggingCtxValue)
+	for k, v := range labels {
+		logCtxVal.labels[k] = v
+	}
+
+	return nil
 }
 
 func init() {

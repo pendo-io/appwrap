@@ -102,6 +102,13 @@ func (sl *StackdriverLogging) Criticalf(format string, args ...interface{}) {
 
 func (sl *StackdriverLogging) Request(method, url, format string, args ...interface{}) {}
 
+func (sl *StackdriverLogging) AddLabels(labels map[string]string) error {
+	for k, v := range labels {
+		sl.AddLabel(k, v)
+	}
+	return nil
+}
+
 // Debug will log the specified data to the logging system with the debug log level
 func (sl *StackdriverLogging) Debug(data interface{}) {
 	sl.processLog(logging.Debug, data)
