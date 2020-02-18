@@ -203,6 +203,20 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	}
 }
 
+func AddLoggingLabels(c *context.Context, labels map[string]string) error {
+	ctxVal := (*c).Value(loggingCtxKey)
+	if ctxVal == nil {
+		return fmt.Errorf("failed to add log labels, need to wrap http handler to use stackdriver logger")
+	}
+
+	logCtxVal := ctxVal.(*loggingCtxValue)
+	for k, v := range labels {
+		logCtxVal.labels[k] = v
+	}
+
+	return nil
+}
+
 func Criticalf(ctx context.Context, format string, args ...interface{}) {
 	logFromContext(ctx, logtypepb.LogSeverity_CRITICAL, format, args...)
 }
