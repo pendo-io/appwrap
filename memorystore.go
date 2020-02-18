@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash"
-
 	cloudms "cloud.google.com/go/redis/apiv1"
+	"github.com/cespare/xxhash"
 	"github.com/go-redis/redis"
+	"github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
@@ -29,6 +30,18 @@ type CacheItem struct {
 	Expiration time.Duration
 	// Used for CompareAndSwap, invisible to client
 	valueOnLastGet []byte
+}
+
+type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
+
+func NewRedisAPIService(ctx context.Context) (redisAPIService, error) {
+	return cloudms.NewCloudRedisClient(ctx)
+}
+
+// redisAPIService captures the behavior of *redispb.CloudRedisClient, to make it mockable to testing.
+type redisAPIService interface {
+	io.Closer
+	GetInstance(context.Context, *redispb.GetInstanceRequest, ...gax.CallOption) (*redispb.Instance, error)
 }
 
 // Implements needed redis methods for mocking purposes.  See *redis.Client for a full list of available methods
@@ -149,17 +162,22 @@ type memorystoreService struct {
 
 	clients *[]redisClientInterface
 	addrs   []string
+
+	connectFn redisAPIConnectorFn // if nil, use "real" implementation NewRedisAPIService; non-nil used for testing
 }
 
 var GlobalService memorystoreService
 
-func (ms *memorystoreService) getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) []string {
+func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) []string {
 	if ms.addrs != nil {
 		return ms.addrs
 	}
 
-	appInfo := NewAppengineInfoFromContext(c)
-	client, err := cloudms.NewCloudRedisClient(context.Background())
+	connectFn := ms.connectFn
+	if connectFn == nil {
+		connectFn = NewRedisAPIService
+	}
+	client, err := connectFn(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -183,11 +201,11 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, loc CacheLocation,
 	return addrs
 }
 
-func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
-	return GlobalService.NewMemcache(c, loc, name, shards)
+func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+	return GlobalService.NewMemcache(c, appInfo, loc, name, shards)
 }
 
-func (ms *memorystoreService) NewMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if ms.clients == nil {
 		ms.mtx.Lock()
@@ -200,7 +218,7 @@ func (ms *memorystoreService) NewMemcache(c context.Context, loc CacheLocation, 
 			}
 
 			clients := make([]redisClientInterface, shards)
-			addrs := ms.getRedisAddr(c, loc, name, shards)
+			addrs := ms.getRedisAddr(c, appInfo, loc, name, shards)
 			for i := range addrs {
 				client := redis.NewClient(&redis.Options{
 					Addr:     addrs[i],

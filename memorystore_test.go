@@ -7,9 +7,25 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	"github.com/googleapis/gax-go"
 	"github.com/stretchr/testify/mock"
+	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"
+	"pendo.io/brace"
 )
+
+type redisAPIServiceMock struct {
+	mock.Mock
+}
+
+func (r redisAPIServiceMock) Close() error {
+	return r.Called().Error(0)
+}
+func (r redisAPIServiceMock) GetInstance(ctx context.Context, req *redispb.GetInstanceRequest, opts ...gax.CallOption) (*redispb.Instance, error) {
+	ret := r.Called(ctx, req, opts)
+	inst, _ := ret.Get(0).(*redispb.Instance) // converts untyped-nil Get(0) to typed-nil *redispb.Instance
+	return inst, ret.Error(1)
+}
 
 type redisClientMock struct {
 	mock.Mock
@@ -113,7 +129,9 @@ var _ = Suite(&MemorystoreTest{})
 func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
 	mocks := []*redisClientMock{{}, {}}
 	ms := memorystoreService{clients: &[]redisClientInterface{mocks[0], mocks[1]}}
-	return ms.NewMemcache(context.Background(), "", "", 2).(Memorystore), mocks
+	appInfo := &AppengineInfoMock{}
+	appInfo.On("AppID").Return("pendo-devserver").Maybe()
+	return ms.NewMemcache(context.Background(), appInfo, "", "", 2).(Memorystore), mocks
 }
 func (s *MemorystoreTest) newMemstoreWithNamespace() (Memorystore, []*redisClientMock) {
 	ms, mocks := s.newMemstore()
@@ -121,8 +139,16 @@ func (s *MemorystoreTest) newMemstoreWithNamespace() (Memorystore, []*redisClien
 }
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
-	// don't want to instantiate GCP object, so set addrs
-	ms := memorystoreService{addrs: []string{"1.2.3.4:1234"}}
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	connFn := func(ctx context.Context) (redisAPIService, error) {
+		apiMock := &redisAPIServiceMock{} // we don't assert expectations because collecting this is very hard, but that's OK: other tests verify these calls actually happen
+		apiMock.On("GetInstance", mock.Anything, &redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"}, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: connFn}
 
 	wg := &sync.WaitGroup{}
 	startingLine := make(chan struct{})
@@ -136,7 +162,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 			defer wg.Done()
 			// Start all goroutines at once
 			<-startingLine
-			msClients[i] = ms.NewMemcache(context.Background(), "", "", 1).(Memorystore)
+			msClients[i] = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1).(Memorystore)
 		}()
 	}
 	close(startingLine)
@@ -149,6 +175,90 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 		// should be the exact same pointer
 		c.Assert(msClients[i].clients[0], Equals, authoritativeClients[0])
 	}
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestAPIConnectError(c *C) {
+	connErr := errors.New("over quota: google is just too awesome")
+
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	var doErr bool
+	conn := func(ctx context.Context) (redisAPIService, error) {
+		if doErr {
+			return nil, errors.New("over quota: google is just too awesome")
+		}
+
+		apiMock := &redisAPIServiceMock{}
+		apiMock.On("GetInstance",
+			mock.Anything,
+			&redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"},
+			[]gax.CallOption(nil),
+		).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: conn}
+
+	// Connection error -> panic
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return nil, connErr }
+	c.Assert(
+		func() { ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1) },
+		PanicMatches,
+		".*over quota: google is just too awesome.*")
+
+	// Connection success -> no panic (valid client)
+	apiMock := &redisAPIServiceMock{}
+	apiMock.On("GetInstance",
+		mock.Anything,
+		&redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"},
+		[]gax.CallOption(nil),
+	).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+	apiMock.On("Close").Return(nil).Once()
+
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return apiMock, nil }
+	m := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	apiMock.AssertExpectations(c)
+
+	// Check that connFn is not called again, since setup was successful
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return nil, connErr }
+	m2 := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(m2.(Memorystore).clients, brace.SameMemoryAs, m.(Memorystore).clients) // same underlying clients as before
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	apiMock := &redisAPIServiceMock{}
+	ms := memorystoreService{connectFn: func(context.Context) (redisAPIService, error) { return apiMock, nil }}
+
+	expectReq := &redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"}
+
+	// GetInstance failed -> panic
+	apiMock.On("GetInstance", mock.Anything, expectReq, []gax.CallOption(nil)).Return(nil, errors.New(".*over quota: google is just too awesome.*")).Once()
+	apiMock.On("Close").Return(nil).Once()
+	c.Assert(
+		func() { ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1) },
+		PanicMatches,
+		".*over quota: google is just too awesome.*")
+	apiMock.AssertExpectations(c)
+
+	// GetInstance succeeded -> don't panic (valid clients)
+	apiMock.On("GetInstance", mock.Anything, expectReq, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+	apiMock.On("Close").Return(nil).Once()
+	m := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	apiMock.AssertExpectations(c)
+
+	// Check that GetInstance is not called again, since setup was successful
+	m2 := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(m2.(Memorystore).clients, brace.SameMemoryAs, m.(Memorystore).clients) // same underlying clients
+
+	appMock.AssertExpectations(c)
 }
 
 func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
