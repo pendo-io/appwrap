@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash"
-
 	cloudms "cloud.google.com/go/redis/apiv1"
+	"github.com/cespare/xxhash"
 	"github.com/go-redis/redis"
+	"github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
@@ -29,6 +30,18 @@ type CacheItem struct {
 	Expiration time.Duration
 	// Used for CompareAndSwap, invisible to client
 	valueOnLastGet []byte
+}
+
+type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
+
+func NewRedisAPIService(ctx context.Context) (redisAPIService, error) {
+	return cloudms.NewCloudRedisClient(ctx)
+}
+
+// redisAPIService captures the behavior of *redispb.CloudRedisClient, to make it mockable to testing.
+type redisAPIService interface {
+	io.Closer
+	GetInstance(context.Context, *redispb.GetInstanceRequest, ...gax.CallOption) (*redispb.Instance, error)
 }
 
 // Implements needed redis methods for mocking purposes.  See *redis.Client for a full list of available methods
@@ -144,57 +157,96 @@ type Memorystore struct {
 	namespace string
 }
 
-var (
-	redisClientMtx = &sync.Mutex{}
-	// This needs to be a pointer to guarantee atomic reads/writes to the value inside NewAppengineMemcache
-	redisClients *[]redisClientInterface
-	redisAddrs   []string
-)
+type memorystoreService struct {
+	connectFn redisAPIConnectorFn // if nil, use "real" implementation NewRedisAPIService; non-nil used for testing
 
-func getRedisAddr(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) []string {
-	if redisAddrs != nil {
-		return redisAddrs
+	mtx sync.Mutex
+
+	clients            *[]redisClientInterface
+	addrs              []string
+	addrLastErr        error
+	addrDontRetryUntil time.Time
+}
+
+var GlobalService memorystoreService
+
+const redisErrorDontRetryInterval = 5 * time.Second
+
+func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (_ []string, finalErr error) {
+	if ms.addrs != nil && ms.addrLastErr == nil {
+		return ms.addrs, nil
 	}
 
-	appInfo := NewAppengineInfoFromContext(c)
-	client, err := cloudms.NewCloudRedisClient(context.Background())
+	// Handle don't-retry interval: repeat prior error if too soon after failure
+	now := time.Now()
+	if ms.addrLastErr != nil && now.Before(ms.addrDontRetryUntil) {
+		return nil, fmt.Errorf("cached error (no retry for %s): %s", ms.addrDontRetryUntil.Sub(now), ms.addrLastErr)
+	}
+	defer func() {
+		if finalErr != nil {
+			ms.addrLastErr, ms.addrDontRetryUntil = finalErr, now.Add(redisErrorDontRetryInterval)
+		}
+	}()
+
+	connectFn := ms.connectFn
+	if connectFn == nil {
+		connectFn = NewRedisAPIService
+	}
+	client, err := connectFn(context.Background())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer client.Close()
 
 	projectId := appInfo.AppID()
 
-	addrs := make([]string, shards)
-	for shard := range addrs {
+	if ms.addrs == nil {
+		ms.addrs = make([]string, shards)
+	}
+
+	for shard, existingAddr := range ms.addrs {
+		if existingAddr != "" {
+			continue // skip already-successful addresses
+		}
 		instance, err := client.GetInstance(c, &redispb.GetInstanceRequest{
 			Name: fmt.Sprintf("projects/%s/locations/%s/instances/%s-%d", projectId, loc, name, shard),
 		})
 		if err != nil {
-			panic(err)
+			finalErr = err
+			continue // skip failed address gets and keep trying to cache others (but consider the overall lookup failed)
 		}
 
-		addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
+		ms.addrs[shard] = fmt.Sprintf("%s:%d", instance.Host, instance.Port)
 	}
 
-	redisAddrs = addrs
-	return redisAddrs
+	if finalErr != nil {
+		return nil, finalErr
+	}
+
+	return ms.addrs, nil
 }
 
-func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, shards CacheShards) Memcache {
+func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
+	return GlobalService.NewMemcache(c, appInfo, loc, name, shards)
+}
+
+func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
-	if redisClients == nil {
-		redisClientMtx.Lock()
-		defer redisClientMtx.Unlock()
+	if ms.clients == nil {
+		ms.mtx.Lock()
+		defer ms.mtx.Unlock()
 
 		// Check again, because another goroutine could have beaten us here while we were checking the first time
-		if redisClients == nil {
+		if ms.clients == nil {
 			if shards == 0 {
 				panic("cannot use Memorystore with zero shards")
 			}
 
 			clients := make([]redisClientInterface, shards)
-			addrs := getRedisAddr(c, loc, name, shards)
+			addrs, err := ms.getRedisAddr(c, appInfo, loc, name, shards)
+			if err != nil {
+				return nil, err
+			}
 			for i := range addrs {
 				client := redis.NewClient(&redis.Options{
 					Addr:     addrs[i],
@@ -205,10 +257,10 @@ func NewAppengineMemcache(c context.Context, loc CacheLocation, name CacheName, 
 				clients[i] = &redisClientImplementation{client, client}
 			}
 
-			redisClients = &clients
+			ms.clients = &clients
 		}
 	}
-	return Memorystore{c, *redisClients, ""}
+	return Memorystore{c, *ms.clients, ""}, nil
 }
 
 func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int) {
@@ -378,19 +430,19 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 func (ms Memorystore) Flush() error {
 	return errors.New("please don't call this on memorystore")
 	/*
-	Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
+		Leaving this here to show how you implement flush. It is currently disabled because flush brings down memorystore for the duration of this operation.
 
-		errs := make([]error, 0, len(ms.clients))
-		for _, client := range ms.clients {
-			if err := client.FlushAll(); err != nil {
-				errs = append(errs, err)
+			errs := make([]error, 0, len(ms.clients))
+			for _, client := range ms.clients {
+				if err := client.FlushAll(); err != nil {
+					errs = append(errs, err)
+				}
 			}
-		}
-		if len(errs) == 0 {
-			return nil
-		} else {
-			return MultiError(errs)
-		}
+			if len(errs) == 0 {
+				return nil
+			} else {
+				return MultiError(errs)
+			}
 	*/
 }
 

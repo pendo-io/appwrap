@@ -3,13 +3,29 @@ package appwrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis"
+	"github.com/googleapis/gax-go"
 	"github.com/stretchr/testify/mock"
+	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"
 )
+
+type redisAPIServiceMock struct {
+	mock.Mock
+}
+
+func (r redisAPIServiceMock) Close() error {
+	return r.Called().Error(0)
+}
+func (r redisAPIServiceMock) GetInstance(ctx context.Context, req *redispb.GetInstanceRequest, opts ...gax.CallOption) (*redispb.Instance, error) {
+	ret := r.Called(ctx, req, opts)
+	inst, _ := ret.Get(0).(*redispb.Instance) // converts untyped-nil Get(0) to typed-nil *redispb.Instance
+	return inst, ret.Error(1)
+}
 
 type redisClientMock struct {
 	mock.Mock
@@ -110,21 +126,33 @@ type MemorystoreTest struct{}
 
 var _ = Suite(&MemorystoreTest{})
 
-func (s *MemorystoreTest) SetUpTest(c *C) {
-	redisClients = &[]redisClientInterface{&redisClientMock{}, &redisClientMock{}}
-}
-
 func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
-	mocks := []*redisClientMock{(*redisClients)[0].(*redisClientMock), (*redisClients)[1].(*redisClientMock)}
-	return NewAppengineMemcache(context.Background(), "", "", 2).Namespace("test-ns").(Memorystore), mocks
+	mocks := []*redisClientMock{{}, {}}
+	ms := memorystoreService{clients: &[]redisClientInterface{mocks[0], mocks[1]}}
+	appInfo := &AppengineInfoMock{}
+	appInfo.On("AppID").Return("pendo-devserver").Maybe()
+	m, err := ms.NewMemcache(context.Background(), appInfo, "", "", 2)
+	if err != nil {
+		panic(err)
+	}
+	return m.(Memorystore), mocks
+}
+func (s *MemorystoreTest) newMemstoreWithNamespace() (Memorystore, []*redisClientMock) {
+	ms, mocks := s.newMemstore()
+	return ms.Namespace("test-ns").(Memorystore), mocks
 }
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
-	// for just this test, we want redisClient to be nil
-	redisClients = nil
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
 
-	// don't want to instantiate GCP object, so set redisAddrs
-	redisAddrs = []string{"1.2.3.4:1234"}
+	connFn := func(ctx context.Context) (redisAPIService, error) {
+		apiMock := &redisAPIServiceMock{} // we don't assert expectations because collecting this is very hard, but that's OK: other tests verify these calls actually happen
+		apiMock.On("GetInstance", mock.Anything, &redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"}, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: connFn}
 
 	wg := &sync.WaitGroup{}
 	startingLine := make(chan struct{})
@@ -138,7 +166,11 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 			defer wg.Done()
 			// Start all goroutines at once
 			<-startingLine
-			msClients[i] = NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+			mIntf, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+			if err != nil {
+				panic(err)
+			}
+			msClients[i] = mIntf.(Memorystore)
 		}()
 	}
 	close(startingLine)
@@ -151,10 +183,145 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 		// should be the exact same pointer
 		c.Assert(msClients[i].clients[0], Equals, authoritativeClients[0])
 	}
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestAPIConnectError(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	apiMock := &redisAPIServiceMock{}
+	ms := memorystoreService{} // connectFn to be set below before each call
+
+	connErr := errors.New("I accidentally the whole Internet")
+
+	// Connection error -> return error
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return nil, connErr }
+	_, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
+
+	// Connection success but still within don't-retry delay -> return error
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return apiMock, nil }
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*cached error.*I accidentally the whole Internet.*")
+
+	// Connection success -> return no error (valid clients)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	apiMock.On("GetInstance",
+		mock.Anything,
+		&redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"},
+		[]gax.CallOption(nil),
+	).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+	apiMock.On("Close").Return(nil).Once()
+
+	m, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, IsNil)
+	apiMock.AssertExpectations(c)
+
+	// Check that connFn is not called again, since setup was successful
+	ms.connectFn = func(context.Context) (redisAPIService, error) { return nil, connErr }
+	m2, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, IsNil)
+	c.Assert(&m2.(Memorystore).clients[0], Equals, &m.(Memorystore).clients[0]) // same underlying clients as before
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	apiMock := &redisAPIServiceMock{}
+	ms := memorystoreService{connectFn: func(context.Context) (redisAPIService, error) { return apiMock, nil }}
+
+	expectReq := &redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"}
+
+	// GetInstance error -> return error
+	apiMock.On("GetInstance", mock.Anything, expectReq, []gax.CallOption(nil)).Return(nil, errors.New(".*I accidentally the whole Internet.*")).Once()
+	apiMock.On("Close").Return(nil).Once()
+	_, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
+	apiMock.AssertExpectations(c)
+
+	// GetInstance success but still within don't-retry delay -> return error
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, ErrorMatches, ".*I accidentally the whole Internet.*")
+
+	// GetInstance success -> return no error (valid clients)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	apiMock.On("GetInstance", mock.Anything, expectReq, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+	apiMock.On("Close").Return(nil).Once()
+	m, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, IsNil)
+	apiMock.AssertExpectations(c)
+
+	// Check that GetInstance is not called again, since setup was successful
+	m2, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 1)
+	c.Assert(err, IsNil)
+	c.Assert(&m2.(Memorystore).clients[0], Equals, &m.(Memorystore).clients[0]) // same underlying clients
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestGetAddrKeepShards(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+
+	apiMock := &redisAPIServiceMock{}
+	mockShard := func(shard int, succeeds bool) {
+		call := apiMock.On("GetInstance",
+			mock.Anything,
+			&redispb.GetInstanceRequest{Name: fmt.Sprintf("projects/pendo-devserver/locations/cacheloc/instances/cachename-%d", shard)},
+			[]gax.CallOption(nil),
+		)
+		if succeeds {
+			call.Return(&redispb.Instance{Host: "1.2.3.4", Port: 1000 + int32(shard)}, nil).Once()
+		} else {
+			call.Return(nil, fmt.Errorf("shard %d exploded into shards", shard)).Once()
+		}
+	}
+
+	conn := func(ctx context.Context) (redisAPIService, error) {
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: conn}
+
+	// Shards 0 and 2 succeed, 1 and 3 fail
+	mockShard(0, true)
+	mockShard(1, false)
+	mockShard(2, true)
+	mockShard(3, false)
+	_, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, ErrorMatches, ".*shard 3 exploded into shards.*") // last shard to explode sets the error message
+	apiMock.AssertExpectations(c)
+
+	// Shard 3 succeeds, 1 still fails
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	mockShard(1, false)
+	mockShard(3, true)
+	_, err = ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, ErrorMatches, ".*shard 1 exploded into shards.*") // last shard to explode sets the error message
+	apiMock.AssertExpectations(c)
+
+	// Shard 1 finally succeeds (all shards now loaded)
+	ms.addrDontRetryUntil = time.Time{} // allow retry now
+	mockShard(1, true)
+	m, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, IsNil)
+	apiMock.AssertExpectations(c)
+
+	// Ensure that there are no further calls to GetInstance
+	m2, err := ms.NewMemcache(context.Background(), appMock, "cacheloc", "cachename", 4)
+	c.Assert(err, IsNil)
+	c.Assert(&m2.(Memorystore).clients[0], Equals, &m.(Memorystore).clients[0]) // same underlying clients
+
+	appMock.AssertExpectations(c)
 }
 
 func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
-	ms, _ := s.newMemstore()
+	ms, _ := s.newMemstoreWithNamespace()
 
 	fullKey, shard := ms.namespacedKeyAndShard("banana1")
 	c.Assert(fullKey, Equals, "test-ns:banana1")
@@ -170,7 +337,7 @@ func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
 }
 
 func (s *MemorystoreTest) TestAdd(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -204,7 +371,7 @@ func (s *MemorystoreTest) TestAdd(c *C) {
 }
 
 func (s *MemorystoreTest) TestAddMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock0 := &redisPipelineMock{}
 	pipeMock1 := &redisPipelineMock{}
 	resultMock0 := &boolCmdMock{}
@@ -315,7 +482,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
 		clientMocks[1].AssertExpectations(c)
@@ -348,7 +515,7 @@ func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock := &redisPipelineMock{}
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -402,7 +569,7 @@ func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
 }
 
 func (s *MemorystoreTest) TestDelete(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -426,7 +593,7 @@ func (s *MemorystoreTest) TestDelete(c *C) {
 }
 
 func (s *MemorystoreTest) TestDeleteMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -454,7 +621,7 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestFlush(c *C) {
-	ms, _ := s.newMemstore()
+	ms, _ := s.newMemstoreWithNamespace()
 	fatalErr := errors.New("please don't call this on memorystore")
 	err := ms.Flush()
 	c.Assert(err, DeepEquals, fatalErr)
@@ -483,11 +650,11 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		err = ms.Flush()
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
-	 */
+	*/
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -519,7 +686,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 }
 
 func (s *MemorystoreTest) TestGetMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -601,7 +768,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrement(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	calledResultMock := &intCmdMock{}
 	pipeMock := &redisPipelineMock{}
 	uncalledResultMock := &intCmdMock{}
@@ -645,7 +812,7 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 }
 
 func (s *MemorystoreTest) TestIncrementExisting(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -688,7 +855,7 @@ func (s *MemorystoreTest) TestIncrementExisting(c *C) {
 }
 
 func (s *MemorystoreTest) TestSet(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 
 	checkMocks := func() {
 		clientMocks[0].AssertExpectations(c)
@@ -718,7 +885,7 @@ func (s *MemorystoreTest) TestSet(c *C) {
 }
 
 func (s *MemorystoreTest) TestSetMulti(c *C) {
-	ms, clientMocks := s.newMemstore()
+	ms, clientMocks := s.newMemstoreWithNamespace()
 	pipeMock0 := &redisPipelineMock{}
 	pipeMock1 := &redisPipelineMock{}
 
@@ -784,7 +951,7 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 }
 
 func (s *MemorystoreTest) TestNamespace(c *C) {
-	ms := NewAppengineMemcache(context.Background(), "", "", 1).(Memorystore)
+	ms, _ := s.newMemstore()
 	msNewNamespace := ms.Namespace("test-ns").(Memorystore)
 	// original ns not modified
 	c.Assert(ms.namespace, Equals, "")
