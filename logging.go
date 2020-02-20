@@ -29,6 +29,7 @@ type Logging interface {
 	Errorf(format string, args ...interface{})                // Error message
 	Criticalf(format string, args ...interface{})             // Critical message
 	Request(request, url, format string, args ...interface{}) // This is conditionally implemented
+	AddLabels(labels map[string]string) error                 // Adds labels to your log message
 }
 
 // DataLogging for system logging that can accept json, strings, or structs
@@ -51,6 +52,7 @@ func (nl NullLogger) Warningf(format string, args ...interface{})              {
 func (nl NullLogger) Errorf(format string, args ...interface{})                {}
 func (nl NullLogger) Criticalf(format string, args ...interface{})             {}
 func (nl NullLogger) Request(request, url, format string, args ...interface{}) {}
+func (nl NullLogger) AddLabels(labels map[string]string) error                 {return nil}
 
 type FormatLogger struct {
 	Logf func(format string, args ...interface{})
@@ -82,6 +84,10 @@ func (fl FormatLogger) Request(request, url, format string, args ...interface{})
 	}
 
 	fl.Logf("REQUEST: %s %s"+format, append([]interface{}{request, url}, args...)...)
+}
+
+func (fl FormatLogger) AddLabels(labels map[string]string) error {
+	return nil
 }
 
 type WriterLogger struct {
@@ -161,6 +167,10 @@ func (ll *LevelLogger) Request(request, url, format string, args ...interface{})
 	ll.requestArgs = args
 }
 
+func (ll *LevelLogger) AddLabels(labels map[string]string) error {
+	return ll.wrappedLogger.AddLabels(labels)
+}
+
 func (ll *LevelLogger) emitRequest() {
 	if ll.requestMethod != "" {
 		ll.wrappedLogger.Request(ll.requestMethod, ll.requestUrl, ll.requestFormat, ll.requestArgs...)
@@ -211,6 +221,15 @@ func (tee TeeLogging) Request(request, url, format string, args ...interface{}) 
 	}
 }
 
+func (tee TeeLogging) AddLabels(labels map[string]string) error {
+	for _, l := range tee.Logs {
+		if err := l.AddLabels(labels); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type PrefixLogger struct {
 	Logging
 	Prefix string
@@ -238,4 +257,8 @@ func (pl PrefixLogger) Criticalf(format string, args ...interface{}) {
 
 func (pl PrefixLogger) Request(request, url, format string, args ...interface{}) {
 	pl.Logging.Request(request, url, pl.Prefix+format, args...)
+}
+
+func (pl PrefixLogger) AddLabels(labels map[string]string) error {
+	return pl.Logging.AddLabels(labels)
 }
