@@ -28,7 +28,7 @@ func (s *AeLoggingStackdriverTests) SetUpTest(c *C) {
 
 func (s *AeLoggingStackdriverTests) TestAddLoggingLabels(c *C) {
 	// adding a new key will keep the previous keys
-	err := AddLoggingLabels(s.log, map[string]string{"label3": "black"})
+	err := AddStackdriverLoggingLabels(s.log, map[string]string{"label3": "black"})
 	c.Assert(err, IsNil)
 	logCtxVal := s.sdLog.c.Value(loggingCtxKey).(*loggingCtxValue)
 	c.Assert(logCtxVal.labels, DeepEquals, map[string]string{
@@ -38,7 +38,7 @@ func (s *AeLoggingStackdriverTests) TestAddLoggingLabels(c *C) {
 	})
 
 	// using an existing key will override the original value
-	err = AddLoggingLabels(s.log, map[string]string{"label2": "black"})
+	err = AddStackdriverLoggingLabels(s.log, map[string]string{"label2": "black"})
 	c.Assert(err, IsNil)
 	logCtxVal = s.sdLog.c.Value(loggingCtxKey).(*loggingCtxValue)
 	c.Assert(logCtxVal.labels, DeepEquals, map[string]string{
@@ -50,14 +50,14 @@ func (s *AeLoggingStackdriverTests) TestAddLoggingLabels(c *C) {
 
 func (s *AeLoggingStackdriverTests) TestAddLoggingLabelsErrors(c *C) {
 	errorLogger1 := stackdriverLogging{c: context.WithValue(StubContext(), loggingCtxKey, nil)}
-	err := AddLoggingLabels(errorLogger1, map[string]string{"label1": "pink"})
+	err := AddStackdriverLoggingLabels(errorLogger1, map[string]string{"label1": "pink"})
 	c.Assert(err.Error(), Equals, "failed to add log labels, log needs to be a level logger")
 
 	errorLogger2 := NewLevelLogger(LogLevelDebug, NullLogger{})
-	err = AddLoggingLabels(errorLogger2, map[string]string{"label1": "pink"})
+	err = AddStackdriverLoggingLabels(errorLogger2, map[string]string{"label1": "pink"})
 	c.Assert(err.Error(), Equals, "failed to add log labels, wrapped log needs to be a stackdriver logger")
 
 	errorLogger3 := NewLevelLogger(LogLevelDebug,  stackdriverLogging{c: context.WithValue(StubContext(), loggingCtxKey, nil)})
-	err = AddLoggingLabels(errorLogger3, map[string]string{"label1": "pink"})
+	err = AddStackdriverLoggingLabels(errorLogger3, map[string]string{"label1": "pink"})
 	c.Assert(err.Error(), Equals, "failed to add log labels, needs to have a logging context")
 }

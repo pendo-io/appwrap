@@ -3,6 +3,7 @@ package appwrap
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -203,26 +204,17 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	}
 }
 
-func AddLoggingLabels(log Logging, labels map[string]string) error {
+func AddStackdriverLoggingLabels(log Logging, labels map[string]string) error {
 	levelLogger, ok := log.(*LevelLogger)
 	if !ok {
-		return fmt.Errorf("failed to add log labels, log needs to be a level logger")
+		return errors.New("failed to add log labels, log needs to be a level logger")
 	}
 	stackdriverLogger, ok := levelLogger.wrappedLogger.(stackdriverLogging)
 	if !ok {
-		return fmt.Errorf("failed to add log labels, wrapped log needs to be a stackdriver logger", )
-	}
-	ctxVal := (stackdriverLogger.c).Value(loggingCtxKey)
-	if ctxVal == nil {
-		return fmt.Errorf("failed to add log labels, needs to have a logging context")
+		return errors.New("failed to add log labels, wrapped log needs to be a stackdriver logger")
 	}
 
-	logCtxVal := ctxVal.(*loggingCtxValue)
-	for k, v := range labels {
-		logCtxVal.labels[k] = v
-	}
-
-	return nil
+	return stackdriverLogger.AddLoggingLabels(labels)
 }
 
 func Criticalf(ctx context.Context, format string, args ...interface{}) {
