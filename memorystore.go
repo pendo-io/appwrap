@@ -12,7 +12,7 @@ import (
 	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/cespare/xxhash"
 	"github.com/go-redis/redis"
-	"github.com/googleapis/gax-go"
+	gax "github.com/googleapis/gax-go/v2"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
@@ -169,6 +169,10 @@ type memorystoreService struct {
 }
 
 var GlobalService memorystoreService
+
+func InitializeRedisAddrs(addrs []string) {
+	GlobalService.addrs = addrs
+}
 
 const redisErrorDontRetryInterval = 5 * time.Second
 
