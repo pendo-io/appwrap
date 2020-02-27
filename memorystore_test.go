@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/googleapis/gax-go"
+	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"
@@ -673,7 +673,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 		Value:          val,
 		valueOnLastGet: val,
 	})
-	c.Assert(item.Value, Not(Equals), item.valueOnLastGet)
+	c.Assert(sameMemory(item.Value, item.valueOnLastGet), IsFalse)
 	checkMocks()
 
 	// error case
@@ -731,8 +731,8 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 			valueOnLastGet: []byte(shard0Vals[1].(string)),
 		},
 	})
-	c.Assert(results["apple"].Value, Not(Equals), results["apple"].valueOnLastGet)
-	c.Assert(results["pear"].Value, Not(Equals), results["pear"].valueOnLastGet)
+	c.Assert(sameMemory(results["apple"].Value, results["apple"].valueOnLastGet), IsFalse)
+	c.Assert(sameMemory(results["pear"].Value, results["pear"].valueOnLastGet), IsFalse)
 	checkMocks()
 
 	// test getting keys all in same shard
@@ -755,7 +755,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 			valueOnLastGet: []byte(shard0Vals[1].(string)),
 		},
 	})
-	c.Assert(results["pineapple"].Value, Not(Equals), results["pineapple"].valueOnLastGet)
+	c.Assert(sameMemory(results["pineapple"].Value, results["pineapple"].valueOnLastGet), IsFalse)
 	checkMocks()
 
 	// error case

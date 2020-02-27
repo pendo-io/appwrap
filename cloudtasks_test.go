@@ -50,10 +50,10 @@ func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
 	// verify that all pointers and slices are different locations in memory
 	c.Assert(task, Not(Equals), taskCopy)
 	c.Assert(task.task, Not(Equals), taskCopy.task)
-	c.Assert(task.task.MessageType, Not(Equals), taskCopy.task.MessageType)
+	c.Assert(task.task.GetMessageType(), Not(Equals), taskCopy.task.GetMessageType())
 	c.Assert(task.task.GetAppEngineHttpRequest(), Not(Equals), taskCopy.task.GetAppEngineHttpRequest())
-	c.Assert(task.task.GetAppEngineHttpRequest().Headers, Not(Equals), taskCopy.task.GetAppEngineHttpRequest().Headers)
-	c.Assert(task.task.GetAppEngineHttpRequest().Body, Not(Equals), taskCopy.task.GetAppEngineHttpRequest().Body)
+	c.Assert(sameMemory(task.task.GetAppEngineHttpRequest().Headers, taskCopy.task.GetAppEngineHttpRequest().Headers), IsFalse)
+	c.Assert(sameMemory(task.task.GetAppEngineHttpRequest().Body, taskCopy.task.GetAppEngineHttpRequest().Body), IsFalse)
 	c.Assert(task.task.GetAppEngineHttpRequest().GetAppEngineRouting(), Not(Equals), taskCopy.task.GetAppEngineHttpRequest().GetAppEngineRouting())
 
 	// modifying one shouldn't touch the other
