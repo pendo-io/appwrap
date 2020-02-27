@@ -10,7 +10,7 @@ import (
 	"time"
 
 	cloudms "cloud.google.com/go/redis/apiv1"
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 	"github.com/go-redis/redis"
 	gax "github.com/googleapis/gax-go/v2"
 	"golang.org/x/net/context"
