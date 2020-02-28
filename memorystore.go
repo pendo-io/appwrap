@@ -171,6 +171,11 @@ type memorystoreService struct {
 var GlobalService memorystoreService
 
 func InitializeRedisAddrs(addrs []string) {
+	if len(addrs) == 0 {
+		return
+	}
+	GlobalService.mtx.Lock()
+	defer GlobalService.mtx.Unlock()
 	GlobalService.addrs = addrs
 }
 
