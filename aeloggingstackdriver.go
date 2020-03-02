@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -192,7 +193,7 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 
 	e := logging.Entry{
 		Labels:    logCtxVal.labels,
-		Payload:   fmt.Sprintf(format, args...),
+		Payload:   truncateLog(format, args...),
 		Severity:  logging.Severity(sev),
 		Timestamp: time.Now(),
 		Trace:     logCtxVal.trace,
@@ -201,6 +202,19 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	if sev > logCtxVal.sev {
 		logCtxVal.sev = sev
 	}
+}
+
+// set to 240k, slightly under real max of 256k
+const maxLogLength = 240 << 10
+const truncatedLogPrefix = "TRUNCATED: (full log in stderr) "
+
+func truncateLog(format string, args ...interface{}) string {
+	payload := fmt.Sprintf(format, args...)
+	if len(payload) > maxLogLength {
+		_, _ = fmt.Fprint(os.Stderr, payload)
+		payload = truncatedLogPrefix + payload[:maxLogLength]
+	}
+	return payload
 }
 
 func Criticalf(ctx context.Context, format string, args ...interface{}) {
