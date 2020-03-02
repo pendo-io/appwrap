@@ -228,7 +228,6 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 type LocalDatastore struct {
 	lastId          int64
 	entities        map[string]*dsItem
-	emptyContext    context.Context
 	mtx             *sync.Mutex
 	namespaces      map[string]*LocalDatastore
 	parent          *LocalDatastore
@@ -258,7 +257,6 @@ func NewLocalDatastore(addField bool, index DatastoreIndex) Datastore {
 	return &LocalDatastore{
 		lastId:          1 << 30,
 		entities:        make(map[string]*dsItem),
-		emptyContext:    StubContext(),
 		mtx:             &sync.Mutex{},
 		namespaces:      make(map[string]*LocalDatastore),
 		addEntityFields: addField,
@@ -514,10 +512,9 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 	// Create a new datastore; it's mutex is unlocked, since the "original" datastore is locked.
 	// We will copy the entities and lastId from the current datastore before running the transaction func().
 	dsCopy := &LocalDatastore{
-		lastId:       ds.lastId,
-		entities:     make(map[string]*dsItem),
-		emptyContext: StubContext(),
-		mtx:          &sync.Mutex{},
+		lastId:   ds.lastId,
+		entities: make(map[string]*dsItem),
+		mtx:      &sync.Mutex{},
 	}
 	for k, v := range ds.entities {
 		dsCopy.entities[k] = v

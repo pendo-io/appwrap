@@ -74,7 +74,7 @@ func DecodeKey(encoded string) (*datastore.Key, error) {
 	return datastore.DecodeKey(encoded)
 }
 
-func newKey(ctx context.Context, kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
+func NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
 	key := &datastore.Key{
 		Kind:   kind,
 		ID:     iId,
@@ -229,7 +229,7 @@ func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 		namespace = cds.namespace
 	}
 
-	key := newKey(nil, kind, sId, iId, parent)
+	key := NewKey(kind, sId, iId, parent)
 	key.Namespace = namespace
 
 	return key
@@ -311,7 +311,7 @@ func (ct CloudTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error
 }
 
 func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *DatastoreKey) *DatastoreKey {
-	key := newKey(nil, kind, sId, iId, parent)
+	key := NewKey(kind, sId, iId, parent)
 	key.Namespace = ct.namespace
 
 	return key
@@ -502,7 +502,7 @@ func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 		namespace = "s~memds" // this mirrors StubContext
 	}
 
-	key := newKey(ds.emptyContext, kind, sId, iId, parent)
+	key := NewKey(kind, sId, iId, parent)
 	key.Namespace = namespace
 
 	return key
