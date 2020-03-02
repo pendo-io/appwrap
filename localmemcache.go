@@ -105,6 +105,13 @@ func (mc *LocalMemcache) Flush() error {
 	return nil
 }
 
+func (mc *LocalMemcache) FlushShard(shard int) error {
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
+	mc.items = make(map[string]cachedItem)
+	return nil
+}
+
 func (mc *LocalMemcache) get(key string) (item cachedItem, found bool) {
 	mc.mtx.Lock()
 	defer mc.mtx.Unlock()

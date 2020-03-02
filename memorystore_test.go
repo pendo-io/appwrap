@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/googleapis/gax-go/v2"
+	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"
@@ -42,6 +42,11 @@ func (m *redisClientMock) Exists(keys ...string) (int64, error) {
 }
 
 func (m *redisClientMock) FlushAll() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *redisClientMock) FlushAllAsync() error {
 	args := m.Called()
 	return args.Error(0)
 }
@@ -651,6 +656,36 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
 	*/
+}
+
+func (s *MemorystoreTest) TestFlushShard(c *C) {
+	ms, clientMocks := s.newMemstore()
+
+	checkMocks := func() {
+		clientMocks[0].AssertExpectations(c)
+		clientMocks[1].AssertExpectations(c)
+	}
+
+	clientMocks[0].On("FlushAllAsync").Return(nil).Once()
+	err := ms.FlushShard(0)
+	c.Assert(err, IsNil)
+	checkMocks()
+
+	clientMocks[1].On("FlushAllAsync").Return(nil).Once()
+	err = ms.FlushShard(1)
+	c.Assert(err, IsNil)
+	checkMocks()
+
+	err = ms.FlushShard(-1)
+	c.Assert(err, ErrorMatches, "shard must be in range.*")
+
+	err = ms.FlushShard(2)
+	c.Assert(err, ErrorMatches, "shard must be in range.*")
+
+	fatalErr := errors.New("aaaah")
+	clientMocks[0].On("FlushAllAsync").Return(fatalErr).Once()
+	err = ms.FlushShard(0)
+	c.Assert(err, Equals, fatalErr)
 }
 
 func (s *MemorystoreTest) TestGet(c *C) {
