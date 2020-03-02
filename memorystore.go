@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"io"
 	"runtime"
 	"sync"
 	"time"
 
 	cloudms "cloud.google.com/go/redis/apiv1"
-	"github.com/cespare/xxhash/v2"
+	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/go-redis/redis"
 	gax "github.com/googleapis/gax-go/v2"
 	"golang.org/x/net/context"
@@ -51,6 +52,7 @@ type redisCommonInterface interface {
 	Del(keys ...string) error
 	Exists(keys ...string) (int64, error)
 	FlushAll() error
+	FlushAllAsync() error
 	Get(key string) ([]byte, error)
 	IncrBy(key string, value int64) (int64, error)
 	MGet(keys ...string) ([]interface{}, error)
@@ -82,6 +84,10 @@ func (rci *redisClientImplementation) Exists(keys ...string) (int64, error) {
 
 func (rci *redisClientImplementation) FlushAll() error {
 	return rci.common.FlushAll().Err()
+}
+
+func (rci *redisClientImplementation) FlushAllAsync() error {
+	return rci.common.FlushAllAsync().Err()
 }
 
 func (rci *redisClientImplementation) Get(key string) ([]byte, error) {
@@ -453,6 +459,13 @@ func (ms Memorystore) Flush() error {
 				return MultiError(errs)
 			}
 	*/
+}
+
+func (ms Memorystore) FlushShard(shard int) error {
+	if shard < 0 || shard >= len(ms.clients) {
+		return fmt.Errorf("shard must be in range [0, %d), got %d", len(ms.clients), shard)
+	}
+	return ms.clients[shard].FlushAllAsync()
 }
 
 func (ms Memorystore) Get(key string) (*CacheItem, error) {

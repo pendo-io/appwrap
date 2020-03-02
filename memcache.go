@@ -7,6 +7,7 @@ type Memcache interface {
 	Delete(key string) error
 	DeleteMulti(keys []string) error
 	Flush() error
+	FlushShard(shard int) error
 	Get(key string) (*CacheItem, error)
 	GetMulti(keys []string) (map[string]*CacheItem, error)
 	Increment(key string, amount int64, initialValue uint64) (uint64, error)
