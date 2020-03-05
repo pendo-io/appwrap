@@ -481,6 +481,12 @@ type localDatastoreTransaction struct {
 	keyMap map[*PendingKey]*DatastoreKey
 }
 
+func (lds localDatastoreTransaction) NewQuery(kind string) DatastoreQuery {
+	query := lds.Datastore.NewQuery(kind).(*memoryQuery)
+	query.inTransaction = true
+	return query
+}
+
 func (lds localDatastoreTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
 	resultKey, err := lds.Datastore.Put(key, src)
 	pk := &PendingKey{}
@@ -666,6 +672,7 @@ type memoryQuery struct {
 	project         map[string]bool
 	distinct        bool
 	addEntityFields bool
+	inTransaction   bool
 }
 
 type orderField struct {
@@ -1086,6 +1093,12 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
 }
 
 func (mq *memoryQuery) getMatchingItems() ([]*dsItem, error) {
+	if !mq.inTransaction {
+		// all types of queries allowed
+	} else if mq.ancestor == nil {
+		return nil, errors.New("queries inside transactions must include an ancestor")
+	}
+
 	if err := mq.checkIndexes(false); err != nil {
 		return nil, err
 	}
