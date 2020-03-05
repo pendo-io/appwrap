@@ -491,3 +491,21 @@ func (dsit *AppengineInterfacesTest) TestPanicOnDatastoreEntitySave(c *C) {
 		mem.put("key", v)
 	}, PanicMatches, "cannot save non-flattened structs.*")
 }
+
+func (dsit *AppengineInterfacesTest) TestQueryInsideTransaction(c *C) {
+	mem := dsit.newDatastore().(*LocalDatastore)
+	mem.RunInTransaction(func(coreds DatastoreTransaction) error {
+		type wat struct {
+			Name string
+		}
+		results := make([]wat, 0)
+		goodQuery := coreds.NewQuery("wat").Ancestor(&DatastoreKey{})
+		_, err := goodQuery.GetAll(&results)
+		c.Assert(err, IsNil)
+
+		badQuery := coreds.NewQuery("wat")
+		_, err = badQuery.GetAll(&results)
+		c.Assert(err, ErrorMatches, "queries inside transactions must include an ancestor")
+		return nil
+	}, nil)
+}
