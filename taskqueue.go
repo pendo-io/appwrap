@@ -10,6 +10,7 @@ import (
 
 type Taskqueue interface {
 	Add(c context.Context, task Task, queueName string) (Task, error)
+	AddHttpTask(c context.Context, task HttpTask, queueName string) (HttpTask, error)
 	AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error)
 	DeleteMulti(c context.Context, tasks []Task, queueName string) error
 	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]Task, error)
@@ -47,10 +48,35 @@ type Task interface {
 	SetVersion(version string)
 }
 
+type HttpTask interface {
+	isTask()
+	Copy() HttpTask
+	Delay() time.Duration
+	SetDelay(delay time.Duration)
+	Header() http.Header
+	SetHeader(header http.Header)
+	Method() string
+	SetMethod(method string)
+	Name() string
+	SetName(name string)
+	Payload() []byte
+	SetPayload(payload []byte)
+	RetryCount() int32
+	SetRetryCount(count int32)
+	Tag() string
+	SetTag(tag string)
+	Url() string
+	SetUrl(url string)
+}
+
 type CloudTasksLocation string
 
 func NewTask() Task {
 	return newCloudTask()
+}
+
+func NewHttpCloudTask() HttpTask {
+	return newHttpCloudTask()
 }
 
 func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {

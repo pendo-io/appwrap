@@ -260,6 +260,17 @@ func (t cloudTaskqueue) Add(c context.Context, task Task, queueName string) (Tas
 	}, err
 }
 
+func (t cloudTaskqueue) AddHttpTask(c context.Context, task HttpTask, queueName string) (HttpTask, error) {
+	taskCopy := task.Copy().(*cloudHttpTaskImpl)
+	newTask, err := t.client.CreateTask(context.Background(), &taskspb.CreateTaskRequest{
+		Task:   taskCopy.task,
+		Parent: t.getFullQueueName(queueName),
+	})
+	return &cloudHttpTaskImpl{
+		task: newTask,
+	}, err
+}
+
 func (t cloudTaskqueue) AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error) {
 	errList := make(MultiError, len(tasks))
 	addedTasks := make([]Task, len(tasks))
