@@ -21,7 +21,7 @@ type cloudTaskImpl struct {
 	task *taskspb.Task
 }
 
-func newCloudTask() Task {
+func newCloudTask() AppEngineTask {
 	return &cloudTaskImpl{
 		task: &taskspb.Task{
 			MessageType: &taskspb.Task_AppEngineHttpRequest{
@@ -35,7 +35,7 @@ func newCloudTask() Task {
 
 func (t *cloudTaskImpl) isTask() {}
 
-func (t *cloudTaskImpl) Copy() Task {
+func (t *cloudTaskImpl) Copy() AppEngineTask {
 	innerCopy := *t.task.GetAppEngineHttpRequest()
 	bodyCopy := make([]byte, len(innerCopy.Body))
 	copy(bodyCopy, innerCopy.Body)
@@ -249,7 +249,7 @@ func (t cloudTaskqueue) getFullQueueName(queueName string) string {
 	return fmt.Sprintf(queuePathFmt, t.project, t.location, queueName)
 }
 
-func (t cloudTaskqueue) Add(c context.Context, task Task, queueName string) (Task, error) {
+func (t cloudTaskqueue) Add(c context.Context, task AppEngineTask, queueName string) (AppEngineTask, error) {
 	taskCopy := task.Copy().(*cloudTaskImpl)
 	newTask, err := t.client.CreateTask(context.Background(), &taskspb.CreateTaskRequest{
 		Task:   taskCopy.task,
@@ -271,9 +271,9 @@ func (t cloudTaskqueue) AddHttpTask(c context.Context, task HttpTask, queueName 
 	}, err
 }
 
-func (t cloudTaskqueue) AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error) {
+func (t cloudTaskqueue) AddMulti(c context.Context, tasks []AppEngineTask, queueName string) ([]AppEngineTask, error) {
 	errList := make(MultiError, len(tasks))
-	addedTasks := make([]Task, len(tasks))
+	addedTasks := make([]AppEngineTask, len(tasks))
 	var haveErr bool
 	for i, task := range tasks {
 		addedTasks[i], errList[i] = t.Add(c, task, queueName)
@@ -287,23 +287,23 @@ func (t cloudTaskqueue) AddMulti(c context.Context, tasks []Task, queueName stri
 	return addedTasks, nil
 }
 
-func (t cloudTaskqueue) DeleteMulti(c context.Context, tasks []Task, queueName string) error {
+func (t cloudTaskqueue) DeleteMulti(c context.Context, tasks []AppEngineTask, queueName string) error {
 	panic("not implemented for CloudTasks")
 }
 
-func (t cloudTaskqueue) Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]Task, error) {
+func (t cloudTaskqueue) Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error) {
 	panic("not implemented for CloudTasks")
 }
 
-func (t cloudTaskqueue) LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]Task, error) {
+func (t cloudTaskqueue) LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error) {
 	panic("not implemented for CloudTasks")
 }
 
-func (t cloudTaskqueue) ModifyLease(c context.Context, task Task, queueName string, leaseTime int) error {
+func (t cloudTaskqueue) ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error {
 	panic("not implemented for CloudTasks")
 }
 
-func (t cloudTaskqueue) NewPOSTTask(path string, params url.Values) Task {
+func (t cloudTaskqueue) NewPOSTTask(path string, params url.Values) AppEngineTask {
 	task := NewTask()
 	h := make(http.Header)
 	h.Set("Content-Type", "application/x-www-form-urlencoded")

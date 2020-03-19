@@ -9,23 +9,23 @@ import (
 )
 
 type Taskqueue interface {
-	Add(c context.Context, task Task, queueName string) (Task, error)
+	Add(c context.Context, task AppEngineTask, queueName string) (AppEngineTask, error)
 	AddHttpTask(c context.Context, task HttpTask, queueName string) (HttpTask, error)
-	AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error)
-	DeleteMulti(c context.Context, tasks []Task, queueName string) error
-	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]Task, error)
-	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]Task, error)
-	ModifyLease(c context.Context, task Task, queueName string, leaseTime int) error
-	NewPOSTTask(path string, params url.Values) Task
+	AddMulti(c context.Context, tasks []AppEngineTask, queueName string) ([]AppEngineTask, error)
+	DeleteMulti(c context.Context, tasks []AppEngineTask, queueName string) error
+	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error)
+	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error)
+	ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error
+	NewPOSTTask(path string, params url.Values) AppEngineTask
 }
 
 // This is so the calling code cannot create task structs directly.
 // This is important for cloud tasks, where the fields of the struct have to be populated properly
 // with blank values for the various pointer fields.
-type Task interface {
+type AppEngineTask interface {
 	// private method guarantees that caller can't imitate the struct
 	isTask()
-	Copy() Task
+	Copy() AppEngineTask
 	Delay() time.Duration
 	SetDelay(delay time.Duration)
 	Header() http.Header
@@ -71,7 +71,7 @@ type HttpTask interface {
 
 type CloudTasksLocation string
 
-func NewTask() Task {
+func NewTask() AppEngineTask {
 	return newCloudTask()
 }
 

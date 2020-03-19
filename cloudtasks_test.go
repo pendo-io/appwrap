@@ -284,11 +284,11 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	tasks := []Task{
+	tasks := []AppEngineTask{
 		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
 		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
 	}
-	expectTasks := []Task{
+	expectTasks := []AppEngineTask{
 		tasks[0].Copy(),
 		tasks[1].Copy(),
 	}
@@ -323,7 +323,7 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
-	expectTasks = []Task{
+	expectTasks = []AppEngineTask{
 		tasks[0].Copy(),
 		&cloudTaskImpl{},
 	}
