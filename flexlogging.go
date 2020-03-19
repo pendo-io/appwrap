@@ -88,9 +88,16 @@ func (sl stackdriverLogging) AddLabels(labels map[string]string) error {
 	}
 
 	logCtxVal := ctxVal.(*loggingCtxValue)
-	for k, v := range labels {
-		logCtxVal.labels[k] = v
+
+	// we want to preserve the previous labels but will override the values if newer ones have been provided
+	allLabels := make(map[string]string)
+	for k, v := range logCtxVal.labels {
+		allLabels[k] = v
 	}
+	for k, v := range labels {
+		allLabels[k] = v
+	}
+	logCtxVal.labels = allLabels
 
 	return nil
 }
