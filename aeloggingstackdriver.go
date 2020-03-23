@@ -170,7 +170,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 				Request:      r,
 				Status:       sw.status,
 			},
-			Labels:    logCtxVal.labels,
+			Labels:    logCtxVal.getLabels(),
 			Severity:  logging.Severity(logCtxVal.sev),
 			Timestamp: time.Now(),
 			Trace:     logCtxVal.trace,
@@ -192,7 +192,7 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 	logCtxVal := ctxVal.(*loggingCtxValue)
 
 	e := logging.Entry{
-		Labels:    logCtxVal.labels,
+		Labels:    logCtxVal.getLabels(),
 		Payload:   truncateLog(format, args...),
 		Severity:  logging.Severity(sev),
 		Timestamp: time.Now(),

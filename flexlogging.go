@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/logging"
 	"golang.org/x/net/context"
 )
+
+var labelsMtx = &sync.RWMutex{}
 
 func NewAppengineLogging(c context.Context) Logging {
 	nonce := fmt.Sprintf("%016x", rand.Uint64())
@@ -88,11 +91,25 @@ func (sl stackdriverLogging) AddLabels(labels map[string]string) error {
 	}
 
 	logCtxVal := ctxVal.(*loggingCtxValue)
+
+	labelsMtx.Lock()
+	defer labelsMtx.Unlock()
 	for k, v := range labels {
 		logCtxVal.labels[k] = v
 	}
 
 	return nil
+}
+
+func (logCtxVal *loggingCtxValue) getLabels() map[string]string {
+	labelsMtx.RLock()
+	defer labelsMtx.RUnlock()
+	labels := make(map[string]string, len(logCtxVal.labels))
+	for k, v := range logCtxVal.labels {
+		labels[k] = v
+	}
+
+	return labels
 }
 
 func init() {
