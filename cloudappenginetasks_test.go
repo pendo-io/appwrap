@@ -229,7 +229,7 @@ func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
 	ctx := context.Background()
 
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
+	task := tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
 	c.Assert(task, DeepEquals, &cloudAppEngineTaskImpl{
 		cloudTaskImpl{
 			task: &taskspb.Task{
@@ -261,7 +261,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudAppEngineTaskImpl)
+	task := tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudAppEngineTaskImpl)
 	expectTask := task.Copy().(*cloudAppEngineTaskImpl)
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
@@ -289,8 +289,8 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	}
 
 	tasks := []AppEngineTask{
-		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
-		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
+		tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
+		tq.NewAppEngineCloudTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
 	}
 	expectTasks := []AppEngineTask{
 		tasks[0].Copy(),

@@ -220,7 +220,7 @@ func (s *HttpCloudTasksTest) TestNewHttpPOSTTask(c *C) {
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
 	headers := make(http.Header)
 	headers.Set("Content-Type", "application/json")
-	task := tq.NewHttpPOSTTask("https://api.example.com/vegetables/potato", []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"), headers).(*cloudHttpTaskImpl)
+	task := tq.NewHttpCloudTask("https://api.example.com/vegetables/potato", []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"), headers).(*cloudHttpTaskImpl)
 	c.Assert(task, DeepEquals, &cloudHttpTaskImpl{
 		cloudTaskImpl: cloudTaskImpl{
 			task: &taskspb.Task{
@@ -258,7 +258,7 @@ func (s *HttpCloudTasksTest) TestAddHttpTask(c *C) {
 	data := "{ vegetables: [{'type': 'Russet', 'tasty': true] }"
 	headers := make(http.Header)
 	headers.Set("Content-Type", "application/json")
-	task := tq.NewHttpPOSTTask("https://api.example.com/vegetables/potato", []byte(data), headers).(*cloudHttpTaskImpl)
+	task := tq.NewHttpCloudTask("https://api.example.com/vegetables/potato", []byte(data), headers).(*cloudHttpTaskImpl)
 	expectTask := task.Copy().(*cloudHttpTaskImpl)
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{

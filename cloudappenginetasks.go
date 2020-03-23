@@ -259,7 +259,7 @@ func (t cloudTaskqueue) ModifyLease(c context.Context, task AppEngineTask, queue
 	panic("not implemented for CloudTasks")
 }
 
-func (t cloudTaskqueue) NewPOSTTask(path string, params url.Values) AppEngineTask {
+func (t cloudTaskqueue) NewAppEngineCloudTask(path string, params url.Values) AppEngineTask {
 	task := NewAppEngineTask()
 	h := make(http.Header)
 	h.Set("Content-Type", "application/x-www-form-urlencoded")

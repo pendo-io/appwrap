@@ -15,7 +15,8 @@ type Taskqueue interface {
 	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error)
 	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error)
 	ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error
-	NewPOSTTask(path string, params url.Values) AppEngineTask
+	NewAppEngineCloudTask(path string, params url.Values) AppEngineTask
+	NewHttpCloudTask(url string, data []byte, headers http.Header) HttpTask
 }
 
 // This is so the calling code cannot create task structs directly.
