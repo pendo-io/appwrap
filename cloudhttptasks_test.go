@@ -22,15 +22,17 @@ func (s *HttpCloudTasksTest) SetUpTest(c *C) {
 
 func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 	task := &cloudHttpTaskImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_HttpRequest{
-				HttpRequest: &taskspb.HttpRequest{
-					HttpMethod: taskspb.HttpMethod_POST,
-					Headers: map[string]string{
-						"key": "value",
+		cloudTaskImpl: cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_HttpRequest{
+					HttpRequest: &taskspb.HttpRequest{
+						HttpMethod: taskspb.HttpMethod_POST,
+						Headers: map[string]string{
+							"key": "value",
+						},
+						Body: []byte("body"),
+						Url:  "https://api.example.com/vegetables/potato",
 					},
-					Body: []byte("body"),
-					Url:  "https://api.example.com/vegetables/potato",
 				},
 			},
 		},
@@ -220,18 +222,20 @@ func (s *HttpCloudTasksTest) TestNewHttpPOSTTask(c *C) {
 	headers.Set("Content-Type", "application/json")
 	task := tq.NewHttpPOSTTask("https://api.example.com/vegetables/potato", []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"), headers).(*cloudHttpTaskImpl)
 	c.Assert(task, DeepEquals, &cloudHttpTaskImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_HttpRequest{
-				HttpRequest: &taskspb.HttpRequest{
-					Url:        "https://api.example.com/vegetables/potato",
-					HttpMethod: taskspb.HttpMethod_POST,
-					Headers: map[string]string{
-						"Content-Type": "application/json",
-					},
-					Body: []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"),
-					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
-						OidcToken: &taskspb.OidcToken{
-							ServiceAccountEmail: "pendo-apollo@appspot.gserviceaccount.com",
+		cloudTaskImpl: cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_HttpRequest{
+					HttpRequest: &taskspb.HttpRequest{
+						Url:        "https://api.example.com/vegetables/potato",
+						HttpMethod: taskspb.HttpMethod_POST,
+						Headers: map[string]string{
+							"Content-Type": "application/json",
+						},
+						Body: []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"),
+						AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
+							OidcToken: &taskspb.OidcToken{
+								ServiceAccountEmail: "pendo-apollo@appspot.gserviceaccount.com",
+							},
 						},
 					},
 				},

@@ -25,21 +25,23 @@ func (s *CloudTasksTest) SetUpTest(c *C) {
 
 func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
 	task := &cloudAppEngineTaskImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_AppEngineHttpRequest{
-				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-					AppEngineRouting: &taskspb.AppEngineRouting{
-						Service:  "service",
-						Version:  "version",
-						Instance: "instance",
-						Host:     "host",
+		cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_AppEngineHttpRequest{
+					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+						AppEngineRouting: &taskspb.AppEngineRouting{
+							Service:  "service",
+							Version:  "version",
+							Instance: "instance",
+							Host:     "host",
+						},
+						HttpMethod: taskspb.HttpMethod_GET,
+						Headers: map[string]string{
+							"key": "value",
+						},
+						Body:        []byte("body"),
+						RelativeUri: "/path",
 					},
-					HttpMethod: taskspb.HttpMethod_GET,
-					Headers: map[string]string{
-						"key": "value",
-					},
-					Body:        []byte("body"),
-					RelativeUri: "/path",
 				},
 			},
 		},
@@ -229,16 +231,18 @@ func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
 	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
 	c.Assert(task, DeepEquals, &cloudAppEngineTaskImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_AppEngineHttpRequest{
-				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-					AppEngineRouting: &taskspb.AppEngineRouting{},
-					RelativeUri:      "/vegetables/potato",
-					HttpMethod:       taskspb.HttpMethod_POST,
-					Headers: map[string]string{
-						"Content-Type": "application/x-www-form-urlencoded",
+		cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_AppEngineHttpRequest{
+					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+						AppEngineRouting: &taskspb.AppEngineRouting{},
+						RelativeUri:      "/vegetables/potato",
+						HttpMethod:       taskspb.HttpMethod_POST,
+						Headers: map[string]string{
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						Body: []byte("types=Russet&types=Red&types=White&types=Sweet"),
 					},
-					Body: []byte("types=Russet&types=Red&types=White&types=Sweet"),
 				},
 			},
 		},
