@@ -24,7 +24,7 @@ func (s *CloudTasksTest) SetUpTest(c *C) {
 }
 
 func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
-	task := &cloudTaskImpl{
+	task := &cloudAppEngineTaskImpl{
 		task: &taskspb.Task{
 			MessageType: &taskspb.Task_AppEngineHttpRequest{
 				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
@@ -45,7 +45,7 @@ func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
 		},
 	}
 
-	taskCopy := task.Copy().(*cloudTaskImpl)
+	taskCopy := task.Copy().(*cloudAppEngineTaskImpl)
 	c.Assert(task, DeepEquals, taskCopy)
 	// verify that all pointers and slices are different locations in memory
 	c.Assert(task, Not(Equals), taskCopy)
@@ -63,7 +63,7 @@ func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
 }
 
 func (s *CloudTasksTest) TestNewTask(c *C) {
-	task := NewTask().(*cloudTaskImpl)
+	task := NewTask().(*cloudAppEngineTaskImpl)
 	c.Assert(task.task, DeepEquals, &taskspb.Task{
 		MessageType: &taskspb.Task_AppEngineHttpRequest{
 			AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
@@ -76,7 +76,7 @@ func (s *CloudTasksTest) TestNewTask(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskDelay(c *C) {
-	task := NewTask().(*cloudTaskImpl)
+	task := NewTask().(*cloudAppEngineTaskImpl)
 
 	storedDelay := task.Delay()
 	c.Assert(storedDelay, Equals, time.Duration(0))
@@ -228,7 +228,7 @@ func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
 
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
 	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
-	c.Assert(task, DeepEquals, &cloudTaskImpl{
+	c.Assert(task, DeepEquals, &cloudAppEngineTaskImpl{
 		task: &taskspb.Task{
 			MessageType: &taskspb.Task_AppEngineHttpRequest{
 				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
@@ -257,8 +257,8 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskImpl)
-	expectTask := task.Copy().(*cloudTaskImpl)
+	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudAppEngineTaskImpl)
+	expectTask := task.Copy().(*cloudAppEngineTaskImpl)
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
 		Task:   task.task,
@@ -294,13 +294,13 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	}
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
-		Task:   tasks[0].(*cloudTaskImpl).task,
+		Task:   tasks[0].(*cloudAppEngineTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudAppEngineTaskImpl).task, nil).Once()
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
-		Task:   tasks[1].(*cloudTaskImpl).task,
+		Task:   tasks[1].(*cloudAppEngineTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(tasks[1].(*cloudTaskImpl).task, nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[1].(*cloudAppEngineTaskImpl).task, nil).Once()
 
 	added, err := tq.AddMulti(ctx, tasks, "grocery-store")
 	c.Assert(added[0], Not(Equals), expectTasks[0]) // not same pointer (copied)...
@@ -315,17 +315,17 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	fatalErr := errors.New("disney land < disney world")
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
-		Task:   tasks[0].(*cloudTaskImpl).task,
+		Task:   tasks[0].(*cloudAppEngineTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
-	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudTaskImpl).task, nil).Once()
+	}, ([]gax.CallOption)(nil)).Return(tasks[0].(*cloudAppEngineTaskImpl).task, nil).Once()
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
-		Task:   tasks[1].(*cloudTaskImpl).task,
+		Task:   tasks[1].(*cloudAppEngineTaskImpl).task,
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
 	expectTasks = []AppEngineTask{
 		tasks[0].Copy(),
-		&cloudTaskImpl{},
+		&cloudAppEngineTaskImpl{},
 	}
 
 	expectedErr := MultiError{

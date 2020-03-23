@@ -35,6 +35,7 @@ type CloudTask interface {
 	SetTag(tag string)
 }
 
+
 type AppEngineTask interface {
 	CloudTask
 	Copy() AppEngineTask
