@@ -4,6 +4,7 @@ import (
 	"fmt"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	"net/http"
+	"os"
 )
 
 type cloudHttpTaskImpl struct {
@@ -18,7 +19,7 @@ func newHttpCloudTask() HttpTask {
 					HttpRequest: &taskspb.HttpRequest{
 						AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
 							OidcToken: &taskspb.OidcToken{
-								ServiceAccountEmail: "pendo-apollo@appspot.gserviceaccount.com",
+								ServiceAccountEmail: os.Getenv("FDBK_CLOUD_TASKS_SERVICE_ACCOUNT"),
 							},
 						},
 					},

@@ -66,7 +66,7 @@ type HttpTask interface {
 
 type CloudTasksLocation string
 
-func NewTask() AppEngineTask {
+func NewAppEngineTask() AppEngineTask {
 	return newCloudTask()
 }
 

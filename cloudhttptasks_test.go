@@ -96,7 +96,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskDelay(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskHeader(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedHeader := task.Header()
 	c.Assert(storedHeader, DeepEquals, http.Header(nil))
@@ -125,7 +125,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskHeader(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskMethod(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedMethod := task.Method()
 	c.Assert(storedMethod, Equals, "HTTP_METHOD_UNSPECIFIED")
@@ -146,7 +146,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskMethod(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskName(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedName := task.Name()
 	c.Assert(storedName, Equals, "")
@@ -157,7 +157,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskName(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskPath(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedPath := task.Path()
 	c.Assert(storedPath, Equals, "")
@@ -187,7 +187,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskPath(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskPayload(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedPayload := task.Payload()
 	c.Assert(bytes.Equal(storedPayload, []byte{}), IsTrue)
@@ -198,7 +198,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskPayload(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskRetryCount(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedCount := task.RetryCount()
 	c.Assert(storedCount, Equals, int32(0))

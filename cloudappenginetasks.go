@@ -260,7 +260,7 @@ func (t cloudTaskqueue) ModifyLease(c context.Context, task AppEngineTask, queue
 }
 
 func (t cloudTaskqueue) NewPOSTTask(path string, params url.Values) AppEngineTask {
-	task := NewTask()
+	task := NewAppEngineTask()
 	h := make(http.Header)
 	h.Set("Content-Type", "application/x-www-form-urlencoded")
 	task.SetMethod("POST")
