@@ -4,14 +4,13 @@ import (
 	"fmt"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	"net/http"
-	"os"
 )
 
 type cloudHttpTaskImpl struct {
 	cloudTaskImpl
 }
 
-func newHttpCloudTask() HttpTask {
+func newHttpCloudTask(serviceAccount string) HttpTask {
 	return &cloudHttpTaskImpl{
 		cloudTaskImpl: cloudTaskImpl{
 			task: &taskspb.Task{
@@ -19,7 +18,7 @@ func newHttpCloudTask() HttpTask {
 					HttpRequest: &taskspb.HttpRequest{
 						AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
 							OidcToken: &taskspb.OidcToken{
-								ServiceAccountEmail: os.Getenv("FDBK_CLOUD_TASKS_SERVICE_ACCOUNT"),
+								ServiceAccountEmail: serviceAccount,
 							},
 						},
 					},
@@ -110,8 +109,8 @@ func (t *cloudHttpTaskImpl) SetPayload(payload []byte) {
 	req.Body = payload
 }
 
-func (t cloudTaskqueue) NewHttpCloudTask(url string, data []byte, headers http.Header) HttpTask {
-	task := NewHttpCloudTask()
+func (t cloudTaskqueue) NewHttpCloudTask(queueName string, url string, data []byte, headers http.Header) HttpTask {
+	task := NewHttpCloudTask(queueName)
 	headers.Set("Content-Type", "application/json")
 	task.SetMethod("POST")
 	task.SetPayload(data)

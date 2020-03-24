@@ -16,7 +16,7 @@ type Taskqueue interface {
 	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error)
 	ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error
 	NewAppEngineCloudTask(path string, params url.Values) AppEngineTask
-	NewHttpCloudTask(url string, data []byte, headers http.Header) HttpTask
+	NewHttpCloudTask(serviceAccount string, url string, data []byte, headers http.Header) HttpTask
 }
 
 // This is so the calling code cannot create task structs directly.
@@ -71,8 +71,8 @@ func NewAppEngineTask() AppEngineTask {
 	return newCloudTask()
 }
 
-func NewHttpCloudTask() HttpTask {
-	return newHttpCloudTask()
+func NewHttpCloudTask(serviceAccount string) HttpTask {
+	return newHttpCloudTask(serviceAccount)
 }
 
 func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
