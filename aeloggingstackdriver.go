@@ -70,7 +70,7 @@ func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *loggin
 	}), logging.DelayThreshold(loggingFlushTimeTrigger), logging.EntryByteThreshold(loggingFlushSizeTrigger), logging.EntryCountThreshold(loggingFlushCountTrigger))
 }
 
-func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, parent, trace string) *loggingCtxValue {
+func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, trace string) *loggingCtxValue {
 	var remoteIp string
 	if addr := hreq.Header.Get(IPListHeader); addr != "" {
 		remoteIp = strings.Split(addr, ",")[0]
@@ -88,7 +88,6 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 			"pendo.io/useragent":                     hreq.UserAgent(),
 		},
 		logger: logger,
-		parent: parent,
 		trace:  trace,
 	}
 }
@@ -109,17 +108,97 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 	if logName == "" {
 		logName = ChildLogName
 	}
-	req, err := http.NewRequest("GET", "pendo.io/background", bytes.NewReader([]byte{}))
+	req, err := http.NewRequest(http.MethodGet, "pendo.io/background", bytes.NewReader([]byte{}))
 	if err != nil {
 		panic(err)
 	}
 	logger := getLogger(aeInfo, lc, logName)
-	logCtxVal := getLogCtxVal(aeInfo, req, logger, parent, parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
+	logCtxVal := getLogCtxVal(aeInfo, req, logger, parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
 
 	ctx := context.WithValue(c, loggingCtxKey, logCtxVal)
 	return ctx, func() {
 		lc.Close()
 	}
+}
+
+var sharedClientCtxKey = struct{ k string }{"shared client context key"}
+
+type sharedClientLogCtxVal struct {
+	aeInfo       AppengineInfo
+	client       *logging.Client
+	logger       *logging.Logger
+	parent       string
+	parentLogger *logging.Logger
+}
+
+func AddSharedLogClientToBackgroundContext(c context.Context, logName string) context.Context {
+	if IsDevAppServer {
+		return c
+	}
+
+	aeInfo := NewAppengineInfoFromContext(c)
+	project := aeInfo.AppID()
+	if project == "" {
+		panic("aelog: no GCP project set in environment")
+	}
+	parent := "projects/" + project
+	lc, err := logging.NewClient(c, parent)
+	if err != nil {
+		panic(err)
+	}
+
+	if logName == "" {
+		logName = ChildLogName
+	}
+
+	logger := getLogger(aeInfo, lc, logName)
+	parentLogger := getLogger(aeInfo, lc, requestLogPath)
+
+	return context.WithValue(c, sharedClientCtxKey, &sharedClientLogCtxVal{
+		aeInfo:       aeInfo,
+		client:       lc,
+		logger:       logger,
+		parent:       parent,
+		parentLogger: parentLogger,
+	})
+}
+
+func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl string, fn func(log Logging)) {
+	ctxVal := c.Value(sharedClientCtxKey)
+	if ctxVal == nil {
+		panic("must wrap context with AddSharedLogClientToBackgroundContext")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, simulatedUrl, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	sharedClientCtxVal := ctxVal.(*sharedClientLogCtxVal)
+
+	logCtxVal := getLogCtxVal(sharedClientCtxVal.aeInfo, req, sharedClientCtxVal.logger, sharedClientCtxVal.parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
+	fctx := context.WithValue(c, loggingCtxKey, logCtxVal)
+
+	dedicatedLogger := NewStackdriverLogging(fctx)
+
+	start := time.Now()
+
+	defer func() {
+		sharedClientCtxVal.parentLogger.Log(logging.Entry{
+			HTTPRequest: &logging.HTTPRequest{
+				Latency:      time.Now().Sub(start),
+				ResponseSize: 0,
+				Request:      req,
+				Status:       http.StatusOK,
+			},
+			Labels:    logCtxVal.getLabels(),
+			Severity:  logging.Severity(logCtxVal.sev),
+			Timestamp: time.Now(),
+			Trace:     logCtxVal.trace,
+		})
+	}()
+
+	fn(dedicatedLogger)
 }
 
 func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...option.ClientOption) http.Handler {
@@ -149,7 +228,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 	parentLogger := getLogger(aeInfo, lc, requestLogPath)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logCtxVal := getLogCtxVal(aeInfo, r, logger, parent, "")
+		logCtxVal := getLogCtxVal(aeInfo, r, logger, "")
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
 		if traceHeader != "" {
 			logCtxVal.trace = parent + "/traces/" + strings.Split(traceHeader, "/")[0]
