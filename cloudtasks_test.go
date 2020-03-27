@@ -28,30 +28,32 @@ func (m *tqClientMock) CreateTask(ctx context.Context, req *taskspb.CreateTaskRe
 	return args.Get(0).(*taskspb.Task), args.Error(1)
 }
 
-func (s *CloudTasksTest) TestNewPOSTTask(c *C) {
+func (s *CloudTasksTest) TestNewAppEngineCloudTask(c *C) {
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 
 	tq := NewTaskqueue(ctx, location).(cloudTaskqueue)
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
+	task := tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}})
 	c.Assert(task, DeepEquals, &cloudTaskAppEngineImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_AppEngineHttpRequest{
-				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-					AppEngineRouting: &taskspb.AppEngineRouting{},
-					RelativeUri:      "/vegetables/potato",
-					HttpMethod:       taskspb.HttpMethod_POST,
-					Headers: map[string]string{
-						"Content-Type": "application/x-www-form-urlencoded",
+		cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_AppEngineHttpRequest{
+					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+						AppEngineRouting: &taskspb.AppEngineRouting{},
+						RelativeUri:      "/vegetables/potato",
+						HttpMethod:       taskspb.HttpMethod_POST,
+						Headers: map[string]string{
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						Body: []byte("types=Russet&types=Red&types=White&types=Sweet"),
 					},
-					Body: []byte("types=Russet&types=Red&types=White&types=Sweet"),
 				},
 			},
 		},
 	})
 }
 
-func (s *CloudTasksTest) TestAdd(c *C) {
+func (s *CloudTasksTest) TestAddAppEngineTask(c *C) {
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 
@@ -63,7 +65,7 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	task := tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskAppEngineImpl)
+	task := tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}).(*cloudTaskAppEngineImpl)
 	expectTask := task.Copy().(*cloudTaskAppEngineImpl)
 
 	clientMock.On("CreateTask", context.Background(), &taskspb.CreateTaskRequest{
@@ -72,8 +74,8 @@ func (s *CloudTasksTest) TestAdd(c *C) {
 	}, []gax.CallOption(nil)).Return(task.task, nil).Once()
 
 	added, err := tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, Not(Equals), expectTask) // not same pointer (copied)...
-	c.Assert(added, DeepEquals, expectTask)  // ...but has same content
+	c.Assert(added, Not(Equals), expectTask)                    // not same pointer (copied)...
+	c.Assert(added.getTask(), DeepEquals, expectTask.getTask()) // ...but has same content
 	c.Assert(err, IsNil)
 	checkMocks()
 }
@@ -90,11 +92,11 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	tasks := []AppEngineTask{
-		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
-		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
+	tasks := []CloudTask{
+		tq.NewAppEngineCloudTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
+		tq.NewAppEngineCloudTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
 	}
-	expectTasks := []AppEngineTask{
+	expectTasks := []CloudTask{
 		tasks[0].Copy(),
 		tasks[1].Copy(),
 	}
@@ -111,7 +113,9 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	added, err := tq.AddMulti(ctx, tasks, "grocery-store")
 	c.Assert(added[0], Not(Equals), expectTasks[0]) // not same pointer (copied)...
 	c.Assert(added[1], Not(Equals), expectTasks[1]) //...
-	c.Assert(added, DeepEquals, expectTasks)        // ...but have same content
+	for i, addedTask := range added {
+		c.Assert(addedTask.getTask(), DeepEquals, expectTasks[i].getTask()) // ...but have same content
+	}
 	c.Assert(err, IsNil)
 	// IsNil isn't enough - need to make sure it's not a nil slice (since MultiError is a slice type)
 	c.Assert(err, Equals, nil)
@@ -129,7 +133,7 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
-	expectTasks = []AppEngineTask{
+	expectTasks = []CloudTask{
 		tasks[0].Copy(),
 		&cloudTaskAppEngineImpl{},
 	}
@@ -140,7 +144,9 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 	}
 	added, err = tq.AddMulti(ctx, tasks, "grocery-store")
 	c.Assert(added[0], Not(Equals), expectTasks[0])
-	c.Assert(added, DeepEquals, expectTasks)
+	for i, task := range added {
+		c.Assert(task.getTask(), DeepEquals, expectTasks[i].getTask())
+	}
 	c.Assert(err, DeepEquals, expectedErr)
 	checkMocks()
 }
