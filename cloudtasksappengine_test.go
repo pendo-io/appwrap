@@ -20,21 +20,23 @@ func (s *CloudTasksAppEngineTest) SetUpTest(c *C) {
 
 func (s *CloudTasksAppEngineTest) TestCloudTaskCopy(c *C) {
 	task := &cloudTaskAppEngineImpl{
-		task: &taskspb.Task{
-			MessageType: &taskspb.Task_AppEngineHttpRequest{
-				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-					AppEngineRouting: &taskspb.AppEngineRouting{
-						Service:  "service",
-						Version:  "version",
-						Instance: "instance",
-						Host:     "host",
+		cloudTaskImpl{
+			task: &taskspb.Task{
+				MessageType: &taskspb.Task_AppEngineHttpRequest{
+					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+						AppEngineRouting: &taskspb.AppEngineRouting{
+							Service:  "service",
+							Version:  "version",
+							Instance: "instance",
+							Host:     "host",
+						},
+						HttpMethod: taskspb.HttpMethod_GET,
+						Headers: map[string]string{
+							"key": "value",
+						},
+						Body:        []byte("body"),
+						RelativeUri: "/path",
 					},
-					HttpMethod: taskspb.HttpMethod_GET,
-					Headers: map[string]string{
-						"key": "value",
-					},
-					Body:        []byte("body"),
-					RelativeUri: "/path",
 				},
 			},
 		},
