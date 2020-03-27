@@ -63,7 +63,7 @@ func (s *CloudTasksTest) TestCloudTaskCopy(c *C) {
 }
 
 func (s *CloudTasksTest) TestNewTask(c *C) {
-	task := NewTask().(*cloudTaskImpl)
+	task := NewAppEngineTask().(*cloudTaskImpl)
 	c.Assert(task.task, DeepEquals, &taskspb.Task{
 		MessageType: &taskspb.Task_AppEngineHttpRequest{
 			AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
@@ -76,7 +76,7 @@ func (s *CloudTasksTest) TestNewTask(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskDelay(c *C) {
-	task := NewTask().(*cloudTaskImpl)
+	task := NewAppEngineTask().(*cloudTaskImpl)
 
 	storedDelay := task.Delay()
 	c.Assert(storedDelay, Equals, time.Duration(0))
@@ -101,7 +101,7 @@ func (s *CloudTasksTest) TestTaskDelay(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskHeader(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedHeader := task.Header()
 	c.Assert(storedHeader, DeepEquals, http.Header(nil))
@@ -130,7 +130,7 @@ func (s *CloudTasksTest) TestTaskHeader(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskMethod(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedMethod := task.Method()
 	c.Assert(storedMethod, Equals, "HTTP_METHOD_UNSPECIFIED")
@@ -151,7 +151,7 @@ func (s *CloudTasksTest) TestTaskMethod(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskName(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedName := task.Name()
 	c.Assert(storedName, Equals, "")
@@ -162,7 +162,7 @@ func (s *CloudTasksTest) TestTaskName(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskPath(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedPath := task.Path()
 	c.Assert(storedPath, Equals, "")
@@ -192,7 +192,7 @@ func (s *CloudTasksTest) TestTaskPath(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskPayload(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedPayload := task.Payload()
 	c.Assert(bytes.Equal(storedPayload, []byte{}), IsTrue)
@@ -203,7 +203,7 @@ func (s *CloudTasksTest) TestTaskPayload(c *C) {
 }
 
 func (s *CloudTasksTest) TestTaskRetryCount(c *C) {
-	task := NewTask()
+	task := NewAppEngineTask()
 
 	storedCount := task.RetryCount()
 	c.Assert(storedCount, Equals, int32(0))
@@ -284,11 +284,11 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		clientMock.AssertExpectations(c)
 	}
 
-	tasks := []Task{
+	tasks := []AppEngineTask{
 		tq.NewPOSTTask("/vegetables/potato", url.Values{"types": []string{"Russet", "Red", "White", "Sweet"}}),
 		tq.NewPOSTTask("/fruits/apple", url.Values{"types": []string{"Granny Smith", "Red Delicious", "Golden Delicious"}}),
 	}
-	expectTasks := []Task{
+	expectTasks := []AppEngineTask{
 		tasks[0].Copy(),
 		tasks[1].Copy(),
 	}
@@ -323,7 +323,7 @@ func (s *CloudTasksTest) TestAddMulti(c *C) {
 		Parent: "projects/shopping/locations/disney-world/queues/grocery-store",
 	}, ([]gax.CallOption)(nil)).Return((*taskspb.Task)(nil), fatalErr).Once()
 
-	expectTasks = []Task{
+	expectTasks = []AppEngineTask{
 		tasks[0].Copy(),
 		&cloudTaskImpl{},
 	}
