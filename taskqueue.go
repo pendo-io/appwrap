@@ -36,18 +36,18 @@ type CloudTask interface {
 	SetTag(tag string)
 	Copy() CloudTask
 	getTask() *taskspb.Task
-}
-
-type AppEngineTask interface {
-	CloudTask
 	Header() http.Header
 	SetHeader(header http.Header)
 	Method() string
 	SetMethod(method string)
-	Path() string
-	SetPath(path string)
 	Payload() []byte
 	SetPayload(payload []byte)
+}
+
+type AppEngineTask interface {
+	CloudTask
+	Path() string
+	SetPath(path string)
 	Service() string
 	SetService(service string)
 	Version() string
@@ -56,12 +56,6 @@ type AppEngineTask interface {
 
 type HttpTask interface {
 	CloudTask
-	Header() http.Header
-	SetHeader(header http.Header)
-	Method() string
-	SetMethod(method string)
-	Payload() []byte
-	SetPayload(payload []byte)
 	Url() string
 	SetUrl(url string)
 }
