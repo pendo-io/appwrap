@@ -2,24 +2,24 @@ package appwrap
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	"net/http"
+	"time"
 )
 
 type cloudTaskHttpImpl struct {
-	cloudTaskImpl
+	task *taskspb.Task
 }
 
 func newHttpCloudTask(serviceAccount string) HttpTask {
 	return &cloudTaskHttpImpl{
-		cloudTaskImpl: cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_HttpRequest{
-					HttpRequest: &taskspb.HttpRequest{
-						AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
-							OidcToken: &taskspb.OidcToken{
-								ServiceAccountEmail: serviceAccount,
-							},
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_HttpRequest{
+				HttpRequest: &taskspb.HttpRequest{
+					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
+						OidcToken: &taskspb.OidcToken{
+							ServiceAccountEmail: serviceAccount,
 						},
 					},
 				},
@@ -37,21 +37,72 @@ func (t cloudTaskHttpImpl) Copy() CloudTask {
 		headerCopy[k] = v
 	}
 	taskCopy := &cloudTaskHttpImpl{
-		cloudTaskImpl: cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_HttpRequest{
-					HttpRequest: &taskspb.HttpRequest{
-						HttpMethod:          innerCopy.HttpMethod,
-						Headers:             headerCopy,
-						Body:                bodyCopy,
-						Url:                 innerCopy.Url,
-						AuthorizationHeader: innerCopy.AuthorizationHeader,
-					},
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_HttpRequest{
+				HttpRequest: &taskspb.HttpRequest{
+					HttpMethod:          innerCopy.HttpMethod,
+					Headers:             headerCopy,
+					Body:                bodyCopy,
+					Url:                 innerCopy.Url,
+					AuthorizationHeader: innerCopy.AuthorizationHeader,
 				},
 			},
 		},
 	}
 	return taskCopy
+}
+
+func (t *cloudTaskHttpImpl) isTask() {}
+
+func (t *cloudTaskHttpImpl) Delay() (delay time.Duration) {
+	if sched := t.task.ScheduleTime; sched == nil {
+	} else {
+		delay = time.Unix(sched.Seconds, int64(sched.Nanos)).Sub(time.Now())
+	}
+	if delay < 0 {
+		return time.Duration(0)
+	}
+	return
+}
+
+func (t *cloudTaskHttpImpl) getTask() *taskspb.Task {
+	return t.task
+}
+
+func (t *cloudTaskHttpImpl) SetDelay(delay time.Duration) {
+	eta := time.Now().Add(delay)
+	t.SetEta(eta)
+}
+
+func (t *cloudTaskHttpImpl) SetEta(eta time.Time) {
+	t.task.ScheduleTime = &timestamp.Timestamp{
+		Seconds: eta.Unix(),
+		Nanos:   int32(eta.Nanosecond()),
+	}
+}
+
+func (t *cloudTaskHttpImpl) Name() string {
+	return t.task.Name
+}
+
+func (t *cloudTaskHttpImpl) SetName(name string) {
+	t.task.Name = name
+}
+
+func (t *cloudTaskHttpImpl) RetryCount() int32 {
+	return t.task.DispatchCount
+}
+
+func (t *cloudTaskHttpImpl) SetRetryCount(count int32) {
+	t.task.DispatchCount = count
+}
+
+func (t *cloudTaskHttpImpl) Tag() (tag string) {
+	panic("not implemented for CloudTasks")
+}
+
+func (t *cloudTaskHttpImpl) SetTag(tag string) {
+	panic("not implemented for CloudTasks")
 }
 
 func (t *cloudTaskHttpImpl) Header() http.Header {

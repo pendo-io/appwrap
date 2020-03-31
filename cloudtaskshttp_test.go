@@ -22,17 +22,15 @@ func (s *HttpCloudTasksTest) SetUpTest(c *C) {
 
 func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 	task := &cloudTaskHttpImpl{
-		cloudTaskImpl: cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_HttpRequest{
-					HttpRequest: &taskspb.HttpRequest{
-						HttpMethod: taskspb.HttpMethod_POST,
-						Headers: map[string]string{
-							"key": "value",
-						},
-						Body: []byte("body"),
-						Url:  "https://api.example.com/vegetables/potato",
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_HttpRequest{
+				HttpRequest: &taskspb.HttpRequest{
+					HttpMethod: taskspb.HttpMethod_POST,
+					Headers: map[string]string{
+						"key": "value",
 					},
+					Body: []byte("body"),
+					Url:  "https://api.example.com/vegetables/potato",
 				},
 			},
 		},
@@ -221,20 +219,18 @@ func (s *HttpCloudTasksTest) TestNewHttpPOSTTask(c *C) {
 	headers.Set("Content-Type", "application/json")
 	task := tq.NewHttpCloudTask("foo@example.com", "https://api.example.com/vegetables/potato", http.MethodPost, []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"), headers).(*cloudTaskHttpImpl)
 	c.Assert(task, DeepEquals, &cloudTaskHttpImpl{
-		cloudTaskImpl: cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_HttpRequest{
-					HttpRequest: &taskspb.HttpRequest{
-						Url:        "https://api.example.com/vegetables/potato",
-						HttpMethod: taskspb.HttpMethod_POST,
-						Headers: map[string]string{
-							"Content-Type": "application/json",
-						},
-						Body: []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"),
-						AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
-							OidcToken: &taskspb.OidcToken{
-								ServiceAccountEmail: "foo@example.com",
-							},
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_HttpRequest{
+				HttpRequest: &taskspb.HttpRequest{
+					Url:        "https://api.example.com/vegetables/potato",
+					HttpMethod: taskspb.HttpMethod_POST,
+					Headers: map[string]string{
+						"Content-Type": "application/json",
+					},
+					Body: []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"),
+					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
+						OidcToken: &taskspb.OidcToken{
+							ServiceAccountEmail: "foo@example.com",
 						},
 					},
 				},
@@ -243,7 +239,7 @@ func (s *HttpCloudTasksTest) TestNewHttpPOSTTask(c *C) {
 	})
 }
 
-func (s *CloudTasksTest) TestHttpAdd(c *C) {
+func (s *HttpCloudTasksTest) TestHttpAdd(c *C) {
 	location := CloudTasksLocation("disney-world")
 	ctx := context.Background()
 

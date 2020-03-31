@@ -3,29 +3,29 @@ package appwrap
 import (
 	"context"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/googleapis/gax-go/v2"
 	"google.golang.org/api/option"
 	"net/http"
 	"net/url"
 	"runtime"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/cloudtasks/apiv2"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 )
 
 type cloudTaskAppEngineImpl struct {
-	cloudTaskImpl
+	task *taskspb.Task
 }
 
 func newAppEngineCloudTask() AppEngineTask {
 	return &cloudTaskAppEngineImpl{
-		cloudTaskImpl: cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_AppEngineHttpRequest{
-					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-						AppEngineRouting: &taskspb.AppEngineRouting{},
-					},
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_AppEngineHttpRequest{
+				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+					AppEngineRouting: &taskspb.AppEngineRouting{},
 				},
 			},
 		},
@@ -41,26 +41,77 @@ func (t cloudTaskAppEngineImpl) Copy() CloudTask {
 		headerCopy[k] = v
 	}
 	taskCopy := &cloudTaskAppEngineImpl{
-		cloudTaskImpl{
-			task: &taskspb.Task{
-				MessageType: &taskspb.Task_AppEngineHttpRequest{
-					AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
-						AppEngineRouting: &taskspb.AppEngineRouting{
-							Service:  innerCopy.AppEngineRouting.Service,
-							Version:  innerCopy.AppEngineRouting.Version,
-							Instance: innerCopy.AppEngineRouting.Instance,
-							Host:     innerCopy.AppEngineRouting.Host,
-						},
-						HttpMethod:  innerCopy.HttpMethod,
-						Headers:     headerCopy,
-						Body:        bodyCopy,
-						RelativeUri: innerCopy.RelativeUri,
+		task: &taskspb.Task{
+			MessageType: &taskspb.Task_AppEngineHttpRequest{
+				AppEngineHttpRequest: &taskspb.AppEngineHttpRequest{
+					AppEngineRouting: &taskspb.AppEngineRouting{
+						Service:  innerCopy.AppEngineRouting.Service,
+						Version:  innerCopy.AppEngineRouting.Version,
+						Instance: innerCopy.AppEngineRouting.Instance,
+						Host:     innerCopy.AppEngineRouting.Host,
 					},
+					HttpMethod:  innerCopy.HttpMethod,
+					Headers:     headerCopy,
+					Body:        bodyCopy,
+					RelativeUri: innerCopy.RelativeUri,
 				},
 			},
 		},
 	}
 	return taskCopy
+}
+
+func (t *cloudTaskAppEngineImpl) isTask() {}
+
+func (t *cloudTaskAppEngineImpl) Delay() (delay time.Duration) {
+	if sched := t.task.ScheduleTime; sched == nil {
+	} else {
+		delay = time.Unix(sched.Seconds, int64(sched.Nanos)).Sub(time.Now())
+	}
+	if delay < 0 {
+		return time.Duration(0)
+	}
+	return
+}
+
+func (t *cloudTaskAppEngineImpl) getTask() *taskspb.Task {
+	return t.task
+}
+
+func (t *cloudTaskAppEngineImpl) SetDelay(delay time.Duration) {
+	eta := time.Now().Add(delay)
+	t.SetEta(eta)
+}
+
+func (t *cloudTaskAppEngineImpl) SetEta(eta time.Time) {
+	t.task.ScheduleTime = &timestamp.Timestamp{
+		Seconds: eta.Unix(),
+		Nanos:   int32(eta.Nanosecond()),
+	}
+}
+
+func (t *cloudTaskAppEngineImpl) Name() string {
+	return t.task.Name
+}
+
+func (t *cloudTaskAppEngineImpl) SetName(name string) {
+	t.task.Name = name
+}
+
+func (t *cloudTaskAppEngineImpl) RetryCount() int32 {
+	return t.task.DispatchCount
+}
+
+func (t *cloudTaskAppEngineImpl) SetRetryCount(count int32) {
+	t.task.DispatchCount = count
+}
+
+func (t *cloudTaskAppEngineImpl) Tag() (tag string) {
+	panic("not implemented for CloudTasks")
+}
+
+func (t *cloudTaskAppEngineImpl) SetTag(tag string) {
+	panic("not implemented for CloudTasks")
 }
 
 func (t *cloudTaskAppEngineImpl) Header() http.Header {
@@ -208,7 +259,7 @@ func (t cloudTaskqueue) Add(c context.Context, task CloudTask, queueName string)
 		Task:   taskCopy.getTask(),
 		Parent: t.getFullQueueName(queueName),
 	})
-	return &cloudTaskImpl{
+	return &cloudTaskAppEngineImpl{
 		task: newTask,
 	}, err
 }
