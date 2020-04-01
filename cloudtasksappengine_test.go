@@ -268,8 +268,8 @@ func (s *CloudTasksAppEngineTest) TestAddAppEngineTask(c *C) {
 	added, err := tq.Add(ctx, task, "grocery-store")
 	c.Assert(added, Not(Equals), expectTask)                    // not same pointer (copied)...
 	c.Assert(added.getTask(), DeepEquals, expectTask.getTask()) // ...but has same content
-	_, isHttpTask := added.(AppEngineTask)
-	c.Assert(isHttpTask, IsTrue)
+	_, isAppEngineTask := added.(AppEngineTask)
+	c.Assert(isAppEngineTask, IsTrue)
 	c.Assert(err, IsNil)
 	checkMocks()
 }
