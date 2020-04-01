@@ -93,7 +93,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskDelay(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskHeader(c *C) {
-	task := NewAppEngineTask()
+	task := NewHttpCloudTask("feedback@service.account")
 
 	storedHeader := task.Header()
 	c.Assert(storedHeader, DeepEquals, http.Header(nil))
@@ -122,7 +122,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskHeader(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskMethod(c *C) {
-	task := NewAppEngineTask()
+	task := NewHttpCloudTask("feedback@service.account")
 
 	storedMethod := task.Method()
 	c.Assert(storedMethod, Equals, "HTTP_METHOD_UNSPECIFIED")
@@ -143,7 +143,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskMethod(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskName(c *C) {
-	task := NewAppEngineTask()
+	task := NewHttpCloudTask("feedback@service.account")
 
 	storedName := task.Name()
 	c.Assert(storedName, Equals, "")
@@ -153,38 +153,8 @@ func (s *HttpCloudTasksTest) TestHttpTaskName(c *C) {
 	c.Assert(storedName, Equals, "names are hard")
 }
 
-func (s *HttpCloudTasksTest) TestHttpTaskPath(c *C) {
-	task := NewAppEngineTask()
-
-	storedPath := task.Path()
-	c.Assert(storedPath, Equals, "")
-
-	task.SetPath("/store/fruit/banana")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/store/fruit/banana")
-
-	task.SetPath("/what/the/pineapple")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/what/the/pineapple")
-
-	// path escapes and keeps what it can
-	task.SetPath("/http://this-is-not-a-path.com")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/http://this-is-not-a-path.com")
-
-	// set back to something normal
-	task.SetPath("/pineapple")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "/pineapple")
-
-	//clear
-	task.SetPath("")
-	storedPath = task.Path()
-	c.Assert(storedPath, Equals, "")
-}
-
 func (s *HttpCloudTasksTest) TestHttpTaskPayload(c *C) {
-	task := NewAppEngineTask()
+	task := NewHttpCloudTask("feedback@service.account")
 
 	storedPayload := task.Payload()
 	c.Assert(bytes.Equal(storedPayload, []byte{}), IsTrue)
@@ -195,7 +165,7 @@ func (s *HttpCloudTasksTest) TestHttpTaskPayload(c *C) {
 }
 
 func (s *HttpCloudTasksTest) TestHttpTaskRetryCount(c *C) {
-	task := NewAppEngineTask()
+	task := NewHttpCloudTask("feedback@service.account")
 
 	storedCount := task.RetryCount()
 	c.Assert(storedCount, Equals, int32(0))
