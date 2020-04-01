@@ -259,9 +259,17 @@ func (t cloudTaskqueue) Add(c context.Context, task CloudTask, queueName string)
 		Task:   taskCopy.getTask(),
 		Parent: t.getFullQueueName(queueName),
 	})
-	return &cloudTaskAppEngineImpl{
-		task: newTask,
-	}, err
+	switch task.(type) {
+	case *cloudTaskAppEngineImpl:
+		return &cloudTaskAppEngineImpl{
+			task: newTask,
+		}, err
+	case *cloudTaskHttpImpl:
+		return &cloudTaskHttpImpl{
+			task: newTask,
+		}, err
+	}
+	panic("Only AppEngine and Http target tasks are supported")
 }
 
 func (t cloudTaskqueue) AddMulti(c context.Context, tasks []CloudTask, queueName string) ([]CloudTask, error) {

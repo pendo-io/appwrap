@@ -264,6 +264,8 @@ func (s *HttpCloudTasksTest) TestHttpAdd(c *C) {
 
 	added, err := tq.Add(ctx, task, "grocery-store")
 	c.Assert(added, Not(Equals), expectTask)                    // not same pointer (copied)...
+	_, isHttpTask := added.(HttpTask)
+	c.Assert(isHttpTask, IsTrue)
 	c.Assert(added.getTask(), DeepEquals, expectTask.getTask()) // ...but has same content
 	c.Assert(err, IsNil)
 	checkMocks()
