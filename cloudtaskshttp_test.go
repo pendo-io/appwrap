@@ -31,6 +31,11 @@ func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 					},
 					Body: []byte("body"),
 					Url:  "https://api.example.com/vegetables/potato",
+					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
+						OidcToken: &taskspb.OidcToken{
+							ServiceAccountEmail: "feedback@service.account",
+						},
+					},
 				},
 			},
 		},
@@ -41,6 +46,8 @@ func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 	// verify that all pointers and slices are different locations in memory
 	c.Assert(task, Not(Equals), taskCopy)
 	c.Assert(task.task, Not(Equals), taskCopy.task)
+	c.Assert(task.task.GetHttpRequest().AuthorizationHeader, Not(Equals), taskCopy.task.GetHttpRequest().AuthorizationHeader)
+	c.Assert(task.task.GetHttpRequest().GetOidcToken(), Not(Equals), taskCopy.task.GetHttpRequest().GetOidcToken())
 	c.Assert(task.task.GetMessageType(), Not(Equals), taskCopy.task.GetMessageType())
 	c.Assert(task.task.GetHttpRequest(), Not(Equals), taskCopy.task.GetHttpRequest())
 	c.Assert(sameMemory(task.task.GetHttpRequest().Headers, taskCopy.task.GetHttpRequest().Headers), IsFalse)

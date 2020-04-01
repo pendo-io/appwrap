@@ -36,6 +36,8 @@ func (t cloudTaskHttpImpl) Copy() CloudTask {
 	for k, v := range innerCopy.Headers {
 		headerCopy[k] = v
 	}
+	serviceAccountCopy := make([]byte, len(innerCopy.GetOidcToken().ServiceAccountEmail))
+	copy(serviceAccountCopy, innerCopy.GetOidcToken().ServiceAccountEmail)
 	taskCopy := &cloudTaskHttpImpl{
 		task: &taskspb.Task{
 			MessageType: &taskspb.Task_HttpRequest{
@@ -44,7 +46,11 @@ func (t cloudTaskHttpImpl) Copy() CloudTask {
 					Headers:             headerCopy,
 					Body:                bodyCopy,
 					Url:                 innerCopy.Url,
-					AuthorizationHeader: innerCopy.AuthorizationHeader,
+					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
+						OidcToken: &taskspb.OidcToken{
+							ServiceAccountEmail: string(serviceAccountCopy),
+						},
+					},
 				},
 			},
 		},
