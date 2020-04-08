@@ -239,6 +239,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 		start := time.Now()
 		sw := &statusWriter{
 			ResponseWriter: w,
+			status:         http.StatusOK, // default response if we don't explicitly set one
 		}
 		h.ServeHTTP(sw, r.WithContext(ctx))
 
