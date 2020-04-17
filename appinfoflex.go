@@ -37,7 +37,16 @@ func (ai AppengineInfoFlex) InstanceID() string {
 }
 
 func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string, error) {
-	return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", strings.Split(ai.VersionID(), ".")[0], ai.ModuleName(), ai.AppID()), nil
+	if version == "" {
+		version = strings.Split(ai.VersionID(), ".")[0]
+	}
+	if module == "" {
+		module = ai.ModuleName()
+	}
+	if app == "" {
+		app = ai.AppID()
+	}
+	return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", version, module, app), nil
 }
 
 func (ai AppengineInfoFlex) ModuleName() string {
