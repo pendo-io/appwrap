@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -9,10 +10,15 @@ import (
 
 func Test(t *testing.T) { TestingT(t) }
 
-type AppengineInterfacesTest struct {
-}
+type AppengineInterfacesTest struct{}
 
 var _ = Suite(&AppengineInterfacesTest{})
+
+func (t *AppengineInterfacesTest) SetUpSuite(c *C) {
+	os.Setenv("GOOGLE_CLOUD_PROJECT", "theapp")
+	os.Setenv("GAE_SERVICE", "theservice")
+	os.Setenv("GAE_VERSION", "theversion")
+}
 
 func sameMemory(one, two interface{}) bool {
 	valOne, valTwo := reflect.ValueOf(one), reflect.ValueOf(two)
