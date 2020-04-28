@@ -9,48 +9,63 @@ import (
 )
 
 type Taskqueue interface {
-	Add(c context.Context, task Task, queueName string) (Task, error)
-	AddMulti(c context.Context, tasks []Task, queueName string) ([]Task, error)
-	DeleteMulti(c context.Context, tasks []Task, queueName string) error
-	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]Task, error)
-	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]Task, error)
-	ModifyLease(c context.Context, task Task, queueName string, leaseTime int) error
-	NewPOSTTask(path string, params url.Values) Task
+	Add(c context.Context, task CloudTask, queueName string) (CloudTask, error)
+	AddMulti(c context.Context, tasks []CloudTask, queueName string) ([]CloudTask, error)
+	DeleteMulti(c context.Context, tasks []AppEngineTask, queueName string) error
+	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error)
+	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error)
+	ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error
+	NewAppEngineCloudTask(path string, params url.Values) AppEngineTask
+	NewHttpCloudTask(serviceAccount string, url string, method string, data []byte, headers http.Header) HttpTask
 }
 
 // This is so the calling code cannot create task structs directly.
 // This is important for cloud tasks, where the fields of the struct have to be populated properly
 // with blank values for the various pointer fields.
-type Task interface {
+type CloudTask interface {
 	// private method guarantees that caller can't imitate the struct
 	isTask()
-	Copy() Task
 	Delay() time.Duration
 	SetDelay(delay time.Duration)
+	Name() string
+	SetName(name string)
+	RetryCount() int32
+	SetRetryCount(count int32)
+	Tag() string
+	SetTag(tag string)
+	Copy() CloudTask
 	Header() http.Header
 	SetHeader(header http.Header)
 	Method() string
 	SetMethod(method string)
-	Name() string
-	SetName(name string)
-	Path() string
-	SetPath(path string)
 	Payload() []byte
 	SetPayload(payload []byte)
-	RetryCount() int32
-	SetRetryCount(count int32)
+}
+
+type AppEngineTask interface {
+	CloudTask
+	Path() string
+	SetPath(path string)
 	Service() string
 	SetService(service string)
-	Tag() string
-	SetTag(tag string)
 	Version() string
 	SetVersion(version string)
 }
 
+type HttpTask interface {
+	CloudTask
+	Url() string
+	SetUrl(url string)
+}
+
 type CloudTasksLocation string
 
-func NewTask() Task {
-	return newCloudTask()
+func NewAppEngineTask() AppEngineTask {
+	return newAppEngineCloudTask()
+}
+
+func NewHttpCloudTask(serviceAccount string) HttpTask {
+	return newHttpCloudTask(serviceAccount)
 }
 
 func NewTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
