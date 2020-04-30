@@ -77,6 +77,29 @@ func (ai AppengineInfoFlex) Zone() string {
 	return zone
 }
 
+func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
+
+	ae, err := appengine.New(webClient(ai.c))
+	if err != nil {
+		return false, err
+	}
+
+	svc := appengine.NewAppsServicesService(ae)
+	call := svc.Get(ai.AppID(), moduleName)
+	if resp, err := call.Do(); err != nil {
+		return false, err
+	} else {
+		for version, allocation := range resp.Split.Allocations {
+			if version == moduleVersion && allocation > 0 {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+
 func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, error) {
 	ae, err := appengine.New(webClient(ai.c))
 	if err != nil {
