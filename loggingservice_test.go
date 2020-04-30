@@ -44,6 +44,11 @@ func (mock *AppengineInfoMock) ModuleHostname(version, module, app string) (stri
 	return args.String(0), args.Error(1)
 }
 
+func (mock *AppengineInfoMock) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
+	args := mock.Called(moduleName, moduleVersion)
+	return args.Bool(0), args.Error(1)
+}
+
 func (mock *AppengineInfoMock) AppID() string {
 	args := mock.Called()
 	return args.String(0)
