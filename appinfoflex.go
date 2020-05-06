@@ -43,7 +43,7 @@ func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string,
 		app = ai.AppID()
 	}
 	if version == "" {
-		return fmt.Sprintf("%s-dot-%s.appspot.com",module, app), nil
+		return fmt.Sprintf("%s-dot-%s.appspot.com", module, app), nil
 	} else {
 		return fmt.Sprintf("%s-dot-%s-dot-%s.appspot.com", version, module, app), nil
 	}
@@ -98,7 +98,6 @@ func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (
 
 	return false, nil
 }
-
 
 func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, error) {
 	ae, err := appengine.New(webClient(ai.c))
