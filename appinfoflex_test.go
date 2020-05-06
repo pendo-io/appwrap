@@ -12,9 +12,9 @@ func (t *AppengineInterfacesTest) TestModuleHostname(c *C) {
 		c.Assert(actual, Equals, expect)
 	}
 
-	ck("", "", "", "theversion-dot-theservice-dot-theapp.appspot.com")
+	ck("", "", "", "theservice-dot-theapp.appspot.com")
 	ck("v", "", "", "v-dot-theservice-dot-theapp.appspot.com")
-	ck("", "s", "", "theversion-dot-s-dot-theapp.appspot.com")
-	ck("", "", "a", "theversion-dot-theservice-dot-a.appspot.com")
+	ck("", "s", "", "s-dot-theapp.appspot.com")
+	ck("", "", "a", "theservice-dot-a.appspot.com")
 	ck("v", "s", "a", "v-dot-s-dot-a.appspot.com")
 }
