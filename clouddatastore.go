@@ -145,6 +145,8 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 	return newCloudDatastore(c, dsClient, "", dsClientTimeout), nil
 }
 
+var ErrDatastoreDoNotRetry = status.Error(codes.Canceled, "request context cancelled")
+
 func withDeadline(parent context.Context, time time.Time, f func(context.Context) error) error {
 	tctx, cancel := context.WithDeadline(parent, time)
 	defer cancel()
@@ -152,6 +154,8 @@ func withDeadline(parent context.Context, time time.Time, f func(context.Context
 	if err != nil && tctx.Err() != nil && parent.Err() == nil {
 		// The individual request timed out, but the parent context is still alive; return a retryable error to the caller.
 		return status.Error(codes.DeadlineExceeded, "datastore timeout")
+	} else if parent.Err() != nil {
+		return ErrDatastoreDoNotRetry
 	}
 	return err // otherwise, just return whatever error we got
 }
