@@ -22,6 +22,11 @@ type AppengineInfoFlex struct {
 
 // Don't call this.  It exists to make NewAppengineInfoFromContext mockable
 func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
+	// if running in K8s, K8S_POD will be set
+	if os.Getenv("K8S_POD") != "" {
+		return AppengineInfoK8s{c: c}
+	}
+
 	return AppengineInfoFlex{c: c}
 }
 
