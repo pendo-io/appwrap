@@ -158,12 +158,12 @@ func (s *AppengineInterfacesTest) TestDatastoreWithDeadline(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(ck.Called, IsTrue)
 	}
-	// Deadline in future, parent context cancelled, no func error
+	// Deadline in future, parent context cancelled, canceled err
 	{
 		deadline := time.Now().Add(time.Hour)
 		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.Canceled}
 		err := withDeadline(cancelledCtx, deadline, ck.Func)
-		c.Assert(err, IsNil)
+		c.Assert(status.Code(err), Equals, codes.Canceled)
 		c.Assert(ck.Called, IsTrue)
 	}
 	// Deadline in future, func error
@@ -182,12 +182,12 @@ func (s *AppengineInterfacesTest) TestDatastoreWithDeadline(c *C) {
 		c.Assert(status.Code(err), Equals, codes.DeadlineExceeded)
 		c.Assert(ck.Called, IsTrue)
 	}
-	// Deadline in future, parent context cancelled, func error
+	// Deadline in past, parent context cancelled, func error
 	{
 		deadline := time.Now().Add(-time.Hour)
 		ck := deadlineCheck{C: c, ExpectDeadline: deadline, ExpectErr: context.Canceled, ReturnErr: testErr}
 		err := withDeadline(cancelledCtx, deadline, ck.Func)
-		c.Assert(err, Equals, testErr)
+		c.Assert(status.Code(err), Equals, codes.Canceled)
 		c.Assert(ck.Called, IsTrue)
 	}
 }
