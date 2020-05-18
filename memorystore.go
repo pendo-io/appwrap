@@ -264,10 +264,13 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			}
 			for i := range addrs {
 				client := redis.NewClient(&redis.Options{
-					Addr:     addrs[i],
-					Password: "",
-					DB:       0,
-					PoolSize: 2 * runtime.GOMAXPROCS(0),
+					Addr:         addrs[i],
+					Password:     "",
+					DB:           0,
+					PoolSize:     2 * runtime.GOMAXPROCS(0),
+					ReadTimeout:  100 * time.Millisecond,
+					WriteTimeout: 200 * time.Millisecond,
+					PoolTimeout:  200 * time.Millisecond,
 				}).WithContext(c)
 				clients[i] = &redisClientImplementation{client, client}
 			}
