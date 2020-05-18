@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-
 	"io"
 	"runtime"
 	"sync"
@@ -489,8 +488,9 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 
 	namespacedKeys, keyIndices := ms.shardedNamespacedKeys(keys)
 	returnVals := make([][]interface{}, len(ms.clients))
-	errs := make(chan error, len(ms.clients))
 	wg := sync.WaitGroup{}
+	haveErrors := false
+	finalErr := make(MultiError, len(ms.clients))
 	for shard := 0; shard < len(ms.clients); shard++ {
 		shardKeys := namespacedKeys[shard]
 		if len(shardKeys) == 0 {
@@ -503,18 +503,13 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 			vals, err := ms.clients[shard].MGet(shardKeys...)
 			returnVals[shard] = vals
 			if err != nil {
-				errs <- err
+				finalErr[shard] = err
+				haveErrors = true
 			}
 		}()
 	}
 
 	wg.Wait()
-	select {
-	case err := <-errs:
-		return nil, err
-	default:
-	}
-	close(errs)
 
 	for shard, shardVals := range returnVals {
 		for i, val := range shardVals {
@@ -534,7 +529,11 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 		}
 	}
 
-	return results, nil
+	if haveErrors {
+		return results, finalErr
+	} else {
+		return results, nil
+	}
 }
 
 func (ms Memorystore) convertToByteSlice(v interface{}) []byte {
