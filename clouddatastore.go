@@ -145,7 +145,7 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 	return newCloudDatastore(c, dsClient, "", dsClientTimeout), nil
 }
 
-var ErrDatastoreDoNotRetry = status.Error(codes.Canceled, "request context cancelled")
+var ErrDatastoreDoNotRetry = status.Error(codes.Canceled, "request context canceled")
 
 func withDeadline(parent context.Context, time time.Time, f func(context.Context) error) error {
 	tctx, cancel := context.WithDeadline(parent, time)
