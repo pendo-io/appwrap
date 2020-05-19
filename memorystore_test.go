@@ -794,11 +794,32 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 	checkMocks()
 
 	// error case
+	keys = []string{"apple", "banana", "pear", "pineapple"}
+	nsKey0, _ = ms.namespacedKeyAndShard(keys[0])
+	nsKey1, _ = ms.namespacedKeyAndShard(keys[1])
+	nsKey2, _ = ms.namespacedKeyAndShard(keys[2])
+	nsKey3, _ = ms.namespacedKeyAndShard(keys[3])
+	shard0Keys = []string{nsKey2, nsKey3}
+	shard1Keys = []string{nsKey0, nsKey1}
+
+	shard1Vals = []interface{}{
+		[]byte("apple tree"),
+		nil, // indicates not found
+	}
+
 	fatalErr := errors.New("aaaah")
 	clientMocks[0].On("MGet", shard0Keys).Return(([]interface{})(nil), fatalErr).Once()
+	clientMocks[1].On("MGet", shard1Keys).Return(shard1Vals, nil).Once()
 	results, err = ms.GetMulti(keys)
-	c.Assert(err, Equals, fatalErr)
-	c.Assert(results, IsNil)
+	c.Assert(err, DeepEquals, MultiError{fatalErr, nil})
+	c.Assert(results, DeepEquals, map[string]*CacheItem{
+		"apple": {
+			Key:            keys[0],
+			Value:          shard1Vals[0].([]byte),
+			valueOnLastGet: shard1Vals[0].([]byte),
+		},
+	})
+	c.Assert(sameMemory(results["apple"].Value, results["apple"].valueOnLastGet), IsFalse)
 	checkMocks()
 }
 
