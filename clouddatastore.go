@@ -123,7 +123,7 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 			aeInfo := NewAppengineInfoFromContext(c)
 			o := []option.ClientOption{
 				// Options borrowed from construction of the pubsub client
-				option.WithGRPCConnectionPool(runtime.GOMAXPROCS(0)),
+				option.WithGRPCConnectionPool(2 * runtime.GOMAXPROCS(0)),
 				option.WithGRPCDialOption(grpc.WithKeepaliveParams(keepalive.ClientParameters{
 					Time: 5 * time.Minute,
 				})),

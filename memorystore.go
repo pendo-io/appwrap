@@ -266,7 +266,7 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 					Addr:     addrs[i],
 					Password: "",
 					DB:       0,
-					PoolSize: 2 * runtime.GOMAXPROCS(0),
+					PoolSize: 4 * runtime.GOMAXPROCS(0),
 				}).WithContext(c)
 				clients[i] = &redisClientImplementation{client, client}
 			}
