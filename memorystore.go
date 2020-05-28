@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -13,6 +16,8 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/go-redis/redis"
 	gax "github.com/googleapis/gax-go/v2"
+	"github.com/pendo-io/appwrap/internal/metrics"
+	"go.opencensus.io/tag"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
@@ -63,6 +68,7 @@ type redisCommonInterface interface {
 // Additionally implements Watch for transactions
 type redisClientInterface interface {
 	redisCommonInterface
+	PoolStats() *redis.PoolStats
 	Watch(fn func(*redis.Tx) error, keys ...string) error
 }
 
@@ -111,6 +117,10 @@ func (rci *redisClientImplementation) SetNX(key string, value interface{}, expir
 
 func (rci *redisClientImplementation) TxPipeline() redisPipelineInterface {
 	return &redisPipelineImplementation{rci.common.TxPipeline()}
+}
+
+func (rci *redisClientImplementation) PoolStats() *redis.PoolStats {
+	return rci.client.PoolStats()
 }
 
 // Watch can only be called by the top-level redis Client.  In particular, this means that
@@ -171,6 +181,8 @@ type memorystoreService struct {
 	addrs              []string
 	addrLastErr        error
 	addrDontRetryUntil time.Time
+
+	statReporterOnce sync.Once
 }
 
 var GlobalService memorystoreService
@@ -274,7 +286,64 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			ms.clients = &clients
 		}
 	}
+
+	statInterval := metrics.GetMetricsRecordingInterval()
+	if statInterval > 0 {
+		ms.statReporterOnce.Do(func() {
+			fmt.Fprintf(os.Stderr, "[memorystoreService] stat reporter starting (reporting every %s)\n", statInterval)
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, os.Interrupt)
+			go func() {
+				ticker := time.NewTicker(statInterval)
+				defer func() {
+					ticker.Stop()
+				}()
+				for {
+					select {
+					case <-ticker.C:
+						ms.logPoolStats()
+					case <-sigCh:
+						fmt.Fprintln(os.Stderr, "[memorystoreService] interrupt received, stopping stat reporter")
+						return
+					}
+				}
+			}()
+		})
+	}
 	return Memorystore{c, *ms.clients, ""}, nil
+}
+
+func (ms *memorystoreService) logPoolStats() {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
+	if ms.clients == nil {
+		return
+	}
+
+	for i, client := range *ms.clients {
+		pstats := client.PoolStats()
+
+		// These metrics are all for the same connection shard
+		mctx, err := tag.New(context.Background(), tag.Insert(metrics.KeyConnectionShard, strconv.Itoa(i)))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create context with tag: "+err.Error())
+			continue
+		}
+
+		// Pool usage stats
+		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Hits)),
+			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultHit)
+		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Misses)),
+			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultMiss)
+		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Timeouts)),
+			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultTimeout)
+
+		// Connection state stats
+		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolConnections.M(int64(pstats.TotalConns-pstats.IdleConns)),
+			metrics.KeyPoolConnState, metrics.ConnectionPoolConnectionStateActive)
+		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolConnections.M(int64(pstats.IdleConns)),
+			metrics.KeyPoolConnState, metrics.ConnectionPoolConnectionStateIdle)
+	}
 }
 
 func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int) {
