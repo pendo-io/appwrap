@@ -18,9 +18,10 @@ type AppengineInfo interface {
 	VersionID() string
 	Zone() string
 }
+
 var (
 	IsDevAppServer = false
-	IsFlex      = appengine.IsFlex
-	IsSecondGen = appengine.IsSecondGen
-	IsStandard  = appengine.IsStandard
+	IsFlex         = appengine.IsFlex
+	IsSecondGen    = appengine.IsSecondGen
+	IsStandard     = appengine.IsStandard
 )

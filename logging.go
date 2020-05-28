@@ -52,7 +52,7 @@ func (nl NullLogger) Warningf(format string, args ...interface{})              {
 func (nl NullLogger) Errorf(format string, args ...interface{})                {}
 func (nl NullLogger) Criticalf(format string, args ...interface{})             {}
 func (nl NullLogger) Request(request, url, format string, args ...interface{}) {}
-func (nl NullLogger) AddLabels(labels map[string]string) error                 {return nil}
+func (nl NullLogger) AddLabels(labels map[string]string) error                 { return nil }
 
 type FormatLogger struct {
 	Logf func(format string, args ...interface{})

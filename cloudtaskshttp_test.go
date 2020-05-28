@@ -240,7 +240,7 @@ func (s *HttpCloudTasksTest) TestHttpAdd(c *C) {
 	}, []gax.CallOption(nil)).Return(task.task, nil).Once()
 
 	added, err := tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, Not(Equals), expectTask)                    // not same pointer (copied)...
+	c.Assert(added, Not(Equals), expectTask) // not same pointer (copied)...
 	_, isHttpTask := added.(HttpTask)
 	c.Assert(isHttpTask, IsTrue)
 	c.Assert(added.(*cloudTaskHttpImpl).task, DeepEquals, expectTask.task) // ...but has same content
