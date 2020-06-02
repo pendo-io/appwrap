@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,26 +36,26 @@ func (s *StackdriverLoggingTests) SetUpTest(c *C) {
 	s.sl = newStackdriverLoggingService(s.clientMock, s.appInfoMock, NullLogger{}).(*StackdriverLoggingService)
 }
 
-func assertParentLogEntry(c *C, log *StackdriverLogging, entry logging.Entry, severity logging.Severity, startTime time.Time) {
-	assertLogEntry(c, entry, severity, startTime)
+func matchesExpectedParentLogEntry(c *C, log *StackdriverLogging, entry logging.Entry, severity logging.Severity, startTime time.Time) bool {
+	return matchesExpectedLogEntry(c, entry, severity, startTime) &&
 
-	c.Assert(entry.Payload, IsNil)
-	c.Assert(entry.HTTPRequest.Latency <= time.Now().Sub(log.start), IsTrue)
-	c.Assert(entry.HTTPRequest.Request, DeepEquals, log.request)
+		entry.Payload == nil &&
+		entry.HTTPRequest.Latency <= time.Now().Sub(log.start) &&
+		reflect.DeepEqual(entry.HTTPRequest.Request, log.request)
 }
 
-func assertChildLogEntry(c *C, entry logging.Entry, severity logging.Severity, startTime time.Time, payload interface{}) {
-	assertLogEntry(c, entry, severity, startTime)
-	c.Assert(entry.Payload, DeepEquals, payload)
+func matchesExpectedChildLogEntry(c *C, entry logging.Entry, severity logging.Severity, startTime time.Time, payload interface{}) bool {
+	return matchesExpectedLogEntry(c, entry, severity, startTime) &&
+		reflect.DeepEqual(entry.Payload, payload)
 }
 
-func assertLogEntry(c *C, entry logging.Entry, severity logging.Severity, startTime time.Time) {
-	c.Assert(entry.Labels, HasLen, 1)
-	c.Assert(entry.Labels["subscriptionId"], Equals, "12345")
-	c.Assert(entry.Severity, Equals, severity)
-	c.Assert(entry.Timestamp.After(startTime), IsTrue)
-	c.Assert(entry.Timestamp.Before(time.Now()), IsTrue)
-	c.Assert(entry.Trace, Equals, "id-to-connect-logs")
+func matchesExpectedLogEntry(c *C, entry logging.Entry, severity logging.Severity, startTime time.Time) bool {
+	return len(entry.Labels) == 1 &&
+		entry.Labels["subscriptionId"] == "12345" &&
+		entry.Severity == severity &&
+		entry.Timestamp.After(startTime) &&
+		entry.Timestamp.Before(time.Now()) &&
+		entry.Trace == "id-to-connect-logs"
 }
 
 func (s *StackdriverLoggingTests) arrangeValidClient(r *http.Request) DataLogging {
@@ -180,14 +181,13 @@ func (s *StackdriverLoggingTests) TestLogStringFormatFunctions(c *C) {
 	for _, testCase := range testCases {
 		startTime := time.Now()
 		log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			c.Assert(entry.Labels, HasLen, 1)
-			c.Assert(entry.Labels["subscriptionId"], Equals, "12345")
-			c.Assert(entry.Payload, Equals, fmt.Sprintf("This is a test %d, %s, and %d", 1, "two", 3))
-			c.Assert(entry.Severity, Equals, testCase.severity)
-			c.Assert(entry.Timestamp.After(startTime), IsTrue)
-			c.Assert(entry.Timestamp.Before(time.Now()), IsTrue)
-			c.Assert(entry.Trace, Equals, "id-to-connect-logs")
-			return true
+			return len(entry.Labels) == 1 &&
+				entry.Labels["subscriptionId"] == "12345" &&
+				entry.Payload == fmt.Sprintf("This is a test %d, %s, and %d", 1, "two", 3) &&
+				entry.Severity == testCase.severity &&
+				entry.Timestamp.After(startTime) &&
+				entry.Timestamp.Before(time.Now()) &&
+				entry.Trace == "id-to-connect-logs"
 		})).Once()
 		testCase.logf("This is a test %d, %s, and %d", 1, "two", 3)
 		log.childLogger.(*LoggerMock).AssertExpectations(c)
@@ -227,14 +227,13 @@ func (s *StackdriverLoggingTests) TestLogDataFunctions(c *C) {
 	for _, testCase := range testCases {
 		startTime := time.Now()
 		log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			c.Assert(entry.Labels, HasLen, 1)
-			c.Assert(entry.Labels["subscriptionId"], Equals, "12345")
-			c.Assert(entry.Payload, DeepEquals, testCase.data)
-			c.Assert(entry.Severity, Equals, testCase.severity)
-			c.Assert(entry.Timestamp.After(startTime), IsTrue)
-			c.Assert(entry.Timestamp.Before(time.Now()), IsTrue)
-			c.Assert(entry.Trace, Equals, "id-to-connect-logs")
-			return true
+			return len(entry.Labels) == 1 &&
+				entry.Labels["subscriptionId"] == "12345" &&
+				reflect.DeepEqual(entry.Payload, testCase.data) &&
+				entry.Severity == testCase.severity &&
+				entry.Timestamp.After(startTime) &&
+				entry.Timestamp.Before(time.Now()) &&
+				entry.Trace == "id-to-connect-logs"
 		})).Once()
 		testCase.logDataFunc(testCase.data)
 		log.childLogger.(*LoggerMock).AssertExpectations(c)
@@ -264,8 +263,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelDefault(c *C) {
 	r.Response = &http.Response{}
 	startTime := time.Now()
 	log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-		assertParentLogEntry(c, log, entry, logging.Default, startTime)
-		return true
+		return matchesExpectedParentLogEntry(c, log, entry, logging.Default, startTime)
 	})).Once()
 	log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 	log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -304,13 +302,11 @@ func (s *StackdriverLoggingTests) TestParentLogLevelNonDefault(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severity, startTime, payload)
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severity, startTime, payload)
 		})).Once()
 		testCase.logFunc(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -344,13 +340,11 @@ func (s *StackdriverLoggingTests) TestParentLogLevelNonDefault(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severity, startTime, fmt.Sprintf("%v", payload))
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severity, startTime, fmt.Sprintf("%v", payload))
 		})).Once()
 		testCase.logFunc("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -393,18 +387,15 @@ func (s *StackdriverLoggingTests) TestParentLogLevelHighOverrideLow(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityLow, startTime, payload)
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityLow, startTime, payload)
 		})).Once()
 		testCase.logFuncLow(payload)
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityHigh, startTime, payload)
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityHigh, startTime, payload)
 		})).Once()
 		testCase.logFuncHigh(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -443,18 +434,15 @@ func (s *StackdriverLoggingTests) TestParentLogLevelHighOverrideLow(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityLow, startTime, fmt.Sprintf("%v", payload))
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityLow, startTime, fmt.Sprintf("%v", payload))
 		})).Once()
 		testCase.logFuncLow("%v", payload)
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityHigh, startTime, fmt.Sprintf("%v", payload))
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityHigh, startTime, fmt.Sprintf("%v", payload))
 		})).Once()
 		testCase.logFuncHigh("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -498,18 +486,15 @@ func (s *StackdriverLoggingTests) TestParentLogLevelLowNotOverrideHigh(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityHigh, startTime, payload)
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityHigh, startTime, payload)
 		})).Once()
 		testCase.logFuncHigh(payload)
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityLow, startTime, payload)
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityLow, startTime, payload)
 		})).Once()
 		testCase.logFuncLow(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -547,18 +532,15 @@ func (s *StackdriverLoggingTests) TestParentLogLevelLowNotOverrideHigh(c *C) {
 		startTime := time.Now()
 		w := httptest.NewRecorder()
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityHigh, startTime, fmt.Sprintf("%v", payload))
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityHigh, startTime, fmt.Sprintf("%v", payload))
 		})).Once()
 		testCase.logFuncHigh("%v", payload)
 		testCase.log.childLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertChildLogEntry(c, entry, testCase.severityLow, startTime, fmt.Sprintf("%v", payload))
-			return true
+			return matchesExpectedChildLogEntry(c, entry, testCase.severityLow, startTime, fmt.Sprintf("%v", payload))
 		})).Once()
 		testCase.logFuncLow("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			assertParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
-			return true
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
