@@ -2,10 +2,10 @@ package appwrap
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/ptypes/duration"
 	"net/http"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 )
@@ -39,10 +39,12 @@ func (t cloudTaskHttpImpl) Copy() CloudTask {
 	for k, v := range innerCopy.Headers {
 		headerCopy[k] = v
 	}
+	deadlineCopy := t.task.DispatchDeadline
 	serviceAccountCopy := make([]byte, len(innerCopy.GetOidcToken().ServiceAccountEmail))
 	copy(serviceAccountCopy, innerCopy.GetOidcToken().ServiceAccountEmail)
 	taskCopy := &cloudTaskHttpImpl{
 		task: &taskspb.Task{
+			DispatchDeadline: deadlineCopy,
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: &taskspb.HttpRequest{
 					HttpMethod: innerCopy.HttpMethod,
@@ -58,6 +60,7 @@ func (t cloudTaskHttpImpl) Copy() CloudTask {
 			},
 		},
 	}
+
 	return taskCopy
 }
 
