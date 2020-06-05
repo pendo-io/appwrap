@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/googleapis/gax-go/v2"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 	. "gopkg.in/check.v1"
@@ -23,6 +24,7 @@ func (s *HttpCloudTasksTest) SetUpTest(c *C) {
 func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 	task := &cloudTaskHttpImpl{
 		task: &taskspb.Task{
+			DispatchDeadline: &duration.Duration{Seconds: 1800},
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: &taskspb.HttpRequest{
 					HttpMethod: taskspb.HttpMethod_POST,
@@ -62,6 +64,7 @@ func (s *HttpCloudTasksTest) TestCloudTaskCopy(c *C) {
 func (s *HttpCloudTasksTest) TestNewHttpTask(c *C) {
 	task := NewHttpCloudTask("foo@example.com").(*cloudTaskHttpImpl)
 	c.Assert(task.task, DeepEquals, &taskspb.Task{
+		DispatchDeadline: &duration.Duration{Seconds: 1800},
 		MessageType: &taskspb.Task_HttpRequest{
 			HttpRequest: &taskspb.HttpRequest{
 				AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
@@ -197,6 +200,7 @@ func (s *HttpCloudTasksTest) TestNewHttpPOSTTask(c *C) {
 	task := tq.NewHttpCloudTask("foo@example.com", "https://api.example.com/vegetables/potato", http.MethodPost, []byte("{ vegetables: [{'type': 'Russet', 'tasty': true] }"), headers).(*cloudTaskHttpImpl)
 	c.Assert(task, DeepEquals, &cloudTaskHttpImpl{
 		task: &taskspb.Task{
+			DispatchDeadline: &duration.Duration{Seconds: 1800},
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: &taskspb.HttpRequest{
 					Url:        "https://api.example.com/vegetables/potato",

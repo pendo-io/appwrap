@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
 )
@@ -16,6 +17,7 @@ type cloudTaskHttpImpl struct {
 func newHttpCloudTask(serviceAccount string) HttpTask {
 	return &cloudTaskHttpImpl{
 		task: &taskspb.Task{
+			DispatchDeadline: &duration.Duration{Seconds: 1800},
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: &taskspb.HttpRequest{
 					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
