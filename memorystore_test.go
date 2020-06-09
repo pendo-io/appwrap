@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
@@ -201,6 +201,35 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 		// should be the exact same pointer
 		c.Assert(msClients[i].clients[0], Equals, authoritativeClients[0])
 	}
+
+	appMock.AssertExpectations(c)
+}
+
+func (s *MemorystoreTest) TestNewAppengineRateLimitedMemcache(c *C) {
+	appMock := &AppengineInfoMock{}
+	appMock.On("AppID").Return("pendo-devserver")
+	limiterMock := &LimiterMock{}
+	log := NewWriterLogger(os.Stdout)
+
+	connFn := func(ctx context.Context) (redisAPIService, error) {
+		apiMock := &redisAPIServiceMock{} // we don't assert expectations because collecting this is very hard, but that's OK: other tests verify these calls actually happen
+		apiMock.On("GetInstance", mock.Anything, &redispb.GetInstanceRequest{Name: "projects/pendo-devserver/locations/cacheloc/instances/cachename-0"}, []gax.CallOption(nil)).Return(&redispb.Instance{Host: "1.2.3.4", Port: 1234}, nil).Once()
+		apiMock.On("Close").Return(nil).Once()
+		return apiMock, nil
+	}
+	ms := memorystoreService{connectFn: connFn}
+
+	limiterCount := 0
+	createLimiter := func(shard int, log Logging) redis.Limiter {
+		limiterCount++
+		return limiterMock
+	}
+
+	memcache, err := ms.NewRateLimitedMemcache(context.Background(), appMock, "cacheloc", "cachename", 1, log, createLimiter)
+	c.Assert(err, IsNil)
+	c.Assert(memcache, NotNil)
+	c.Assert(ms.clients, NotNil)
+	c.Assert(limiterCount, Equals, 1)
 
 	appMock.AssertExpectations(c)
 }
@@ -511,7 +540,6 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	checkMocks()
 
 	// error on exec
-
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
 	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
@@ -1099,4 +1127,16 @@ func (s *MemorystoreTest) TestShardedNamespacedKeysSingleShard(c *C) {
 	c.Assert(singleShard, Equals, 1)
 	c.Assert(namespacedKeys[0], HasLen, 0)
 	c.Assert(namespacedKeys[1], HasLen, len(keys))
+}
+
+type LimiterMock struct {
+	mock.Mock
+}
+
+func (mock *LimiterMock) Allow() error {
+	return mock.Called().Error(0)
+}
+
+func (mock *LimiterMock) ReportResult(err error) {
+	mock.Called(err)
 }
