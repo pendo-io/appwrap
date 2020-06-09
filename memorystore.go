@@ -14,7 +14,7 @@ import (
 
 	cloudms "cloud.google.com/go/redis/apiv1"
 	xxhash "github.com/cespare/xxhash/v2"
-	"github.com/go-redis/redis"
+	redis "github.com/go-redis/redis/v7"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/pendo-io/appwrap/internal/metrics"
 	"go.opencensus.io/tag"
@@ -257,7 +257,15 @@ func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLoc
 	return GlobalService.NewMemcache(c, appInfo, loc, name, shards)
 }
 
+func NewAppengineRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiters func(shard int, log Logging) redis.Limiter) (Memcache, error) {
+	return GlobalService.NewRateLimitedMemcache(c, appInfo, loc, name, shards, log, createLimiters)
+}
+
 func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
+	return ms.NewRateLimitedMemcache(c, appInfo, loc, name, shards, nil, nil)
+}
+
+func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiter func(shard int, log Logging) redis.Limiter) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	if ms.clients == nil {
 		ms.mtx.Lock()
@@ -274,13 +282,21 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			if err != nil {
 				return nil, err
 			}
+
+			rateLimitersProvided := createLimiter != nil && log != nil
+
 			for i := range addrs {
-				client := redis.NewClient(&redis.Options{
+				ops := &redis.Options{
 					Addr:     addrs[i],
 					Password: "",
 					DB:       0,
 					PoolSize: 4 * runtime.GOMAXPROCS(0),
-				}).WithContext(c)
+				}
+				if rateLimitersProvided {
+					ops.Limiter = createLimiter(i, log)
+				}
+
+				client := redis.NewClient(ops)
 				clients[i] = &redisClientImplementation{client, client}
 			}
 
