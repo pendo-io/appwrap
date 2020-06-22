@@ -394,14 +394,14 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 	wg := sync.WaitGroup{}
 	errs := make(chan error, len(ms.clients))
 	for shard := 0; shard < len(ms.clients); shard++ {
+		if len(namespacedKeys[shard]) == 0 {
+			continue
+		}
 		shard := shard
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			shardKeys := namespacedKeys[shard]
-			if len(shardKeys) == 0 {
-				return
-			}
 			pipe := ms.clients[shard].TxPipeline()
 			for _, key := range shardKeys {
 				item := items[itemIndices[key]]
@@ -651,14 +651,15 @@ func (ms Memorystore) SetMulti(items []*CacheItem) error {
 	errs := make(chan error, len(ms.clients))
 	wg := sync.WaitGroup{}
 	for shard := 0; shard < len(ms.clients); shard++ {
+		if len(namespacedKeys[shard]) == 0 {
+			continue
+		}
 		shard := shard
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			shardKeys := namespacedKeys[shard]
-			if len(shardKeys) == 0 {
-				return
-			}
+
 			pipe := ms.clients[shard].TxPipeline()
 			for i, key := range shardKeys {
 				item := items[itemIndices[shardKeys[i]]]
