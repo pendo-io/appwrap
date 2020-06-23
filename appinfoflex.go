@@ -28,7 +28,7 @@ func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 var NewAppengineInfoFromContext = InternalNewAppengineInfoFromContext
 
 func (ai AppengineInfoFlex) AppID() string {
-	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+	return os.Getenv("GOOGLE_CLOUD_PROJECT_OVERRIDE")
 }
 
 func (ai AppengineInfoFlex) InstanceID() string {
