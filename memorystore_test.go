@@ -1045,7 +1045,14 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 
 func (s *MemorystoreTest) TestNamespace(c *C) {
 	ms, _ := s.newMemstore()
+
+	// Set this so we can ensure that the keyHashFn gets assigned on namespace
+	// creation. One cannot compare funcs, but one can make sure they
+	// return the same thing.
+	ms.keyHashFn = func(key string, shardCount int) int { return 1 }
+
 	msNewNamespace := ms.Namespace("test-ns").(Memorystore)
+
 	// original ns not modified
 	c.Assert(ms.namespace, Equals, "")
 	// new ns check
@@ -1053,4 +1060,43 @@ func (s *MemorystoreTest) TestNamespace(c *C) {
 	// want the exact same pointers in other fields
 	c.Assert(ms.c, Equals, msNewNamespace.c)
 	c.Assert(ms.clients[0], Equals, msNewNamespace.clients[0])
+
+	// Ensure that we get the same hashed value when using the keyHashFn
+	c.Assert(ms.keyHashFn("foo", 10), Equals, msNewNamespace.keyHashFn("foo", 10))
+}
+
+func (s *MemorystoreTest) TestShardedNamespacedKeysSingleShard(c *C) {
+	ms, _ := s.newMemstore()
+
+	keys := []string{"psycho", "alpha", "disco", "beta", "aqua", "doloop"}
+
+	// By default, the keys should be distributed by the defaultKeyHashFn.
+	namespacedKeys, _, singleShard := ms.shardedNamespacedKeys(keys)
+	c.Assert(singleShard, Equals, -1)
+	c.Assert(len(namespacedKeys[0])+len(namespacedKeys[1]), Equals, len(keys))
+	c.Assert(len(namespacedKeys[0]) > 0, IsTrue)
+	c.Assert(len(namespacedKeys[1]) > 0, IsTrue)
+
+	msNewNamespace := ms.Namespace("test-ns")
+	namespacedKeys, _, singleShard = msNewNamespace.(Memorystore).shardedNamespacedKeys(keys)
+	c.Assert(singleShard, Equals, -1)
+	c.Assert(len(namespacedKeys[0])+len(namespacedKeys[1]), Equals, len(keys))
+	c.Assert(len(namespacedKeys[0]) > 0, IsTrue)
+	c.Assert(len(namespacedKeys[1]) > 0, IsTrue)
+
+	// Use a dumb hash function that returns the same shard every time
+	ms.keyHashFn = func(key string, shardCount int) int { return 1 }
+
+	// Ensure same keyHashFn is used in namespace and that we get singleShard == 1
+	// in both cases.
+	namespacedKeys, _, singleShard = ms.shardedNamespacedKeys(keys)
+	c.Assert(singleShard, Equals, 1)
+	c.Assert(namespacedKeys[0], HasLen, 0)
+	c.Assert(namespacedKeys[1], HasLen, len(keys))
+
+	msNewNamespace = ms.Namespace("test-ns")
+	namespacedKeys, _, singleShard = msNewNamespace.(Memorystore).shardedNamespacedKeys(keys)
+	c.Assert(singleShard, Equals, 1)
+	c.Assert(namespacedKeys[0], HasLen, 0)
+	c.Assert(namespacedKeys[1], HasLen, len(keys))
 }
