@@ -28,6 +28,14 @@ func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 var NewAppengineInfoFromContext = InternalNewAppengineInfoFromContext
 
 func (ai AppengineInfoFlex) AppID() string {
+	if project := os.Getenv("GOOGLE_CLOUD_PROJECT_OVERRIDE"); project != "" {
+		return project
+	}
+
+	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+}
+
+func (ai AppengineInfoFlex) AppIDHosted() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }
 
@@ -40,7 +48,7 @@ func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string,
 		module = ai.ModuleName()
 	}
 	if app == "" {
-		app = ai.AppID()
+		app = ai.AppIDHosted()
 	}
 	if version == "" {
 		return fmt.Sprintf("%s-dot-%s.appspot.com", module, app), nil
@@ -85,7 +93,7 @@ func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (
 	}
 
 	svc := appengine.NewAppsServicesService(ae)
-	call := svc.Get(ai.AppID(), moduleName)
+	call := svc.Get(ai.AppIDHosted(), moduleName)
 	if resp, err := call.Do(); err != nil {
 		return false, err
 	} else {
@@ -106,7 +114,7 @@ func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, e
 	}
 
 	svc := appengine.NewAppsServicesService(ae)
-	call := svc.Get(ai.AppID(), moduleName)
+	call := svc.Get(ai.AppIDHosted(), moduleName)
 	if resp, err := call.Do(); err != nil {
 		return "", err
 	} else {
@@ -127,7 +135,7 @@ func (ai AppengineInfoFlex) NumInstances(moduleName, version string) (int, error
 	}
 
 	svc := appengine.NewAppsServicesVersionsInstancesService(ae)
-	call := svc.List(ai.AppID(), moduleName, version).PageSize(100)
+	call := svc.List(ai.AppIDHosted(), moduleName, version).PageSize(100)
 	if resp, err := call.Do(); err != nil {
 		return -1, err
 	} else {
