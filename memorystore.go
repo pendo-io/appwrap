@@ -170,6 +170,7 @@ type Memorystore struct {
 	c         context.Context
 	clients   []redisClientInterface
 	namespace string
+	keyHashFn func(key string, shardCount int) int
 }
 
 type memorystoreService struct {
@@ -310,7 +311,7 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 			}()
 		})
 	}
-	return Memorystore{c, *ms.clients, ""}, nil
+	return Memorystore{c, *ms.clients, "", defaultKeyHashFn}, nil
 }
 
 func (ms *memorystoreService) logPoolStats() {
@@ -346,7 +347,7 @@ func (ms *memorystoreService) logPoolStats() {
 	}
 }
 
-func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int) {
+func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int, singleShard int) {
 	keys := make([]string, len(items))
 
 	for i, item := range items {
@@ -356,15 +357,23 @@ func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespa
 	return ms.shardedNamespacedKeys(keys)
 }
 
-func (ms Memorystore) shardedNamespacedKeys(keys []string) (namespacedKeys [][]string, originalPositions map[string]int) {
+func (ms Memorystore) shardedNamespacedKeys(keys []string) (namespacedKeys [][]string, originalPositions map[string]int, singleShard int) {
 	namespacedKeys = make([][]string, len(ms.clients))
 	originalPositions = make(map[string]int, len(keys))
+
+	singleShard = -1
 	for i, key := range keys {
 		namespacedKey, shard := ms.namespacedKeyAndShard(key)
+		if i > 0 && singleShard != shard {
+			singleShard = -1
+		} else {
+			singleShard = shard
+		}
+
 		namespacedKeys[shard] = append(namespacedKeys[shard], namespacedKey)
 		originalPositions[namespacedKey] = i
 	}
-	return namespacedKeys, originalPositions
+	return namespacedKeys, originalPositions, singleShard
 }
 
 func (ms Memorystore) namespacedKeyAndShard(key string) (string, int) {
@@ -372,7 +381,7 @@ func (ms Memorystore) namespacedKeyAndShard(key string) (string, int) {
 		panic("redis: blank key")
 	}
 	namespacedKey := ms.namespace + ":" + key
-	shard := int(xxhash.Sum64String(namespacedKey) % uint64(len(ms.clients)))
+	shard := ms.keyHashFn(namespacedKey, len(ms.clients))
 	return namespacedKey, shard
 }
 
@@ -384,11 +393,46 @@ func (ms Memorystore) Add(item *CacheItem) error {
 		return CacheErrNotStored
 	}
 	return nil
-
 }
 
 func (ms Memorystore) AddMulti(items []*CacheItem) error {
-	namespacedKeys, itemIndices := ms.shardedNamespacedKeysForItems(items)
+
+	addMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) ([]redis.Cmder, error) {
+		pipe := ms.clients[shard].TxPipeline()
+		for _, key := range shardKeys {
+			item := items[itemIndices[key]]
+			pipe.SetNX(key, item.Value, item.Expiration)
+		}
+		return pipe.Exec()
+	}
+
+	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardResults []redis.Cmder, errList []error) bool {
+		haveErrors := false
+		for i, result := range shardResults {
+			if added, err := result.(boolCmdInterface).Result(); err != nil {
+				errList[itemIndices[shardKeys[i]]] = err
+				haveErrors = true
+			} else if !added {
+				errList[itemIndices[shardKeys[i]]] = CacheErrNotStored
+				haveErrors = true
+			}
+		}
+		return haveErrors
+	}
+
+	namespacedKeys, itemIndices, singleShard := ms.shardedNamespacedKeysForItems(items)
+	errList := make(MultiError, len(items))
+
+	if singleShard >= 0 {
+		results, err := addMultiForShard(singleShard, itemIndices, namespacedKeys[singleShard])
+		if err != nil {
+			return err
+		}
+		if handleReturn(singleShard, itemIndices, namespacedKeys[singleShard], results, errList) {
+			return errList
+		}
+		return nil
+	}
 
 	results := make([][]redis.Cmder, len(ms.clients))
 	wg := sync.WaitGroup{}
@@ -402,12 +446,7 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 		go func() {
 			defer wg.Done()
 			shardKeys := namespacedKeys[shard]
-			pipe := ms.clients[shard].TxPipeline()
-			for _, key := range shardKeys {
-				item := items[itemIndices[key]]
-				pipe.SetNX(key, item.Value, item.Expiration)
-			}
-			res, err := pipe.Exec()
+			res, err := addMultiForShard(shard, itemIndices, shardKeys)
 			if err != nil {
 				errs <- err
 			}
@@ -424,18 +463,9 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 	}
 
 	haveErrors := false
-	errList := make(MultiError, len(items))
-
 	for shard, shardResults := range results {
-		for i, result := range shardResults {
-			if added, err := result.(boolCmdInterface).Result(); err != nil {
-				errList[itemIndices[namespacedKeys[shard][i]]] = err
-				haveErrors = true
-			} else if !added {
-				errList[itemIndices[namespacedKeys[shard][i]]] = CacheErrNotStored
-				haveErrors = true
-			}
-		}
+		newErrors := handleReturn(shard, itemIndices, namespacedKeys[shard], shardResults, errList)
+		haveErrors = haveErrors || newErrors
 	}
 
 	if haveErrors {
@@ -487,7 +517,7 @@ func (ms Memorystore) Delete(key string) error {
 }
 
 func (ms Memorystore) DeleteMulti(keys []string) error {
-	namespacedKeys, _ := ms.shardedNamespacedKeys(keys)
+	namespacedKeys, _, _ := ms.shardedNamespacedKeys(keys)
 	errList := make(MultiError, 0, len(ms.clients))
 
 	haveErrors := false
@@ -553,13 +583,50 @@ func (ms Memorystore) Get(key string) (*CacheItem, error) {
 }
 
 func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
-	results := make(map[string]*CacheItem, len(keys))
 
-	namespacedKeys, keyIndices := ms.shardedNamespacedKeys(keys)
+	getMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) ([]interface{}, error) {
+		return ms.clients[shard].MGet(shardKeys...)
+	}
+
+	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardVals []interface{}, results map[string]*CacheItem) {
+		for i, val := range shardVals {
+			if val == nil {
+				// Not found
+				continue
+			}
+			valBytes := ms.convertToByteSlice(val)
+			valCopy := make([]byte, len(valBytes))
+			copy(valCopy, valBytes)
+			key := keys[itemIndices[shardKeys[i]]]
+			results[key] = &CacheItem{
+				Key:            key,
+				Value:          valBytes,
+				valueOnLastGet: valCopy,
+			}
+		}
+	}
+
+	namespacedKeys, keyIndices, singleShard := ms.shardedNamespacedKeys(keys)
+
+	// Fast path (no goroutine) if only one shard is involved
+	if singleShard >= 0 {
+
+		results := make(map[string]*CacheItem, len(keys))
+
+		vals, err := getMultiForShard(singleShard, keyIndices, namespacedKeys[singleShard])
+		if err != nil {
+			return nil, err
+		}
+
+		handleReturn(singleShard, keyIndices, namespacedKeys[singleShard], vals, results)
+		return results, nil
+	}
+
 	returnVals := make([][]interface{}, len(ms.clients))
 	wg := sync.WaitGroup{}
 	haveErrors := false
 	finalErr := make(MultiError, len(ms.clients))
+
 	for shard := 0; shard < len(ms.clients); shard++ {
 		shardKeys := namespacedKeys[shard]
 		if len(shardKeys) == 0 {
@@ -569,7 +636,7 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 		shard := shard
 		go func() {
 			defer wg.Done()
-			vals, err := ms.clients[shard].MGet(shardKeys...)
+			vals, err := getMultiForShard(shard, keyIndices, shardKeys)
 			returnVals[shard] = vals
 			if err != nil {
 				finalErr[shard] = err
@@ -580,22 +647,9 @@ func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 
 	wg.Wait()
 
+	results := make(map[string]*CacheItem, len(keys))
 	for shard, shardVals := range returnVals {
-		for i, val := range shardVals {
-			if val == nil {
-				// Not found
-				continue
-			}
-			valBytes := ms.convertToByteSlice(val)
-			valCopy := make([]byte, len(valBytes))
-			copy(valCopy, valBytes)
-			key := keys[keyIndices[namespacedKeys[shard][i]]]
-			results[key] = &CacheItem{
-				Key:            key,
-				Value:          valBytes,
-				valueOnLastGet: valCopy,
-			}
-		}
+		handleReturn(shard, keyIndices, namespacedKeys[shard], shardVals, results)
 	}
 
 	if haveErrors {
@@ -647,9 +701,31 @@ func (ms Memorystore) Set(item *CacheItem) error {
 }
 
 func (ms Memorystore) SetMulti(items []*CacheItem) error {
-	namespacedKeys, itemIndices := ms.shardedNamespacedKeysForItems(items)
+	setMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) error {
+		pipe := ms.clients[shard].TxPipeline()
+		for i, key := range shardKeys {
+			item := items[itemIndices[shardKeys[i]]]
+			pipe.Set(key, item.Value, item.Expiration)
+		}
+		_, err := pipe.Exec()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	namespacedKeys, itemIndices, singleShard := ms.shardedNamespacedKeysForItems(items)
+
+	if singleShard >= 0 {
+		if err := setMultiForShard(singleShard, itemIndices, namespacedKeys[singleShard]); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	errs := make(chan error, len(ms.clients))
 	wg := sync.WaitGroup{}
+
 	for shard := 0; shard < len(ms.clients); shard++ {
 		if len(namespacedKeys[shard]) == 0 {
 			continue
@@ -659,14 +735,7 @@ func (ms Memorystore) SetMulti(items []*CacheItem) error {
 		go func() {
 			defer wg.Done()
 			shardKeys := namespacedKeys[shard]
-
-			pipe := ms.clients[shard].TxPipeline()
-			for i, key := range shardKeys {
-				item := items[itemIndices[shardKeys[i]]]
-				pipe.Set(key, item.Value, item.Expiration)
-			}
-			_, err := pipe.Exec()
-			if err != nil {
+			if err := setMultiForShard(shard, itemIndices, shardKeys); err != nil {
 				errs <- err
 			}
 		}()
@@ -681,5 +750,9 @@ func (ms Memorystore) SetMulti(items []*CacheItem) error {
 }
 
 func (ms Memorystore) Namespace(ns string) Memcache {
-	return Memorystore{ms.c, ms.clients, ns}
+	return Memorystore{ms.c, ms.clients, ns, ms.keyHashFn}
+}
+
+func defaultKeyHashFn(key string, shardCount int) int {
+	return int(xxhash.Sum64String(key) % uint64(shardCount))
 }
