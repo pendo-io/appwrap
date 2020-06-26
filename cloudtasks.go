@@ -64,7 +64,7 @@ func newCloudTaskqueue(c context.Context, loc CloudTasksLocation) Taskqueue {
 	return cloudTaskqueue{
 		client:   *tqClient,
 		ctx:      c,
-		project:  aeInfo.AppID(),
+		project:  aeInfo.AppIDHosted(),
 		location: loc,
 	}
 }

@@ -94,7 +94,7 @@ type StackdriverLoggingService struct {
 func newStackdriverLoggingService(client LoggerClientInterface, appInfo AppengineInfo, log Logging) LoggingServiceInterface {
 	client.SetUpOnError()
 
-	projectId := appInfo.AppID()
+	projectId := appInfo.AppIDHosted()
 	versionSplit := strings.Split(appInfo.VersionID(), ".")
 	versionId := versionSplit[0]
 	moduleName := appInfo.ModuleName()

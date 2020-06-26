@@ -31,6 +31,10 @@ func (ai AppengineInfoFlex) AppID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT_OVERRIDE")
 }
 
+func (ai AppengineInfoFlex) AppIDHosted() string {
+	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+}
+
 func (ai AppengineInfoFlex) InstanceID() string {
 	return os.Getenv("GAE_INSTANCE")
 }

@@ -65,7 +65,7 @@ func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *loggin
 		Labels: map[string]string{
 			"module_id":  aeInfo.ModuleName(),
 			"version_id": aeInfo.VersionID(),
-			"project_id": aeInfo.AppID(),
+			"project_id": aeInfo.AppIDHosted(),
 		},
 	}), logging.DelayThreshold(loggingFlushTimeTrigger), logging.EntryByteThreshold(loggingFlushSizeTrigger), logging.EntryCountThreshold(loggingFlushCountTrigger))
 }
@@ -96,7 +96,7 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) (context.Context, func()) {
 	aeInfo := NewAppengineInfoFromContext(c)
 
-	project := aeInfo.AppID()
+	project := aeInfo.AppIDHosted()
 	if project == "" {
 		panic("aelog: no GCP project set in environment")
 	}
@@ -137,7 +137,7 @@ func AddSharedLogClientToBackgroundContext(c context.Context, logName string) co
 	}
 
 	aeInfo := NewAppengineInfoFromContext(c)
-	project := aeInfo.AppID()
+	project := aeInfo.AppIDHosted()
 	if project == "" {
 		panic("aelog: no GCP project set in environment")
 	}
@@ -209,7 +209,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 	ctx := context.Background()
 	aeInfo := NewAppengineInfoFromContext(ctx)
 
-	project := aeInfo.AppID()
+	project := aeInfo.AppIDHosted()
 	if project == "" {
 		panic("aelog: no GCP project set in environment")
 	}
