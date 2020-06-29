@@ -30,7 +30,7 @@ func (s *StackdriverLoggingTests) SetUpTest(c *C) {
 
 	s.clientMock.On("SetUpOnError").Return().Once()
 	s.appInfoMock.On("ModuleName").Return("my-module").Once()
-	s.appInfoMock.On("AppID").Return("my-project").Once()
+	s.appInfoMock.On("AppIDHosted").Return("my-project").Once()
 	s.appInfoMock.On("VersionID").Return("my-version").Once()
 
 	s.sl = newStackdriverLoggingService(s.clientMock, s.appInfoMock, NullLogger{}).(*StackdriverLoggingService)

@@ -143,7 +143,7 @@ func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
 	mocks := []*redisClientMock{{}, {}}
 	ms := memorystoreService{clients: &[]redisClientInterface{mocks[0], mocks[1]}}
 	appInfo := &AppengineInfoMock{}
-	appInfo.On("AppID").Return("pendo-devserver").Maybe()
+	appInfo.On("AppIDHosted").Return("pendo-devserver").Maybe()
 	m, err := ms.NewMemcache(context.Background(), appInfo, "", "", 2)
 	if err != nil {
 		panic(err)
@@ -162,7 +162,7 @@ func (s *MemorystoreTest) SetUpTest(c *C) {
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver")
+	appMock.On("AppIDHosted").Return("pendo-devserver")
 
 	connFn := func(ctx context.Context) (redisAPIService, error) {
 		apiMock := &redisAPIServiceMock{} // we don't assert expectations because collecting this is very hard, but that's OK: other tests verify these calls actually happen
@@ -207,7 +207,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 
 func (s *MemorystoreTest) TestAPIConnectError(c *C) {
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver")
+	appMock.On("AppIDHosted").Return("pendo-devserver")
 
 	apiMock := &redisAPIServiceMock{}
 	ms := memorystoreService{} // connectFn to be set below before each call
@@ -248,7 +248,7 @@ func (s *MemorystoreTest) TestAPIConnectError(c *C) {
 
 func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver")
+	appMock.On("AppIDHosted").Return("pendo-devserver")
 
 	apiMock := &redisAPIServiceMock{}
 	ms := memorystoreService{connectFn: func(context.Context) (redisAPIService, error) { return apiMock, nil }}
@@ -284,7 +284,7 @@ func (s *MemorystoreTest) TestAPIGetAddrError(c *C) {
 
 func (s *MemorystoreTest) TestGetAddrKeepShards(c *C) {
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver")
+	appMock.On("AppIDHosted").Return("pendo-devserver")
 
 	apiMock := &redisAPIServiceMock{}
 	mockShard := func(shard int, succeeds bool) {
@@ -367,7 +367,7 @@ func (s *MemorystoreTest) TestPoolStats(c *C) {
 
 	ms := memorystoreService{clients: &[]redisClientInterface{clientMock}}
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver").Maybe()
+	appMock.On("AppIDHosted").Return("pendo-devserver").Maybe()
 	c.Assert(os.Setenv(metrics.EnvMetricsRecordingIntervalSeconds, "1"), IsNil)
 	metrics.ParseRecordingIntervalFromEnvironment()
 
