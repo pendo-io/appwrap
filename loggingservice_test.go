@@ -49,12 +49,12 @@ func (mock *AppengineInfoMock) ModuleHasTraffic(moduleName, moduleVersion string
 	return args.Bool(0), args.Error(1)
 }
 
-func (mock *AppengineInfoMock) AppID() string {
+func (mock *AppengineInfoMock) DataProjectID() string {
 	args := mock.Called()
 	return args.String(0)
 }
 
-func (mock *AppengineInfoMock) AppIDHosted() string {
+func (mock *AppengineInfoMock) NativeProjectID() string {
 	args := mock.Called()
 	return args.String(0)
 }
@@ -132,7 +132,7 @@ func (s *StackdriverLoggingServiceTests) TestLogImplementsSimpleLogging(c *C) {
 
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
-	f.appInfoMock.On("AppIDHosted").Return("my-project").Once()
+	f.appInfoMock.On("NativeProjectID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version").Once()
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
@@ -148,7 +148,7 @@ func (s *StackdriverLoggingServiceTests) TestLogCommonAppEngineLabels(c *C) {
 
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
-	f.appInfoMock.On("AppIDHosted").Return("my-project").Once()
+	f.appInfoMock.On("NativeProjectID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
 
@@ -164,7 +164,7 @@ func (s *StackdriverLoggingServiceTests) TestLogBaseVersion(c *C) {
 
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
-	f.appInfoMock.On("AppIDHosted").Return("my-project").Once()
+	f.appInfoMock.On("NativeProjectID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 
 	service := newStackdriverLoggingService(f.clientMock, f.appInfoMock, f.log).(*StackdriverLoggingService)
@@ -180,7 +180,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceProcessLogAndClose(c *C) 
 	start := time.Now()
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
-	f.appInfoMock.On("AppIDHosted").Return("my-project").Once()
+	f.appInfoMock.On("NativeProjectID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 
 	loggerMock1 := &LoggerMock{}
@@ -221,7 +221,7 @@ func (s *StackdriverLoggingServiceTests) TestLogServiceClose(c *C) {
 
 	f.clientMock.On("SetUpOnError").Return().Once()
 	f.appInfoMock.On("ModuleName").Return("my-module").Once()
-	f.appInfoMock.On("AppIDHosted").Return("my-project").Once()
+	f.appInfoMock.On("NativeProjectID").Return("my-project").Once()
 	f.appInfoMock.On("VersionID").Return("my-version.12345").Once()
 	f.clientMock.On("Close").Return(nil).Once()
 
