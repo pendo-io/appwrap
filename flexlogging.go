@@ -36,7 +36,7 @@ func NewAppengineLogging(c context.Context) Logging {
 }
 
 func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo) LoggingServiceInterface {
-	client, err := logging.NewClient(c, aeInfo.AppID())
+	client, err := logging.NewClient(c, aeInfo.NativeProjectID())
 	if err != nil {
 		panic(fmt.Sprintf("unable to configure stackdriver logger: %s", err.Error()))
 	}

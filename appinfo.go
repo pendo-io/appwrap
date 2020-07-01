@@ -3,7 +3,8 @@ package appwrap
 import "google.golang.org/appengine"
 
 type AppengineInfo interface {
-	AppID() string
+	DataProjectID() string
+	NativeProjectID() string
 	InstanceID() string
 	ModuleDefaultVersionID(moduleName string) (string, error)
 	ModuleHasTraffic(moduleName, moduleVersion string) (bool, error)

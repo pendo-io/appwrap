@@ -225,7 +225,7 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 	}
 	defer client.Close()
 
-	projectId := appInfo.AppID()
+	projectId := appInfo.NativeProjectID()
 
 	if ms.addrs == nil {
 		ms.addrs = make([]string, shards)

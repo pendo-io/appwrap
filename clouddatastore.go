@@ -128,7 +128,7 @@ func NewCloudDatastore(c context.Context) (Datastore, error) {
 					Time: 5 * time.Minute,
 				})),
 			}
-			if dsClient, err = datastore.NewClient(context.Background(), aeInfo.AppID(), o...); err != nil {
+			if dsClient, err = datastore.NewClient(context.Background(), aeInfo.DataProjectID(), o...); err != nil {
 				return nil, convertIfMultiError(err)
 			}
 
