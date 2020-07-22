@@ -11,10 +11,6 @@ import (
 type Taskqueue interface {
 	Add(c context.Context, task CloudTask, queueName string) (CloudTask, error)
 	AddMulti(c context.Context, tasks []CloudTask, queueName string) ([]CloudTask, error)
-	DeleteMulti(c context.Context, tasks []AppEngineTask, queueName string) error
-	Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error)
-	LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error)
-	ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error
 	NewAppEngineCloudTask(path string, params url.Values) AppEngineTask
 	NewHttpCloudTask(serviceAccount string, url string, method string, data []byte, headers http.Header) HttpTask
 }
@@ -31,8 +27,6 @@ type CloudTask interface {
 	SetName(name string)
 	RetryCount() int32
 	SetRetryCount(count int32)
-	Tag() string
-	SetTag(tag string)
 	Copy() CloudTask
 	Header() http.Header
 	SetHeader(header http.Header)

@@ -207,7 +207,7 @@ func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
 
 func (s *MemorystoreTest) TestNewAppengineRateLimitedMemcache(c *C) {
 	appMock := &AppengineInfoMock{}
-	appMock.On("AppID").Return("pendo-devserver")
+	appMock.On("NativeProjectID").Return("pendo-devserver")
 	limiterMock := &LimiterMock{}
 	log := NewWriterLogger(os.Stdout)
 

@@ -95,14 +95,6 @@ func (t *cloudTaskAppEngineImpl) SetRetryCount(count int32) {
 	t.task.DispatchCount = count
 }
 
-func (t *cloudTaskAppEngineImpl) Tag() (tag string) {
-	panic("not implemented for CloudTasks")
-}
-
-func (t *cloudTaskAppEngineImpl) SetTag(tag string) {
-	panic("not implemented for CloudTasks")
-}
-
 func (t *cloudTaskAppEngineImpl) Header() http.Header {
 	req := t.task.GetAppEngineHttpRequest()
 	header := make(http.Header, len(req.Headers))

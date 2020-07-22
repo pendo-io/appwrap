@@ -109,22 +109,6 @@ func (t cloudTaskqueue) AddMulti(c context.Context, tasks []CloudTask, queueName
 	return addedTasks, nil
 }
 
-func (t cloudTaskqueue) DeleteMulti(c context.Context, tasks []AppEngineTask, queueName string) error {
-	panic("not implemented for CloudTasks")
-}
-
-func (t cloudTaskqueue) Lease(c context.Context, maxTasks int, queueName string, leaseTime int) ([]AppEngineTask, error) {
-	panic("not implemented for CloudTasks")
-}
-
-func (t cloudTaskqueue) LeaseByTag(c context.Context, maxTasks int, queueName string, leaseTime int, tag string) ([]AppEngineTask, error) {
-	panic("not implemented for CloudTasks")
-}
-
-func (t cloudTaskqueue) ModifyLease(c context.Context, task AppEngineTask, queueName string, leaseTime int) error {
-	panic("not implemented for CloudTasks")
-}
-
 func (t cloudTaskqueue) NewAppEngineCloudTask(path string, params url.Values) AppEngineTask {
 	task := NewAppEngineTask()
 	h := make(http.Header)
