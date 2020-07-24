@@ -509,3 +509,27 @@ func (dsit *AppengineInterfacesTest) TestQueryInsideTransaction(c *C) {
 		return nil
 	}, nil)
 }
+
+func (dsit *AppengineInterfacesTest) TestProjectionQuery(c *C) {
+	type e struct {
+		Foo string
+		Bar string
+	}
+
+	entity := e{"hello", "banana"}
+
+	ds := dsit.newDatastore()
+	k1 := ds.NewKey("entity", "", 1, nil)
+
+	ds.Put(k1, &entity)
+
+	q := ds.NewQuery("entity").Project("Foo")
+
+	iter := q.Run()
+	res := e{}
+	_, err := iter.Next(&res)
+	c.Assert(err, IsNil)
+
+	c.Assert(res.Foo, Equals, "hello")
+	c.Assert(res.Bar, Equals, "")
+}

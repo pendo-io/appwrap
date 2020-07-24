@@ -198,7 +198,7 @@ func (a dsItemListSorter) less(i, j int) bool {
 func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) error {
 	props := item.props
 	if fields != nil {
-		props := make([]AppwrapProperty, 0, len(fields))
+		props = make([]AppwrapProperty, 0, len(fields))
 		for _, prop := range item.props {
 			if fields[prop.Name] {
 				props = append(props, prop)
