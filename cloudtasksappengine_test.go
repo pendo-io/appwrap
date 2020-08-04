@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
@@ -266,8 +267,10 @@ func (s *CloudTasksAppEngineTest) TestAddAppEngineTask(c *C) {
 	}, []gax.CallOption(nil)).Return(task.task, nil).Once()
 
 	added, err := tq.Add(ctx, task, "grocery-store")
-	c.Assert(added, Not(Equals), expectTask)                                    // not same pointer (copied)...
-	c.Assert(added.(*cloudTaskAppEngineImpl).task, DeepEquals, expectTask.task) // ...but has same content
+
+	c.Assert(added, Not(Equals), expectTask)                                   // not same pointer (copied)...
+	c.Assert(proto.Equal(added.(*cloudTaskAppEngineImpl).task, expectTask.task), IsTrue) // ...but has same content
+
 	_, isAppEngineTask := added.(AppEngineTask)
 	c.Assert(isAppEngineTask, IsTrue)
 	c.Assert(err, IsNil)
@@ -308,7 +311,7 @@ func (s *CloudTasksAppEngineTest) TestAddMulti(c *C) {
 	c.Assert(added[0], Not(Equals), expectTasks[0]) // not same pointer (copied)...
 	c.Assert(added[1], Not(Equals), expectTasks[1]) //...
 	for i, addedTask := range added {
-		c.Assert(addedTask.(*cloudTaskAppEngineImpl).task, DeepEquals, expectTasks[i].task) // ...but has same content
+		c.Assert(proto.Equal(addedTask.(*cloudTaskAppEngineImpl).task, expectTasks[i].task), IsTrue) // ...but has same content
 	}
 	c.Assert(err, IsNil)
 	// IsNil isn't enough - need to make sure it's not a nil slice (since MultiError is a slice type)
@@ -339,7 +342,7 @@ func (s *CloudTasksAppEngineTest) TestAddMulti(c *C) {
 	added, err = tq.AddMulti(ctx, tasks, "grocery-store")
 	c.Assert(added[0], Not(Equals), expectTasks[0])
 	for i, task := range added {
-		c.Assert(task.(*cloudTaskAppEngineImpl).task, DeepEquals, expectTasks[i].task)
+		c.Assert(proto.Equal(task.(*cloudTaskAppEngineImpl).task, expectTasks[i].task), IsTrue) // ...but has same content
 	}
 	c.Assert(err, DeepEquals, expectedErr)
 	checkMocks()
