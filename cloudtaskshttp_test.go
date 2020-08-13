@@ -3,6 +3,7 @@ package appwrap
 import (
 	"bytes"
 	"context"
+	"github.com/golang/protobuf/proto"
 	"net/http"
 	"time"
 
@@ -247,7 +248,7 @@ func (s *HttpCloudTasksTest) TestHttpAdd(c *C) {
 	c.Assert(added, Not(Equals), expectTask) // not same pointer (copied)...
 	_, isHttpTask := added.(HttpTask)
 	c.Assert(isHttpTask, IsTrue)
-	c.Assert(added.(*cloudTaskHttpImpl).task, DeepEquals, expectTask.task) // ...but has same content
+	c.Assert(proto.Equal(added.(*cloudTaskHttpImpl).task, expectTask.task), IsTrue) // ...but has same content
 	c.Assert(err, IsNil)
 	checkMocks()
 }
