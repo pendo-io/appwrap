@@ -533,3 +533,28 @@ func (dsit *AppengineInterfacesTest) TestProjectionQuery(c *C) {
 	c.Assert(res.Foo, Equals, "hello")
 	c.Assert(res.Bar, Equals, "")
 }
+
+func (dsit *AppengineInterfacesTest) TestGetWithIncompleteKeyShouldFail(c *C) {
+	ds := dsit.newDatastore()
+
+	k := ds.NewKey("entity", "", 1, nil)
+	c.Assert(k.Incomplete(), IsFalse)
+
+	incKey := ds.NewKey("entity", "", 0, nil)
+	c.Assert(incKey.Incomplete(), IsTrue)
+
+	type whatever struct {
+		however string
+	}
+	var w whatever
+	c.Assert(ds.Get(incKey, &w), Equals, ErrInvalidKey)
+
+	wList := make([]whatever, 2)
+	err := ds.GetMulti([]*DatastoreKey{k, incKey}, wList)
+	c.Assert(err, NotNil)
+	c.Assert(err, FitsTypeOf, MultiError{})
+	me := err.(MultiError)
+	c.Assert(me, HasLen, 2)
+	c.Assert(me[0], Equals, ErrNoSuchEntity)
+	c.Assert(me[1], Equals, ErrInvalidKey)
+}
