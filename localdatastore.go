@@ -361,6 +361,9 @@ func (ds *LocalDatastore) get(keyStr string) (item *dsItem, found bool) {
 }
 
 func (ds *LocalDatastore) Get(k *DatastoreKey, dst interface{}) error {
+	if k.Incomplete() {
+		return ErrInvalidKey
+	}
 	if item, exists := ds.get(k.String()); !exists {
 		return ErrNoSuchEntity
 	} else {
