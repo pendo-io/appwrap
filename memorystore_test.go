@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
@@ -34,38 +34,38 @@ type redisClientMock struct {
 	mock.Mock
 }
 
-func (m *redisClientMock) Del(keys ...string) error {
-	args := m.Called(keys)
+func (m *redisClientMock) Del(ctx context.Context, keys ...string) error {
+	args := m.Called(ctx, keys)
 	return args.Error(0)
 }
 
-func (m *redisClientMock) Exists(keys ...string) (int64, error) {
-	args := m.Called(keys)
+func (m *redisClientMock) Exists(ctx context.Context, keys ...string) (int64, error) {
+	args := m.Called(ctx, keys)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *redisClientMock) FlushAll() error {
-	args := m.Called()
+func (m *redisClientMock) FlushAll(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
-func (m *redisClientMock) FlushAllAsync() error {
-	args := m.Called()
+func (m *redisClientMock) FlushAllAsync(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
-func (m *redisClientMock) Get(key string) ([]byte, error) {
-	args := m.Called(key)
+func (m *redisClientMock) Get(ctx context.Context, key string) ([]byte, error) {
+	args := m.Called(ctx, key)
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *redisClientMock) IncrBy(key string, value int64) (int64, error) {
-	args := m.Called(key, value)
+func (m *redisClientMock) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
+	args := m.Called(ctx, key, value)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *redisClientMock) MGet(keys ...string) ([]interface{}, error) {
-	args := m.Called(keys)
+func (m *redisClientMock) MGet(ctx context.Context, keys ...string) ([]interface{}, error) {
+	args := m.Called(ctx, keys)
 	return args.Get(0).([]interface{}), args.Error(1)
 }
 
@@ -74,13 +74,13 @@ func (m *redisClientMock) PoolStats() *redis.PoolStats {
 	return args.Get(0).(*redis.PoolStats)
 }
 
-func (m *redisClientMock) Set(key string, value interface{}, expiration time.Duration) error {
-	args := m.Called(key, value, expiration)
+func (m *redisClientMock) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	args := m.Called(ctx, key, value, expiration)
 	return args.Error(0)
 }
 
-func (m *redisClientMock) SetNX(key string, value interface{}, expiration time.Duration) (bool, error) {
-	args := m.Called(key, value, expiration)
+func (m *redisClientMock) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	args := m.Called(ctx, key, value, expiration)
 	return args.Get(0).(bool), args.Error(1)
 }
 
@@ -89,8 +89,8 @@ func (m *redisClientMock) TxPipeline() redisPipelineInterface {
 	return args.Get(0).(redisPipelineInterface)
 }
 
-func (m *redisClientMock) Watch(fn func(*redis.Tx) error, keys ...string) error {
-	args := m.Called(fn, keys)
+func (m *redisClientMock) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
+	args := m.Called(ctx, fn, keys)
 	return args.Error(0)
 }
 
@@ -98,21 +98,21 @@ type redisPipelineMock struct {
 	mock.Mock
 }
 
-func (m *redisPipelineMock) Exec() ([]redis.Cmder, error) {
-	args := m.Called()
+func (m *redisPipelineMock) Exec(ctx context.Context) ([]redis.Cmder, error) {
+	args := m.Called(ctx)
 	return args.Get(0).([]redis.Cmder), args.Error(1)
 }
 
-func (m *redisPipelineMock) IncrBy(key string, value int64) {
-	m.Called(key, value)
+func (m *redisPipelineMock) IncrBy(ctx context.Context, key string, value int64) {
+	m.Called(ctx, key, value)
 }
 
-func (m *redisPipelineMock) Set(key string, value interface{}, expiration time.Duration) {
-	m.Called(key, value, expiration)
+func (m *redisPipelineMock) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	m.Called(ctx, key, value, expiration)
 }
 
-func (m *redisPipelineMock) SetNX(key string, value interface{}, expiration time.Duration) {
-	m.Called(key, value, expiration)
+func (m *redisPipelineMock) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	m.Called(ctx, key, value, expiration)
 }
 
 type intCmdMock struct {
@@ -426,20 +426,20 @@ func (s *MemorystoreTest) TestAdd(c *C) {
 		Expiration: time.Duration(0),
 	}
 	fullKey, _ := ms.namespacedKeyAndShard(item.Key)
-	clientMocks[1].On("SetNX", fullKey, item.Value, item.Expiration).Return(true, nil).Once()
+	clientMocks[1].On("SetNX", ms.c, fullKey, item.Value, item.Expiration).Return(true, nil).Once()
 	err := ms.Add(item)
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// not added because it already exists
-	clientMocks[1].On("SetNX", fullKey, item.Value, item.Expiration).Return(false, nil).Once()
+	clientMocks[1].On("SetNX", ms.c, fullKey, item.Value, item.Expiration).Return(false, nil).Once()
 	err = ms.Add(item)
 	c.Assert(err, Equals, CacheErrNotStored)
 	checkMocks()
 
 	// other error
 	fatalErr := errors.New("aaaah!")
-	clientMocks[1].On("SetNX", fullKey, item.Value, item.Expiration).Return(false, fatalErr).Once()
+	clientMocks[1].On("SetNX", ms.c, fullKey, item.Value, item.Expiration).Return(false, fatalErr).Once()
 	err = ms.Add(item)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
@@ -477,10 +477,10 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	fullKey1, _ := ms.namespacedKeyAndShard(items[1].Key)
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
-	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
-	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
-	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
-	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	pipeMock0.On("SetNX", ms.c, fullKey0, items[0].Value, items[0].Expiration).Once()
+	pipeMock1.On("SetNX", ms.c, fullKey1, items[1].Value, items[1].Expiration).Once()
+	pipeMock0.On("Exec", ms.c).Return([]redis.Cmder{resultMock0}, nil).Once()
+	pipeMock1.On("Exec", ms.c).Return([]redis.Cmder{resultMock1}, nil).Once()
 	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
 	resultMock1.On("Err").Return(nil).Once()
@@ -499,8 +499,8 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	}
 	fullKey0, _ = ms.namespacedKeyAndShard(items[0].Key)
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
-	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
-	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
+	pipeMock0.On("SetNX", ms.c, fullKey0, items[0].Value, items[0].Expiration).Once()
+	pipeMock0.On("Exec", ms.c).Return([]redis.Cmder{resultMock0}, nil).Once()
 	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
 	err = ms.AddMulti(items)
@@ -522,10 +522,10 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	}
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
-	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
-	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
-	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
-	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	pipeMock0.On("SetNX", ms.c, fullKey0, items[0].Value, items[0].Expiration).Once()
+	pipeMock1.On("SetNX", ms.c, fullKey1, items[1].Value, items[1].Expiration).Once()
+	pipeMock0.On("Exec", ms.c).Return([]redis.Cmder{resultMock0}, nil).Once()
+	pipeMock1.On("Exec", ms.c).Return([]redis.Cmder{resultMock1}, nil).Once()
 	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
 	resultMock1.On("Err").Return(nil).Once()
@@ -538,10 +538,10 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	fatalErr := errors.New("aaaah")
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
-	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
-	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
-	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
-	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	pipeMock0.On("SetNX", ms.c, fullKey0, items[0].Value, items[0].Expiration).Once()
+	pipeMock1.On("SetNX", ms.c, fullKey1, items[1].Value, items[1].Expiration).Once()
+	pipeMock0.On("Exec", ms.c).Return([]redis.Cmder{resultMock0}, nil).Once()
+	pipeMock1.On("Exec", ms.c).Return([]redis.Cmder{resultMock1}, nil).Once()
 	resultMock0.On("Err").Return(fatalErr).Once()
 	resultMock1.On("Err").Return(nil).Once()
 	resultMock1.On("Result").Return(true, nil).Once()
@@ -552,10 +552,10 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	// error on exec
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
-	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
-	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
-	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, fatalErr).Once()
-	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	pipeMock0.On("SetNX", ms.c, fullKey0, items[0].Value, items[0].Expiration).Once()
+	pipeMock1.On("SetNX", ms.c, fullKey1, items[1].Value, items[1].Expiration).Once()
+	pipeMock0.On("Exec", ms.c).Return([]redis.Cmder{resultMock0}, fatalErr).Once()
+	pipeMock1.On("Exec", ms.c).Return([]redis.Cmder{resultMock1}, nil).Once()
 	err = ms.AddMulti(items)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
@@ -575,20 +575,20 @@ func (s *MemorystoreTest) TestCompareAndSwap(c *C) {
 		Expiration: time.Duration(0),
 	}
 	fullKey, _ := ms.namespacedKeyAndShard(item.Key)
-	clientMocks[0].On("Watch", mock.Anything, []string{fullKey}).Return(nil).Once()
+	clientMocks[0].On("Watch", ms.c, mock.Anything, []string{fullKey}).Return(nil).Once()
 	err := ms.CompareAndSwap(item)
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// TxFailedErr should become CASConflict
-	clientMocks[0].On("Watch", mock.Anything, []string{fullKey}).Return(redis.TxFailedErr).Once()
+	clientMocks[0].On("Watch", ms.c, mock.Anything, []string{fullKey}).Return(redis.TxFailedErr).Once()
 	err = ms.CompareAndSwap(item)
 	c.Assert(err, Equals, CacheErrCASConflict)
 	checkMocks()
 
 	// other error
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("Watch", mock.Anything, []string{fullKey}).Return(fatalErr).Once()
+	clientMocks[0].On("Watch", ms.c, mock.Anything, []string{fullKey}).Return(fatalErr).Once()
 	err = ms.CompareAndSwap(item)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
@@ -611,38 +611,38 @@ func (s *MemorystoreTest) TestDoCompareAndSwap(c *C) {
 		Expiration:     time.Duration(0),
 	}
 	fullKey, _ := ms.namespacedKeyAndShard(item.Key)
-	clientMocks[0].On("Get", fullKey).Return([]byte("banana"), nil).Once()
+	clientMocks[0].On("Get", ms.c, fullKey).Return([]byte("banana"), nil).Once()
 	clientMocks[0].On("TxPipeline").Return(pipeMock).Once()
-	pipeMock.On("Set", fullKey, item.Value, item.Expiration).Once()
-	pipeMock.On("Exec").Return(([]redis.Cmder)(nil), nil).Once()
+	pipeMock.On("Set", ms.c, fullKey, item.Value, item.Expiration).Once()
+	pipeMock.On("Exec", ms.c).Return(([]redis.Cmder)(nil), nil).Once()
 	err := ms.doCompareAndSwap(item, clientMocks[0], fullKey)
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// Item does not exist
-	clientMocks[0].On("Get", fullKey).Return(([]byte)(nil), ErrCacheMiss).Once()
+	clientMocks[0].On("Get", ms.c, fullKey).Return(([]byte)(nil), ErrCacheMiss).Once()
 	err = ms.doCompareAndSwap(item, clientMocks[0], fullKey)
 	c.Assert(err, Equals, CacheErrNotStored)
 	checkMocks()
 
 	// Other error on Get
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("Get", fullKey).Return(([]byte)(nil), fatalErr).Once()
+	clientMocks[0].On("Get", ms.c, fullKey).Return(([]byte)(nil), fatalErr).Once()
 	err = ms.doCompareAndSwap(item, clientMocks[0], fullKey)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
 
 	// Value modified outside of transaction, cannot CAS
-	clientMocks[0].On("Get", fullKey).Return([]byte("not-a-banana"), nil).Once()
+	clientMocks[0].On("Get", ms.c, fullKey).Return([]byte("not-a-banana"), nil).Once()
 	err = ms.doCompareAndSwap(item, clientMocks[0], fullKey)
 	c.Assert(err, Equals, CacheErrCASConflict)
 	checkMocks()
 
 	// Exec error, should be returned
-	clientMocks[0].On("Get", fullKey).Return([]byte("banana"), nil).Once()
+	clientMocks[0].On("Get", ms.c, fullKey).Return([]byte("banana"), nil).Once()
 	clientMocks[0].On("TxPipeline").Return(pipeMock).Once()
-	pipeMock.On("Set", fullKey, item.Value, item.Expiration).Once()
-	pipeMock.On("Exec").Return(([]redis.Cmder)(nil), fatalErr).Once()
+	pipeMock.On("Set", ms.c, fullKey, item.Value, item.Expiration).Once()
+	pipeMock.On("Exec", ms.c).Return(([]redis.Cmder)(nil), fatalErr).Once()
 	err = ms.doCompareAndSwap(item, clientMocks[0], fullKey)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
@@ -659,14 +659,14 @@ func (s *MemorystoreTest) TestDelete(c *C) {
 	// success case
 	key := "banana1"
 	fullKey, _ := ms.namespacedKeyAndShard(key)
-	clientMocks[0].On("Del", []string{fullKey}).Return(nil).Once()
+	clientMocks[0].On("Del", ms.c, []string{fullKey}).Return(nil).Once()
 	err := ms.Delete(key)
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// error case
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("Del", []string{fullKey}).Return(fatalErr).Once()
+	clientMocks[0].On("Del", ms.c, []string{fullKey}).Return(fatalErr).Once()
 	err = ms.Delete(key)
 	c.Assert(err, DeepEquals, MultiError{fatalErr})
 	checkMocks()
@@ -685,16 +685,16 @@ func (s *MemorystoreTest) TestDeleteMulti(c *C) {
 	fullKey0, _ := ms.namespacedKeyAndShard(key0)
 	key1 := "pear1"
 	fullKey1, _ := ms.namespacedKeyAndShard(key1)
-	clientMocks[0].On("Del", []string{fullKey0}).Return(nil).Once()
-	clientMocks[1].On("Del", []string{fullKey1}).Return(nil).Once()
+	clientMocks[0].On("Del", ms.c, []string{fullKey0}).Return(nil).Once()
+	clientMocks[1].On("Del", ms.c, []string{fullKey1}).Return(nil).Once()
 	err := ms.DeleteMulti([]string{key0, key1})
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// error case
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("Del", []string{fullKey0}).Return(fatalErr).Once()
-	clientMocks[1].On("Del", []string{fullKey1}).Return(nil).Once()
+	clientMocks[0].On("Del", ms.c, []string{fullKey0}).Return(fatalErr).Once()
+	clientMocks[1].On("Del", ms.c, []string{fullKey1}).Return(nil).Once()
 	err = ms.DeleteMulti([]string{key0, key1})
 	c.Assert(err, DeepEquals, MultiError{fatalErr})
 	checkMocks()
@@ -717,16 +717,16 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		}
 
 		// success case
-		clientMocks[0].On("FlushAll").Return(nil).Once()
-		clientMocks[1].On("FlushAll").Return(nil).Once()
+		clientMocks[0].On("FlushAll", ms.c).Return(nil).Once()
+		clientMocks[1].On("FlushAll", ms.c).Return(nil).Once()
 		err := ms.Flush()
 		c.Assert(err, IsNil)
 		checkMocks()
 
 		// error case
 		fatalErr := errors.New("aaaah")
-		clientMocks[0].On("FlushAll").Return(fatalErr).Once()
-		clientMocks[1].On("FlushAll").Return(nil).Once()
+		clientMocks[0].On("FlushAll", ms.c).Return(fatalErr).Once()
+		clientMocks[1].On("FlushAll", ms.c).Return(nil).Once()
 		err = ms.Flush()
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
@@ -741,12 +741,12 @@ func (s *MemorystoreTest) TestFlushShard(c *C) {
 		clientMocks[1].AssertExpectations(c)
 	}
 
-	clientMocks[0].On("FlushAllAsync").Return(nil).Once()
+	clientMocks[0].On("FlushAllAsync", ms.c).Return(nil).Once()
 	err := ms.FlushShard(0)
 	c.Assert(err, IsNil)
 	checkMocks()
 
-	clientMocks[1].On("FlushAllAsync").Return(nil).Once()
+	clientMocks[1].On("FlushAllAsync", ms.c).Return(nil).Once()
 	err = ms.FlushShard(1)
 	c.Assert(err, IsNil)
 	checkMocks()
@@ -758,7 +758,7 @@ func (s *MemorystoreTest) TestFlushShard(c *C) {
 	c.Assert(err, ErrorMatches, "shard must be in range.*")
 
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("FlushAllAsync").Return(fatalErr).Once()
+	clientMocks[0].On("FlushAllAsync", ms.c).Return(fatalErr).Once()
 	err = ms.FlushShard(0)
 	c.Assert(err, Equals, fatalErr)
 }
@@ -775,7 +775,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 	key := "pear1"
 	val := []byte("woohoo")
 	fullKey, _ := ms.namespacedKeyAndShard(key)
-	clientMocks[1].On("Get", fullKey).Return(val, nil).Once()
+	clientMocks[1].On("Get", ms.c, fullKey).Return(val, nil).Once()
 	item, err := ms.Get(key)
 	c.Assert(err, IsNil)
 	c.Assert(item, DeepEquals, &CacheItem{
@@ -788,7 +788,7 @@ func (s *MemorystoreTest) TestGet(c *C) {
 
 	// error case
 	fatalErr := errors.New("aaaah")
-	clientMocks[1].On("Get", fullKey).Return(val, fatalErr).Once()
+	clientMocks[1].On("Get", ms.c, fullKey).Return(val, fatalErr).Once()
 	item, err = ms.Get(key)
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(item, IsNil)
@@ -820,8 +820,8 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 		[]byte("apple tree"),
 		nil, // indicates not found
 	}
-	clientMocks[0].On("MGet", shard0Keys).Return(shard0Vals, nil).Once()
-	clientMocks[1].On("MGet", shard1Keys).Return(shard1Vals, nil).Once()
+	clientMocks[0].On("MGet", ms.c, shard0Keys).Return(shard0Vals, nil).Once()
+	clientMocks[1].On("MGet", ms.c, shard1Keys).Return(shard1Vals, nil).Once()
 	results, err := ms.GetMulti(keys)
 	c.Assert(err, IsNil)
 	c.Assert(results, DeepEquals, map[string]*CacheItem{
@@ -855,7 +855,7 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 		nil,
 		"pineapple shrub thing", // getMulti can return strings instead of byte slices
 	}
-	clientMocks[0].On("MGet", shard0Keys).Return(shard0Vals, nil).Once()
+	clientMocks[0].On("MGet", ms.c, shard0Keys).Return(shard0Vals, nil).Once()
 	results, err = ms.GetMulti(keys)
 	c.Assert(err, IsNil)
 	c.Assert(results, DeepEquals, map[string]*CacheItem{
@@ -883,8 +883,8 @@ func (s *MemorystoreTest) TestGetMulti(c *C) {
 	}
 
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("MGet", shard0Keys).Return(([]interface{})(nil), fatalErr).Once()
-	clientMocks[1].On("MGet", shard1Keys).Return(shard1Vals, nil).Once()
+	clientMocks[0].On("MGet", ms.c, shard0Keys).Return(([]interface{})(nil), fatalErr).Once()
+	clientMocks[1].On("MGet", ms.c, shard1Keys).Return(shard1Vals, nil).Once()
 	results, err = ms.GetMulti(keys)
 	c.Assert(err, DeepEquals, MultiError{fatalErr, nil})
 	c.Assert(results, DeepEquals, map[string]*CacheItem{
@@ -918,9 +918,9 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 	initialValue := uint64(1)
 	amount := int64(5)
 	clientMocks[0].On("TxPipeline").Return(pipeMock).Once()
-	pipeMock.On("SetNX", fullKey, initialValue, time.Duration(0)).Once()
-	pipeMock.On("IncrBy", fullKey, amount).Once()
-	pipeMock.On("Exec").Return([]redis.Cmder{
+	pipeMock.On("SetNX", ms.c, fullKey, initialValue, time.Duration(0)).Once()
+	pipeMock.On("IncrBy", ms.c, fullKey, amount).Once()
+	pipeMock.On("Exec", ms.c).Return([]redis.Cmder{
 		uncalledResultMock,
 		calledResultMock,
 	}, nil).Once()
@@ -933,9 +933,9 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 	// error case
 	fatalErr := errors.New("aaaah")
 	clientMocks[0].On("TxPipeline").Return(pipeMock).Once()
-	pipeMock.On("SetNX", fullKey, initialValue, time.Duration(0)).Once()
-	pipeMock.On("IncrBy", fullKey, amount).Once()
-	pipeMock.On("Exec").Return(([]redis.Cmder)(nil), fatalErr).Once()
+	pipeMock.On("SetNX", ms.c, fullKey, initialValue, time.Duration(0)).Once()
+	pipeMock.On("IncrBy", ms.c, fullKey, amount).Once()
+	pipeMock.On("Exec", ms.c).Return(([]redis.Cmder)(nil), fatalErr).Once()
 	incr, err = ms.Increment(key, amount, initialValue)
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(incr, Equals, uint64(0))
@@ -954,8 +954,8 @@ func (s *MemorystoreTest) TestIncrementExisting(c *C) {
 	key := "banana"
 	fullKey, _ := ms.namespacedKeyAndShard(key)
 	amount := int64(10)
-	clientMocks[1].On("Exists", []string{fullKey}).Return(int64(1), nil).Once()
-	clientMocks[1].On("IncrBy", fullKey, amount).Return(int64(10), nil).Once()
+	clientMocks[1].On("Exists", ms.c, []string{fullKey}).Return(int64(1), nil).Once()
+	clientMocks[1].On("IncrBy", ms.c, fullKey, amount).Return(int64(10), nil).Once()
 	val, err := ms.IncrementExisting(key, amount)
 	c.Assert(err, IsNil)
 	c.Assert(val, Equals, uint64(10))
@@ -963,22 +963,22 @@ func (s *MemorystoreTest) TestIncrementExisting(c *C) {
 
 	// exists case, error on increment
 	fatalErr := errors.New("aaaah")
-	clientMocks[1].On("Exists", []string{fullKey}).Return(int64(1), nil).Once()
-	clientMocks[1].On("IncrBy", fullKey, amount).Return(int64(0), fatalErr).Once()
+	clientMocks[1].On("Exists", ms.c, []string{fullKey}).Return(int64(1), nil).Once()
+	clientMocks[1].On("IncrBy", ms.c, fullKey, amount).Return(int64(0), fatalErr).Once()
 	val, err = ms.IncrementExisting(key, amount)
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(val, Equals, uint64(0))
 	checkMocks()
 
 	// does not exist
-	clientMocks[1].On("Exists", []string{fullKey}).Return(int64(0), nil).Once()
+	clientMocks[1].On("Exists", ms.c, []string{fullKey}).Return(int64(0), nil).Once()
 	val, err = ms.IncrementExisting(key, amount)
 	c.Assert(err, Equals, ErrCacheMiss)
 	c.Assert(val, Equals, uint64(0))
 	checkMocks()
 
 	// fatal error
-	clientMocks[1].On("Exists", []string{fullKey}).Return(int64(0), fatalErr).Once()
+	clientMocks[1].On("Exists", ms.c, []string{fullKey}).Return(int64(0), fatalErr).Once()
 	val, err = ms.IncrementExisting(key, amount)
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(val, Equals, uint64(0))
@@ -1002,14 +1002,14 @@ func (s *MemorystoreTest) TestSet(c *C) {
 		Value:      value,
 		Expiration: time.Duration(0),
 	}
-	clientMocks[0].On("Set", fullKey, value, time.Duration(0)).Return(nil).Once()
+	clientMocks[0].On("Set", ms.c, fullKey, value, time.Duration(0)).Return(nil).Once()
 	err := ms.Set(item)
 	c.Assert(err, IsNil)
 	checkMocks()
 
 	// error case
 	fatalErr := errors.New("aaaah")
-	clientMocks[0].On("Set", fullKey, value, time.Duration(0)).Return(fatalErr).Once()
+	clientMocks[0].On("Set", ms.c, fullKey, value, time.Duration(0)).Return(fatalErr).Once()
 	err = ms.Set(item)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
@@ -1048,10 +1048,10 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 	}
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	clientMocks[1].On("TxPipeline").Return(pipeMock1).Once()
-	pipeMock0.On("Set", fullKey0, value0, time.Duration(0)).Once()
-	pipeMock1.On("Set", fullKey1, value1, time.Duration(1)).Once()
-	pipeMock0.On("Exec").Return(([]redis.Cmder)(nil), nil).Once()
-	pipeMock1.On("Exec").Return(([]redis.Cmder)(nil), nil).Once()
+	pipeMock0.On("Set", ms.c, fullKey0, value0, time.Duration(0)).Once()
+	pipeMock1.On("Set", ms.c, fullKey1, value1, time.Duration(1)).Once()
+	pipeMock0.On("Exec", ms.c).Return(([]redis.Cmder)(nil), nil).Once()
+	pipeMock1.On("Exec", ms.c).Return(([]redis.Cmder)(nil), nil).Once()
 	err := ms.SetMulti(items)
 	c.Assert(err, IsNil)
 	checkMocks()
@@ -1065,8 +1065,8 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 		},
 	}
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
-	pipeMock0.On("Set", fullKey0, value0, time.Duration(0)).Once()
-	pipeMock0.On("Exec").Return(([]redis.Cmder)(nil), nil).Once()
+	pipeMock0.On("Set", ms.c, fullKey0, value0, time.Duration(0)).Once()
+	pipeMock0.On("Exec", ms.c).Return(([]redis.Cmder)(nil), nil).Once()
 	err = ms.SetMulti(items)
 	c.Assert(err, IsNil)
 	checkMocks()
@@ -1074,8 +1074,8 @@ func (s *MemorystoreTest) TestSetMulti(c *C) {
 	// error case
 	fatalErr := errors.New("aaaah")
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
-	pipeMock0.On("Set", fullKey0, value0, time.Duration(0)).Once()
-	pipeMock0.On("Exec").Return(([]redis.Cmder)(nil), fatalErr).Once()
+	pipeMock0.On("Set", ms.c, fullKey0, value0, time.Duration(0)).Once()
+	pipeMock0.On("Exec", ms.c).Return(([]redis.Cmder)(nil), fatalErr).Once()
 	err = ms.SetMulti(items)
 	c.Assert(err, Equals, fatalErr)
 	checkMocks()
