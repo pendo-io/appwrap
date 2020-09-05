@@ -249,7 +249,7 @@ func (dsit *AppengineInterfacesTest) TestCheckIndexNeedIndexFor(c *C) {
 		c.Check(query(mem).(*memoryQuery).checkIndexes(false), ErrorMatches, "(?s:missing index.*)")
 
 		// Create a datastore with only the provided index
-		loadedIndex, err := LoadIndex([]byte("indexes:\n" + index))
+		loadedIndex, err := LoadIndexYaml([]byte("indexes:\n" + index))
 		c.Assert(err, IsNil)
 		indexedDs := NewLocalDatastore(false, loadedIndex)
 		if satisfies {
