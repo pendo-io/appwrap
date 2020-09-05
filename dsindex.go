@@ -1,8 +1,13 @@
 package appwrap
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 
+	admin "cloud.google.com/go/datastore/admin/apiv1"
+	"google.golang.org/api/iterator"
+	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -51,7 +56,68 @@ func (ei entityIndex) String() string {
 
 type DatastoreIndex map[string][]entityIndex
 
-func LoadIndex(data []byte) (DatastoreIndex, error) {
+type datastoreAdminClient struct {
+	adapter datastoreAdminAdapter
+}
+
+type datastoreAdminAdapter interface {
+	withEachIndexFrom(*dsadmin.ListIndexesRequest, func(index *dsadmin.Index)) error
+}
+
+type datastoreAdminAdapterImpl struct {
+	client *admin.DatastoreAdminClient
+	ctx    context.Context
+}
+
+func (d datastoreAdminAdapterImpl) withEachIndexFrom(request *dsadmin.ListIndexesRequest, f func(index *dsadmin.Index)) error {
+	it := d.client.ListIndexes(d.ctx, request)
+	for {
+		item, err := it.Next()
+		if err == iterator.Done {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error listing indexes: %s", err.Error())
+		}
+		f(item)
+	}
+	return nil
+}
+
+func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
+	c, err := admin.NewDatastoreAdminClient(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("Error creating DatastoreAdminClient: %s", err))
+	}
+
+	dac := datastoreAdminClient{
+		adapter: &datastoreAdminAdapterImpl{client: c, ctx: ctx},
+	}
+	return dac
+}
+
+func (c datastoreAdminClient) GetReadyDatastoreIndex(project string) (DatastoreIndex, error) {
+	req := &dsadmin.ListIndexesRequest{
+		ProjectId: project,
+		Filter:    "state=READY",
+	}
+	index := make(DatastoreIndex, 0)
+	err := c.adapter.withEachIndexFrom(req, func(item *dsadmin.Index) {
+		entIndex := entityIndex{ancestor: item.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(item.Properties))}
+		for i, prop := range item.Properties {
+			entIndex.fields[prop.Name] = fieldIndex{
+				descending: prop.Direction == dsadmin.Index_DESCENDING,
+				index:      i,
+			}
+		}
+		index[item.Kind] = append(index[item.Kind], entIndex)
+	})
+	if err != nil {
+		return DatastoreIndex{}, err
+	}
+	return index, nil
+}
+
+func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
 	var indexConfig indexYaml
 	if err := yaml.Unmarshal(data, &indexConfig); err != nil {
 		return nil, err
@@ -87,4 +153,22 @@ func LoadIndex(data []byte) (DatastoreIndex, error) {
 	}
 
 	return index, nil
+}
+
+func IndexIntersection(d1 DatastoreIndex, d2 DatastoreIndex) DatastoreIndex {
+	intersection := make(DatastoreIndex, len(d1))
+	for d1Entity, d1Indexes := range d1 {
+		if d2Indexes, ok := d2[d1Entity]; ok {
+			for _, d1Index := range d1Indexes {
+				for _, d2Index := range d2Indexes {
+					if reflect.DeepEqual(d2Index, d1Index) {
+						intersection[d1Entity] = append(intersection[d1Entity], d1Index)
+					}
+				}
+			}
+		}
+
+	}
+
+	return intersection
 }
