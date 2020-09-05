@@ -2,7 +2,9 @@ package appwrap
 
 import (
 	"fmt"
+	"reflect"
 
+	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -51,7 +53,7 @@ func (ei entityIndex) String() string {
 
 type DatastoreIndex map[string][]entityIndex
 
-func LoadIndex(data []byte) (DatastoreIndex, error) {
+func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
 	var indexConfig indexYaml
 	if err := yaml.Unmarshal(data, &indexConfig); err != nil {
 		return nil, err
@@ -87,4 +89,39 @@ func LoadIndex(data []byte) (DatastoreIndex, error) {
 	}
 
 	return index, nil
+}
+
+func LoadIndexDatastore(resp dsadmin.ListIndexesResponse, readyOnly bool) (DatastoreIndex, error) {
+	index := make(DatastoreIndex, len(resp.Indexes))
+	for _, spec := range resp.Indexes {
+		if !readyOnly || spec.State == dsadmin.Index_READY {
+			entIndex := entityIndex{ancestor: spec.Ancestor == 2, fields: make(map[string]fieldIndex, len(spec.Properties))}
+			for i, prop := range spec.Properties {
+				entIndex.fields[prop.Name] = fieldIndex{
+					descending: prop.Direction == 2,
+					index:      i,
+				}
+			}
+			index[spec.Kind] = append(index[spec.Kind], entIndex)
+		}
+	}
+	return index, nil
+}
+
+func IndexIntersection(d1 DatastoreIndex, d2 DatastoreIndex) DatastoreIndex {
+	intersection := make(DatastoreIndex, len(d1))
+	for d1Entity, d1Indexes := range d1 {
+		if d2Indexes, ok := d2[d1Entity]; ok {
+			for _, d1Index := range d1Indexes {
+				for _, d2Index := range d2Indexes {
+					if reflect.DeepEqual(d2Index, d1Index) {
+						intersection[d1Entity] = append(intersection[d1Entity], d1Index)
+					}
+				}
+			}
+		}
+
+	}
+
+	return intersection
 }
