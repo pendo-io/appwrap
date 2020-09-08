@@ -4,13 +4,14 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.57.0
-	cloud.google.com/go/datastore v1.1.0
+	cloud.google.com/go/datastore v1.2.0
 	cloud.google.com/go/logging v1.0.0
+	cloud.google.com/go/pubsub v1.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.0
 	github.com/codegangsta/inject v0.0.0-20140425184007-37d7f8432a3e // indirect
 	github.com/go-martini/martini v0.0.0-20140425183230-de6438617700
 	github.com/go-redis/redis/v7 v7.0.1
-	github.com/golang/protobuf v1.4.1
+	github.com/golang/protobuf v1.4.2
 	github.com/googleapis/gax-go/v2 v2.0.5
 	github.com/masukomi/check v0.0.0-20150227023654-e0a72205c0f3 // indirect
 	github.com/onsi/ginkgo v1.11.0 // indirect

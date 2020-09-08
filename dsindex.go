@@ -1,10 +1,13 @@
 package appwrap
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
+	admin "cloud.google.com/go/datastore/admin/apiv1"
 	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
+	"google.golang.org/api/iterator"
 	"gopkg.in/yaml.v2"
 )
 
@@ -52,6 +55,43 @@ func (ei entityIndex) String() string {
 }
 
 type DatastoreIndex map[string][]entityIndex
+
+type datastoreAdminClient struct {
+	client *admin.DatastoreAdminClient
+	context context.Context
+}
+
+func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient{
+	c, err := admin.NewDatastoreAdminClient(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("Error creating DatastoreAdminClient: %s", err))
+	}
+
+	dac := datastoreAdminClient{
+		client: c,
+		context: ctx,
+	}
+	return dac
+}
+
+func (c datastoreAdminClient) GetIndexDatastore(project string) (*dsadmin.ListIndexesResponse, error) {
+	req := &dsadmin.ListIndexesRequest{
+		ProjectId: project,
+	}
+
+	it := c.client.ListIndexes(c.context, req)
+	for {
+		_, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return &dsadmin.ListIndexesResponse{}, fmt.Errorf("Error listing indexes: %s", err)
+		}
+	}
+
+	return it.Response.(*dsadmin.ListIndexesResponse), nil
+}
 
 func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
 	var indexConfig indexYaml
