@@ -74,7 +74,7 @@ func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient{
 	return dac
 }
 
-func (c datastoreAdminClient) GetIndexDatastore(project string) (*dsadmin.ListIndexesResponse, error) {
+func (c datastoreAdminClient) GetIndexDatastore(project string, readyOnly bool) (DatastoreIndex, error) {
 	req := &dsadmin.ListIndexesRequest{
 		ProjectId: project,
 	}
@@ -86,11 +86,13 @@ func (c datastoreAdminClient) GetIndexDatastore(project string) (*dsadmin.ListIn
 			break
 		}
 		if err != nil {
-			return &dsadmin.ListIndexesResponse{}, fmt.Errorf("Error listing indexes: %s", err)
+			return DatastoreIndex{}, fmt.Errorf("Error listing indexes: %s", err)
 		}
 	}
 
-	return it.Response.(*dsadmin.ListIndexesResponse), nil
+	indexes := it.Response.(*dsadmin.ListIndexesResponse)
+
+	return LoadIndexDatastore(*indexes, readyOnly)
 }
 
 func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
