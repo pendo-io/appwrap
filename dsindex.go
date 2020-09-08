@@ -95,10 +95,10 @@ func LoadIndexDatastore(resp dsadmin.ListIndexesResponse, readyOnly bool) (Datas
 	index := make(DatastoreIndex, len(resp.Indexes))
 	for _, spec := range resp.Indexes {
 		if !readyOnly || spec.State == dsadmin.Index_READY {
-			entIndex := entityIndex{ancestor: spec.Ancestor == 2, fields: make(map[string]fieldIndex, len(spec.Properties))}
+			entIndex := entityIndex{ancestor: spec.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(spec.Properties))}
 			for i, prop := range spec.Properties {
 				entIndex.fields[prop.Name] = fieldIndex{
-					descending: prop.Direction == 2,
+					descending: prop.Direction == dsadmin.Index_DESCENDING,
 					index:      i,
 				}
 			}
