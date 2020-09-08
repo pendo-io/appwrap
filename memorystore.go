@@ -290,7 +290,7 @@ func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo 
 					Addr:     addrs[i],
 					Password: "",
 					DB:       0,
-					PoolSize: 4 * runtime.GOMAXPROCS(0),
+					PoolSize: 2 * runtime.GOMAXPROCS(0),
 				}
 				if rateLimitersProvided {
 					ops.Limiter = createLimiter(i, log)
