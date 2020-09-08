@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"strconv"
 	"sync"
@@ -194,7 +195,11 @@ func InitializeRedisAddrs(addrs []string) {
 	}
 	GlobalService.mtx.Lock()
 	defer GlobalService.mtx.Unlock()
-	GlobalService.addrs = addrs
+
+	if !reflect.DeepEqual(GlobalService.addrs, addrs) {
+		GlobalService.addrs = addrs
+		GlobalService.clients = nil
+	}
 }
 
 const redisErrorDontRetryInterval = 5 * time.Second
@@ -267,7 +272,9 @@ func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineIn
 
 func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiter func(shard int, log Logging) redis.Limiter) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
-	if ms.clients == nil {
+	ourClients := ms.clients
+
+	if ourClients == nil {
 		ms.mtx.Lock()
 		defer ms.mtx.Unlock()
 
@@ -302,6 +309,8 @@ func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo 
 
 			ms.clients = &clients
 		}
+
+		ourClients = ms.clients
 	}
 
 	statInterval := metrics.GetMetricsRecordingInterval()
@@ -327,7 +336,7 @@ func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo 
 			}()
 		})
 	}
-	return Memorystore{c, *ms.clients, "", defaultKeyHashFn}, nil
+	return Memorystore{c, *ourClients, "", defaultKeyHashFn}, nil
 }
 
 func (ms *memorystoreService) logPoolStats() {
