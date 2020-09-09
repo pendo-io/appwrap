@@ -434,10 +434,10 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardResults []redis.Cmder, errList []error) bool {
 		haveErrors := false
 		for i, result := range shardResults {
-			if added, err := result.(boolCmdInterface).Result(); err != nil {
+			if err := result.Err(); err != nil {
 				errList[itemIndices[shardKeys[i]]] = err
 				haveErrors = true
-			} else if !added {
+			} else if added, _ := result.(boolCmdInterface).Result(); !added {
 				errList[itemIndices[shardKeys[i]]] = CacheErrNotStored
 				haveErrors = true
 			}
