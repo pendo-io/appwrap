@@ -135,6 +135,10 @@ func (m *boolCmdMock) Result() (bool, error) {
 	return args.Get(0).(bool), args.Error(1)
 }
 
+func (m *boolCmdMock) Err() error {
+	return m.Called().Error(0)
+}
+
 type MemorystoreTest struct{}
 
 var _ = Suite(&MemorystoreTest{})
@@ -477,7 +481,9 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
 	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
 	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
+	resultMock1.On("Err").Return(nil).Once()
 	resultMock1.On("Result").Return(true, nil).Once()
 	err := ms.AddMulti(items)
 	c.Assert(err, IsNil)
@@ -495,6 +501,7 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	clientMocks[0].On("TxPipeline").Return(pipeMock0).Once()
 	pipeMock0.On("SetNX", fullKey0, items[0].Value, items[0].Expiration).Once()
 	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
+	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
 	err = ms.AddMulti(items)
 	c.Assert(err, IsNil)
@@ -519,7 +526,9 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
 	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
 	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
+	resultMock0.On("Err").Return(nil).Once()
 	resultMock0.On("Result").Return(true, nil).Once()
+	resultMock1.On("Err").Return(nil).Once()
 	resultMock1.On("Result").Return(false, nil).Once()
 	err = ms.AddMulti(items)
 	c.Assert(err, DeepEquals, MultiError{nil, CacheErrNotStored})
@@ -533,7 +542,8 @@ func (s *MemorystoreTest) TestAddMulti(c *C) {
 	pipeMock1.On("SetNX", fullKey1, items[1].Value, items[1].Expiration).Once()
 	pipeMock0.On("Exec").Return([]redis.Cmder{resultMock0}, nil).Once()
 	pipeMock1.On("Exec").Return([]redis.Cmder{resultMock1}, nil).Once()
-	resultMock0.On("Result").Return(false, fatalErr).Once()
+	resultMock0.On("Err").Return(fatalErr).Once()
+	resultMock1.On("Err").Return(nil).Once()
 	resultMock1.On("Result").Return(true, nil).Once()
 	err = ms.AddMulti(items)
 	c.Assert(err, DeepEquals, MultiError{fatalErr, nil})
