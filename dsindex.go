@@ -6,8 +6,8 @@ import (
 	"reflect"
 
 	admin "cloud.google.com/go/datastore/admin/apiv1"
-	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	"google.golang.org/api/iterator"
+	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -57,24 +57,24 @@ func (ei entityIndex) String() string {
 type DatastoreIndex map[string][]entityIndex
 
 type datastoreAdminClient struct {
-	client *admin.DatastoreAdminClient
+	client  *admin.DatastoreAdminClient
 	context context.Context
 }
 
-func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient{
+func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
 	c, err := admin.NewDatastoreAdminClient(ctx)
 	if err != nil {
 		panic(fmt.Sprintf("Error creating DatastoreAdminClient: %s", err))
 	}
 
 	dac := datastoreAdminClient{
-		client: c,
+		client:  c,
 		context: ctx,
 	}
 	return dac
 }
 
-func (c datastoreAdminClient) GetIndexDatastore(project string, readyOnly bool) (DatastoreIndex, error) {
+func (c datastoreAdminClient) GetDatastoreIndex(project string, readyOnly bool) (DatastoreIndex, error) {
 	req := &dsadmin.ListIndexesRequest{
 		ProjectId: project,
 	}
