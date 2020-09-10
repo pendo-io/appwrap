@@ -5,6 +5,7 @@ import (
 
 	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/mock"
 )
 
 var _ = fmt.Printf
@@ -29,6 +30,14 @@ indexes:
     - name: otherField
 
 `
+
+type datastoreAdminAdapterMock struct {
+	mock.Mock
+}
+
+func (d datastoreAdminAdapterMock) withEachIndexFrom(request *dsadmin.ListIndexesRequest, f func(index *dsadmin.Index)) error {
+	panic("implement me")
+}
 
 func (dsit *AppengineInterfacesTest) TestLoadIndexYaml(c *C) {
 	idx, err := LoadIndexYaml([]byte(testIndex))
@@ -59,7 +68,7 @@ func (dsit *AppengineInterfacesTest) TestLoadIndexYaml(c *C) {
 	})
 }
 
-func (dsit *AppengineInterfacesTest) TestLoadIndexDatastore(c *C) {
+func (dsit *AppengineInterfacesTest) TestGetDatastoreIndex(c *C) {
 	d := dsadmin.ListIndexesResponse{
 		Indexes: []*dsadmin.Index{
 			{
@@ -110,7 +119,13 @@ func (dsit *AppengineInterfacesTest) TestLoadIndexDatastore(c *C) {
 		},
 	}
 
-	idx, err := LoadIndexDatastore(d, true)
+	adapterMock := &datastoreAdminAdapterMock{
+		mock.Mock{},
+	}
+	client := datastoreAdminClient{
+		adapter: adapterMock,
+	}
+	idx, err := client.GetDatastoreIndex("project", true)
 	c.Assert(err, IsNil)
 	c.Assert(idx, DeepEquals, DatastoreIndex{
 		"entityKind": []entityIndex{

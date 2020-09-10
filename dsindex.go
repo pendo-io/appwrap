@@ -57,8 +57,30 @@ func (ei entityIndex) String() string {
 type DatastoreIndex map[string][]entityIndex
 
 type datastoreAdminClient struct {
-	client  *admin.DatastoreAdminClient
-	context context.Context
+	adapter datastoreAdminAdapter
+}
+
+type datastoreAdminAdapter interface {
+	withEachIndexFrom(*dsadmin.ListIndexesRequest, func(index *dsadmin.Index)) error
+}
+
+type datastoreAdminAdapterImpl struct{
+	client *admin.DatastoreAdminClient
+	ctx context.Context
+}
+
+func (d datastoreAdminAdapterImpl) withEachIndexFrom(request *dsadmin.ListIndexesRequest, f func(index *dsadmin.Index)) error {
+	it := d.client.ListIndexes(d.ctx, request)
+	for {
+		item, err := it.Next()
+		if err == iterator.Done {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error listing indexes: %s", err.Error())
+		}
+		f(item)
+	}
+	return nil
 }
 
 func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
@@ -68,8 +90,7 @@ func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
 	}
 
 	dac := datastoreAdminClient{
-		client:  c,
-		context: ctx,
+		adapter:  &datastoreAdminAdapterImpl{client: c, ctx: ctx},
 	}
 	return dac
 }
@@ -78,21 +99,23 @@ func (c datastoreAdminClient) GetDatastoreIndex(project string, readyOnly bool) 
 	req := &dsadmin.ListIndexesRequest{
 		ProjectId: project,
 	}
-
-	it := c.client.ListIndexes(c.context, req)
-	for {
-		_, err := it.Next()
-		if err == iterator.Done {
-			break
+	index := make(DatastoreIndex, 0)
+	err := c.adapter.withEachIndexFrom(req, func(item *dsadmin.Index) {
+		if !readyOnly || item.State == dsadmin.Index_READY {
+			entIndex := entityIndex{ancestor: item.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(item.Properties))}
+			for i, prop := range item.Properties {
+				entIndex.fields[prop.Name] = fieldIndex{
+					descending: prop.Direction == dsadmin.Index_DESCENDING,
+					index:      i,
+				}
+			}
+			index[item.Kind] = append(index[item.Kind], entIndex)
 		}
-		if err != nil {
-			return DatastoreIndex{}, fmt.Errorf("Error listing indexes: %s", err)
-		}
+	})
+	if err != nil {
+		return DatastoreIndex{}, err
 	}
-
-	indexes := it.Response.(*dsadmin.ListIndexesResponse)
-
-	return LoadIndexDatastore(*indexes, readyOnly)
+	return index, nil
 }
 
 func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
@@ -130,23 +153,6 @@ func LoadIndexYaml(data []byte) (DatastoreIndex, error) {
 		index[spec.Kind] = append(index[spec.Kind], entIndex)
 	}
 
-	return index, nil
-}
-
-func LoadIndexDatastore(resp dsadmin.ListIndexesResponse, readyOnly bool) (DatastoreIndex, error) {
-	index := make(DatastoreIndex, len(resp.Indexes))
-	for _, spec := range resp.Indexes {
-		if !readyOnly || spec.State == dsadmin.Index_READY {
-			entIndex := entityIndex{ancestor: spec.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(spec.Properties))}
-			for i, prop := range spec.Properties {
-				entIndex.fields[prop.Name] = fieldIndex{
-					descending: prop.Direction == dsadmin.Index_DESCENDING,
-					index:      i,
-				}
-			}
-			index[spec.Kind] = append(index[spec.Kind], entIndex)
-		}
-	}
 	return index, nil
 }
 
