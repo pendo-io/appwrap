@@ -184,15 +184,20 @@ func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl string, fn func(
 	start := time.Now()
 
 	defer func() {
+		sev := logging.Severity(logCtxVal.sev)
+		status := http.StatusOK
+		if sev >= logging.Error {
+			status = http.StatusInternalServerError
+		}
 		sharedClientCtxVal.parentLogger.Log(logging.Entry{
 			HTTPRequest: &logging.HTTPRequest{
 				Latency:      time.Now().Sub(start),
 				ResponseSize: 0,
 				Request:      req,
-				Status:       http.StatusOK,
+				Status:       status,
 			},
 			Labels:    logCtxVal.getLabels(),
-			Severity:  logging.Severity(logCtxVal.sev),
+			Severity:  sev,
 			Timestamp: time.Now(),
 			Trace:     logCtxVal.trace,
 		})
