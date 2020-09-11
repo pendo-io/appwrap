@@ -95,22 +95,21 @@ func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
 	return dac
 }
 
-func (c datastoreAdminClient) GetDatastoreIndex(project string, readyOnly bool) (DatastoreIndex, error) {
+func (c datastoreAdminClient) GetDatastoreIndex(project string) (DatastoreIndex, error) {
 	req := &dsadmin.ListIndexesRequest{
 		ProjectId: project,
+		Filter: "state=READY",
 	}
 	index := make(DatastoreIndex, 0)
 	err := c.adapter.withEachIndexFrom(req, func(item *dsadmin.Index) {
-		if !readyOnly || item.State == dsadmin.Index_READY {
-			entIndex := entityIndex{ancestor: item.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(item.Properties))}
-			for i, prop := range item.Properties {
-				entIndex.fields[prop.Name] = fieldIndex{
-					descending: prop.Direction == dsadmin.Index_DESCENDING,
-					index:      i,
-				}
+		entIndex := entityIndex{ancestor: item.Ancestor == dsadmin.Index_ALL_ANCESTORS, fields: make(map[string]fieldIndex, len(item.Properties))}
+		for i, prop := range item.Properties {
+			entIndex.fields[prop.Name] = fieldIndex{
+				descending: prop.Direction == dsadmin.Index_DESCENDING,
+				index:      i,
 			}
-			index[item.Kind] = append(index[item.Kind], entIndex)
 		}
+		index[item.Kind] = append(index[item.Kind], entIndex)
 	})
 	if err != nil {
 		return DatastoreIndex{}, err

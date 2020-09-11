@@ -73,16 +73,6 @@ func (d datastoreAdminAdapterMock) withEachIndexFrom(request *dsadmin.ListIndexe
 				},
 				State: dsadmin.Index_READY,
 			},
-			{
-				Kind:     "entityKind",
-				Ancestor: dsadmin.Index_ALL_ANCESTORS,
-				Properties: []*dsadmin.Index_IndexedProperty{
-					{
-						Name: "notReady",
-					},
-				},
-				State: dsadmin.Index_CREATING,
-			},
 		},
 	}
 
@@ -128,7 +118,7 @@ func (dsit *AppengineInterfacesTest) TestGetDatastoreIndex(c *C) {
 	client := datastoreAdminClient{
 		adapter: adapterMock,
 	}
-	idx, err := client.GetDatastoreIndex("project", true)
+	idx, err := client.GetDatastoreIndex("project")
 	c.Assert(err, IsNil)
 	c.Assert(idx, DeepEquals, DatastoreIndex{
 		"entityKind": []entityIndex{
