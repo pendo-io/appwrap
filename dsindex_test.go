@@ -36,40 +36,7 @@ type datastoreAdminAdapterMock struct {
 }
 
 func (d datastoreAdminAdapterMock) withEachIndexFrom(request *dsadmin.ListIndexesRequest, f func(index *dsadmin.Index)) error {
-	panic("implement me")
-}
-
-func (dsit *AppengineInterfacesTest) TestLoadIndexYaml(c *C) {
-	idx, err := LoadIndexYaml([]byte(testIndex))
-	c.Assert(err, IsNil)
-	c.Assert(idx, DeepEquals, DatastoreIndex{
-		"entityKind": []entityIndex{
-			{
-				fields: map[string]fieldIndex{
-					"fieldA": {index: 1},
-					"fieldB": {index: 0},
-				},
-			},
-			{
-				ancestor: true,
-				fields: map[string]fieldIndex{
-					"otherField": {index: 0},
-				},
-			},
-		},
-		"entity2": []entityIndex{
-			{
-				fields: map[string]fieldIndex{
-					"backwards": {descending: true},
-					"normal":    {index: 1},
-				},
-			},
-		},
-	})
-}
-
-func (dsit *AppengineInterfacesTest) TestGetDatastoreIndex(c *C) {
-	d := dsadmin.ListIndexesResponse{
+	resp := dsadmin.ListIndexesResponse{
 		Indexes: []*dsadmin.Index{
 			{
 				Kind: "entityKind",
@@ -119,6 +86,42 @@ func (dsit *AppengineInterfacesTest) TestGetDatastoreIndex(c *C) {
 		},
 	}
 
+	for _, idx := range resp.Indexes {
+		f(idx)
+	}
+	return nil
+}
+
+func (dsit *AppengineInterfacesTest) TestLoadIndexYaml(c *C) {
+	idx, err := LoadIndexYaml([]byte(testIndex))
+	c.Assert(err, IsNil)
+	c.Assert(idx, DeepEquals, DatastoreIndex{
+		"entityKind": []entityIndex{
+			{
+				fields: map[string]fieldIndex{
+					"fieldA": {index: 1},
+					"fieldB": {index: 0},
+				},
+			},
+			{
+				ancestor: true,
+				fields: map[string]fieldIndex{
+					"otherField": {index: 0},
+				},
+			},
+		},
+		"entity2": []entityIndex{
+			{
+				fields: map[string]fieldIndex{
+					"backwards": {descending: true},
+					"normal":    {index: 1},
+				},
+			},
+		},
+	})
+}
+
+func (dsit *AppengineInterfacesTest) TestGetDatastoreIndex(c *C) {
 	adapterMock := &datastoreAdminAdapterMock{
 		mock.Mock{},
 	}
