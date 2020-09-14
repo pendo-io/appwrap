@@ -7,6 +7,7 @@ import (
 
 	admin "cloud.google.com/go/datastore/admin/apiv1"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 	dsadmin "google.golang.org/genproto/googleapis/datastore/admin/v1"
 	"gopkg.in/yaml.v2"
 )
@@ -83,8 +84,8 @@ func (d datastoreAdminAdapterImpl) withEachIndexFrom(request *dsadmin.ListIndexe
 	return nil
 }
 
-func NewDatastoreAdminClient(ctx context.Context) datastoreAdminClient {
-	c, err := admin.NewDatastoreAdminClient(ctx)
+func NewDatastoreAdminClient(ctx context.Context, opts ...option.ClientOption) datastoreAdminClient {
+	c, err := admin.NewDatastoreAdminClient(ctx, opts...)
 	if err != nil {
 		panic(fmt.Sprintf("Error creating DatastoreAdminClient: %s", err))
 	}
