@@ -15,7 +15,7 @@ import (
 
 	cloudms "cloud.google.com/go/redis/apiv1"
 	xxhash "github.com/cespare/xxhash/v2"
-	redis "github.com/go-redis/redis/v7"
+	redis "github.com/go-redis/redis/v8"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/pendo-io/appwrap/internal/metrics"
 	"go.opencensus.io/tag"
@@ -54,15 +54,15 @@ type redisAPIService interface {
 // Implementations of these methods convert the returned redis Cmd objects into mockable data by calling
 // Err(), Result(), etc.
 type redisCommonInterface interface {
-	Del(keys ...string) error
-	Exists(keys ...string) (int64, error)
-	FlushAll() error
-	FlushAllAsync() error
-	Get(key string) ([]byte, error)
-	IncrBy(key string, value int64) (int64, error)
-	MGet(keys ...string) ([]interface{}, error)
-	Set(key string, value interface{}, expiration time.Duration) error
-	SetNX(key string, value interface{}, expiration time.Duration) (bool, error)
+	Del(ctx context.Context, keys ...string) error
+	Exists(ctx context.Context, keys ...string) (int64, error)
+	FlushAll(ctx context.Context) error
+	FlushAllAsync(ctx context.Context) error
+	Get(ctx context.Context, key string) ([]byte, error)
+	IncrBy(ctx context.Context, key string, value int64) (int64, error)
+	MGet(ctx context.Context, keys ...string) ([]interface{}, error)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 	TxPipeline() redisPipelineInterface
 }
 
@@ -70,7 +70,7 @@ type redisCommonInterface interface {
 type redisClientInterface interface {
 	redisCommonInterface
 	PoolStats() *redis.PoolStats
-	Watch(fn func(*redis.Tx) error, keys ...string) error
+	Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error
 }
 
 type redisClientImplementation struct {
@@ -80,40 +80,40 @@ type redisClientImplementation struct {
 	client *redis.Client
 }
 
-func (rci *redisClientImplementation) Del(keys ...string) error {
-	return rci.common.Del(keys...).Err()
+func (rci *redisClientImplementation) Del(ctx context.Context, keys ...string) error {
+	return rci.common.Del(ctx, keys...).Err()
 }
 
-func (rci *redisClientImplementation) Exists(keys ...string) (int64, error) {
-	return rci.common.Exists(keys...).Result()
+func (rci *redisClientImplementation) Exists(ctx context.Context, keys ...string) (int64, error) {
+	return rci.common.Exists(ctx, keys...).Result()
 }
 
-func (rci *redisClientImplementation) FlushAll() error {
-	return rci.common.FlushAll().Err()
+func (rci *redisClientImplementation) FlushAll(ctx context.Context) error {
+	return rci.common.FlushAll(ctx).Err()
 }
 
-func (rci *redisClientImplementation) FlushAllAsync() error {
-	return rci.common.FlushAllAsync().Err()
+func (rci *redisClientImplementation) FlushAllAsync(ctx context.Context) error {
+	return rci.common.FlushAllAsync(ctx).Err()
 }
 
-func (rci *redisClientImplementation) Get(key string) ([]byte, error) {
-	return rci.common.Get(key).Bytes()
+func (rci *redisClientImplementation) Get(ctx context.Context, key string) ([]byte, error) {
+	return rci.common.Get(ctx, key).Bytes()
 }
 
-func (rci *redisClientImplementation) IncrBy(key string, value int64) (int64, error) {
-	return rci.common.IncrBy(key, value).Result()
+func (rci *redisClientImplementation) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
+	return rci.common.IncrBy(ctx, key, value).Result()
 }
 
-func (rci *redisClientImplementation) MGet(keys ...string) ([]interface{}, error) {
-	return rci.common.MGet(keys...).Result()
+func (rci *redisClientImplementation) MGet(ctx context.Context, keys ...string) ([]interface{}, error) {
+	return rci.common.MGet(ctx, keys...).Result()
 }
 
-func (rci *redisClientImplementation) Set(key string, value interface{}, expiration time.Duration) error {
-	return rci.common.Set(key, value, expiration).Err()
+func (rci *redisClientImplementation) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return rci.common.Set(ctx, key, value, expiration).Err()
 }
 
-func (rci *redisClientImplementation) SetNX(key string, value interface{}, expiration time.Duration) (bool, error) {
-	return rci.common.SetNX(key, value, expiration).Result()
+func (rci *redisClientImplementation) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	return rci.common.SetNX(ctx, key, value, expiration).Result()
 }
 
 func (rci *redisClientImplementation) TxPipeline() redisPipelineInterface {
@@ -126,36 +126,36 @@ func (rci *redisClientImplementation) PoolStats() *redis.PoolStats {
 
 // Watch can only be called by the top-level redis Client.  In particular, this means that
 // *redis.TX cannot call Watch again - it only implements redis.Cmdable.
-func (rci *redisClientImplementation) Watch(fn func(*redis.Tx) error, keys ...string) error {
-	return rci.client.Watch(fn, keys...)
+func (rci *redisClientImplementation) Watch(ctx context.Context, fn func(*redis.Tx) error, keys ...string) error {
+	return rci.client.Watch(ctx, fn, keys...)
 }
 
 // Implements needed redis pipeline methods for mocking purposes.  See redis.Pipeliner for all available methods.
 type redisPipelineInterface interface {
-	Exec() ([]redis.Cmder, error)
-	IncrBy(key string, value int64)
-	Set(key string, value interface{}, expiration time.Duration)
-	SetNX(key string, value interface{}, expiration time.Duration)
+	Exec(ctx context.Context) ([]redis.Cmder, error)
+	IncrBy(ctx context.Context, key string, value int64)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration)
+	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration)
 }
 
 type redisPipelineImplementation struct {
 	pipeline redis.Pipeliner
 }
 
-func (rpi *redisPipelineImplementation) Exec() ([]redis.Cmder, error) {
-	return rpi.pipeline.Exec()
+func (rpi *redisPipelineImplementation) Exec(ctx context.Context) ([]redis.Cmder, error) {
+	return rpi.pipeline.Exec(ctx)
 }
 
-func (rpi *redisPipelineImplementation) IncrBy(key string, value int64) {
-	rpi.pipeline.IncrBy(key, value)
+func (rpi *redisPipelineImplementation) IncrBy(ctx context.Context, key string, value int64) {
+	rpi.pipeline.IncrBy(ctx, key, value)
 }
 
-func (rpi *redisPipelineImplementation) Set(key string, value interface{}, expiration time.Duration) {
-	rpi.pipeline.Set(key, value, expiration)
+func (rpi *redisPipelineImplementation) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	rpi.pipeline.Set(ctx, key, value, expiration)
 }
 
-func (rpi *redisPipelineImplementation) SetNX(key string, value interface{}, expiration time.Duration) {
-	rpi.pipeline.SetNX(key, value, expiration)
+func (rpi *redisPipelineImplementation) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	rpi.pipeline.SetNX(ctx, key, value, expiration)
 }
 
 // Allows mocking of IntCmds returned by redis calls
@@ -412,7 +412,7 @@ func (ms Memorystore) namespacedKeyAndShard(key string) (string, int) {
 
 func (ms Memorystore) Add(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	if added, err := ms.clients[shard].SetNX(fullKey, item.Value, item.Expiration); err != nil {
+	if added, err := ms.clients[shard].SetNX(ms.c, fullKey, item.Value, item.Expiration); err != nil {
 		return err
 	} else if !added {
 		return CacheErrNotStored
@@ -426,9 +426,9 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 		pipe := ms.clients[shard].TxPipeline()
 		for _, key := range shardKeys {
 			item := items[itemIndices[key]]
-			pipe.SetNX(key, item.Value, item.Expiration)
+			pipe.SetNX(ms.c, key, item.Value, item.Expiration)
 		}
-		return pipe.Exec()
+		return pipe.Exec(ms.c)
 	}
 
 	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardResults []redis.Cmder, errList []error) bool {
@@ -502,7 +502,7 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 
 func (ms Memorystore) CompareAndSwap(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	if err := ms.clients[shard].Watch(func(tx *redis.Tx) error {
+	if err := ms.clients[shard].Watch(ms.c, func(tx *redis.Tx) error {
 		// Watch is an optimistic lock
 		txClient := &redisClientImplementation{tx, nil}
 		return ms.doCompareAndSwap(item, txClient, fullKey)
@@ -514,7 +514,7 @@ func (ms Memorystore) CompareAndSwap(item *CacheItem) error {
 }
 
 func (ms Memorystore) doCompareAndSwap(item *CacheItem, tx redisCommonInterface, fullKey string) error {
-	val, err := tx.Get(fullKey)
+	val, err := tx.Get(ms.c, fullKey)
 	if err == ErrCacheMiss {
 		// Does item exist?  If not, can't swap it
 		return CacheErrNotStored
@@ -530,8 +530,8 @@ func (ms Memorystore) doCompareAndSwap(item *CacheItem, tx redisCommonInterface,
 	// This extends the TTL of the item
 	// The set will succeed even if the item has expired since we entered WATCH
 	pipe := tx.TxPipeline()
-	pipe.Set(fullKey, item.Value, item.Expiration)
-	_, err = pipe.Exec()
+	pipe.Set(ms.c, fullKey, item.Value, item.Expiration)
+	_, err = pipe.Exec(ms.c)
 	return err
 }
 
@@ -551,7 +551,7 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 		if len(shardKeys) == 0 {
 			continue
 		}
-		if err := client.Del(shardKeys...); err != nil {
+		if err := client.Del(ms.c, shardKeys...); err != nil {
 			errList = append(errList, err)
 			haveErrors = true
 		}
@@ -588,12 +588,12 @@ func (ms Memorystore) FlushShard(shard int) error {
 	if shard < 0 || shard >= len(ms.clients) {
 		return fmt.Errorf("shard must be in range [0, %d), got %d", len(ms.clients), shard)
 	}
-	return ms.clients[shard].FlushAllAsync()
+	return ms.clients[shard].FlushAllAsync(ms.c)
 }
 
 func (ms Memorystore) Get(key string) (*CacheItem, error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
-	if val, err := ms.clients[shard].Get(fullKey); err != nil {
+	if val, err := ms.clients[shard].Get(ms.c, fullKey); err != nil {
 		// redis.Nil (ErrCacheMiss) will be returned if they key doesn't exist
 		return nil, err
 	} else {
@@ -610,7 +610,7 @@ func (ms Memorystore) Get(key string) (*CacheItem, error) {
 func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
 
 	getMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) ([]interface{}, error) {
-		return ms.clients[shard].MGet(shardKeys...)
+		return ms.clients[shard].MGet(ms.c, shardKeys...)
 	}
 
 	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardVals []interface{}, results map[string]*CacheItem) {
@@ -698,11 +698,11 @@ func (ms Memorystore) convertToByteSlice(v interface{}) []byte {
 func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (incr uint64, err error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
 	pipe := ms.clients[shard].TxPipeline()
-	pipe.SetNX(fullKey, initialValue, time.Duration(0))
-	pipe.IncrBy(fullKey, amount)
+	pipe.SetNX(ms.c, fullKey, initialValue, time.Duration(0))
+	pipe.IncrBy(ms.c, fullKey, amount)
 
 	var res []redis.Cmder
-	if res, err = pipe.Exec(); err == nil {
+	if res, err = pipe.Exec(ms.c); err == nil {
 		incr = uint64(res[1].(intCmdInterface).Val())
 	}
 	return incr, err
@@ -710,8 +710,8 @@ func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (
 
 func (ms Memorystore) IncrementExisting(key string, amount int64) (uint64, error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
-	if res, err := ms.clients[shard].Exists(fullKey); err == nil && res == 1 {
-		val, err := ms.clients[shard].IncrBy(fullKey, amount)
+	if res, err := ms.clients[shard].Exists(ms.c, fullKey); err == nil && res == 1 {
+		val, err := ms.clients[shard].IncrBy(ms.c, fullKey, amount)
 		return uint64(val), err
 	} else if err != nil {
 		return 0, err
@@ -722,7 +722,7 @@ func (ms Memorystore) IncrementExisting(key string, amount int64) (uint64, error
 
 func (ms Memorystore) Set(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	return ms.clients[shard].Set(fullKey, item.Value, item.Expiration)
+	return ms.clients[shard].Set(ms.c, fullKey, item.Value, item.Expiration)
 }
 
 func (ms Memorystore) SetMulti(items []*CacheItem) error {
@@ -730,9 +730,9 @@ func (ms Memorystore) SetMulti(items []*CacheItem) error {
 		pipe := ms.clients[shard].TxPipeline()
 		for i, key := range shardKeys {
 			item := items[itemIndices[shardKeys[i]]]
-			pipe.Set(key, item.Value, item.Expiration)
+			pipe.Set(ms.c, key, item.Value, item.Expiration)
 		}
-		_, err := pipe.Exec()
+		_, err := pipe.Exec(ms.c)
 		if err != nil {
 			return err
 		}
