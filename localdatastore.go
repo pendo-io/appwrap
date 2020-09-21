@@ -976,6 +976,9 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 
 func (mq *memoryQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
 	n := *mq
+	if ancestor == nil {
+		panic("datastore: nil query ancestor")
+	}
 	n.ancestor = ancestor
 	return &n
 }
