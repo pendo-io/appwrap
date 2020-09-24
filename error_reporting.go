@@ -55,37 +55,37 @@ func (g *googleErrorReporter) FlushReports() {
 }
 
 type errorForwardingLogger struct {
-	wrappedLogger        Logging
-	errorReporter        ErrorReporter
-	errorAffectsKeyLabel string
-	labelsLock           *sync.RWMutex
-	labels               map[string]string
-	req                  *http.Request
+	wrappedLogger     Logging
+	errorReporter     ErrorReporter
+	errorAffectsLabel string
+	labelsLock        *sync.RWMutex
+	labels            map[string]string
+	req               *http.Request
 }
 
 func (e errorForwardingLogger) Debugf(format string, args ...interface{}) {
-	e.wrappedLogger.Debugf(format, args)
+	e.wrappedLogger.Debugf(format, args...)
 }
 
 func (e errorForwardingLogger) Infof(format string, args ...interface{}) {
-	e.wrappedLogger.Infof(format, args)
+	e.wrappedLogger.Infof(format, args...)
 }
 
 func (e errorForwardingLogger) Warningf(format string, args ...interface{}) {
-	e.Warningf(format, args)
+	e.wrappedLogger.Warningf(format, args...)
 }
 
-func (e errorForwardingLogger) Request(request, url, format string, args ...interface{}) {
+func (e *errorForwardingLogger) Request(request, url, format string, args ...interface{}) {
 	req, err := http.NewRequest(request, url, nil)
 	if err != nil {
 		e.wrappedLogger.Warningf("could not parse request for potential error forwarding: %s", err.Error())
 	} else {
 		e.req = req
 	}
-	e.wrappedLogger.Request(request, url, format, args)
+	e.wrappedLogger.Request(request, url, format, args...)
 }
 
-func (e errorForwardingLogger) AddLabels(labels map[string]string) error {
+func (e *errorForwardingLogger) AddLabels(labels map[string]string) error {
 	e.labelsLock.Lock()
 	for k, v := range labels {
 		e.labels[k] = v
@@ -94,15 +94,15 @@ func (e errorForwardingLogger) AddLabels(labels map[string]string) error {
 	return e.wrappedLogger.AddLabels(labels)
 }
 
-func (e errorForwardingLogger) Errorf(format string, args ...interface{}) {
-	e.wrappedLogger.Errorf(format, args)
+func (e *errorForwardingLogger) Errorf(format string, args ...interface{}) {
+	e.wrappedLogger.Errorf(format, args...)
 	e.forwardError(forwardedError{
 		msg: fmt.Sprintf(format, args...),
 	})
 }
 
-func (e errorForwardingLogger) Criticalf(format string, args ...interface{}) {
-	e.wrappedLogger.Criticalf(format, args)
+func (e *errorForwardingLogger) Criticalf(format string, args ...interface{}) {
+	e.wrappedLogger.Criticalf(format, args...)
 	e.forwardError(forwardedError{
 		msg: fmt.Sprintf(format, args...),
 	})
@@ -116,11 +116,11 @@ func (f forwardedError) Error() string {
 	return f.msg
 }
 
-func (e errorForwardingLogger) forwardError(err error) {
+func (e *errorForwardingLogger) forwardError(err error) {
 	var affects string
-	if len(e.errorAffectsKeyLabel) > 0 {
+	if len(e.errorAffectsLabel) > 0 {
 		e.labelsLock.RLock()
-		affects = e.labels[e.errorAffectsKeyLabel]
+		affects = e.labels[e.errorAffectsLabel]
 		e.labelsLock.RUnlock()
 	}
 	e.errorReporter.Report(ErrorReport{
@@ -130,9 +130,12 @@ func (e errorForwardingLogger) forwardError(err error) {
 	})
 }
 
-func (g *googleErrorReporter) WrapLogger(logging Logging) errorForwardingLogger {
+func (g *googleErrorReporter) WrapLogger(logging Logging, errorAffectsLabel string) errorForwardingLogger {
 	return errorForwardingLogger{
-		wrappedLogger: logging,
-		errorReporter: g,
+		wrappedLogger:     logging,
+		errorReporter:     g,
+		errorAffectsLabel: errorAffectsLabel,
+		labelsLock:        &sync.RWMutex{},
+		labels:            make(map[string]string),
 	}
 }
