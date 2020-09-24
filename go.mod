@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.57.0
 	cloud.google.com/go/datastore v1.2.0
 	cloud.google.com/go/logging v1.0.0
+	cloud.google.com/go/pubsub v1.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codegangsta/inject v0.0.0-20140425184007-37d7f8432a3e // indirect
 	github.com/go-martini/martini v0.0.0-20140425183230-de6438617700
