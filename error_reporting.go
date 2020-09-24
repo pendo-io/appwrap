@@ -14,7 +14,12 @@ type ErrorReporter interface {
 }
 
 type googleErrorReporter struct {
-	client *errorreporting.Client
+	client googleErrorReportingClient
+}
+
+type googleErrorReportingClient interface {
+	Report(entry errorreporting.Entry)
+	Flush()
 }
 
 type ErrorReport struct {
@@ -92,14 +97,14 @@ func (e errorForwardingLogger) AddLabels(labels map[string]string) error {
 func (e errorForwardingLogger) Errorf(format string, args ...interface{}) {
 	e.wrappedLogger.Errorf(format, args)
 	e.forwardError(forwardedError{
-		msg: fmt.Sprintf(format, args),
+		msg: fmt.Sprintf(format, args...),
 	})
 }
 
 func (e errorForwardingLogger) Criticalf(format string, args ...interface{}) {
 	e.wrappedLogger.Criticalf(format, args)
 	e.forwardError(forwardedError{
-		msg: fmt.Sprintf(format, args),
+		msg: fmt.Sprintf(format, args...),
 	})
 }
 
