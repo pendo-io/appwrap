@@ -160,9 +160,8 @@ func (t *cloudTaskHttpImpl) SetPayload(payload []byte) {
 	req.Body = payload
 }
 
-func (t cloudTaskqueue) NewHttpCloudTask(queueName string, url string, method string, data []byte, headers http.Header) HttpTask {
-	task := NewHttpCloudTask(queueName)
-	headers.Set("Content-Type", "application/json")
+func (t cloudTaskqueue) NewHttpCloudTask(serviceAccount string, url string, method string, data []byte, headers http.Header) HttpTask {
+	task := NewHttpCloudTask(serviceAccount)
 	task.SetMethod(method)
 	task.SetPayload(data)
 	task.SetHeader(headers)
