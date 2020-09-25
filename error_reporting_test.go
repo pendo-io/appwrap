@@ -1,12 +1,14 @@
 package appwrap
 
 import (
-	"cloud.google.com/go/errorreporting"
 	"errors"
-	"github.com/stretchr/testify/mock"
-	. "gopkg.in/check.v1"
 	"net/http"
 	"sync"
+
+	"cloud.google.com/go/errorreporting"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
+	. "gopkg.in/check.v1"
 )
 
 type ErrorReportingTest struct{}
@@ -70,6 +72,15 @@ func (e *ErrorReportingTest) TestFlush(c *C) {
 	reporter.FlushReports()
 
 	client.AssertExpectations(c)
+}
+
+func (e *ErrorReportingTest) TestWrapLogger_CantWrapAgain(c *C) {
+	log := &errorForwardingLogger{}
+	reporter := &googleErrorReporter{}
+
+	assert.Panics(c, func() {
+		_ = reporter.WrapLogger(log, "")
+	})
 }
 
 func (e *ErrorReportingTest) TestDebugf_OnlyForwards(c *C) {

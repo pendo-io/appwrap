@@ -1,11 +1,12 @@
 package appwrap
 
 import (
-	"cloud.google.com/go/errorreporting"
 	"context"
 	"fmt"
 	"net/http"
 	"sync"
+
+	"cloud.google.com/go/errorreporting"
 )
 
 type ErrorReporter interface {
@@ -131,6 +132,9 @@ func (e *errorForwardingLogger) forwardError(err error) {
 }
 
 func (g *googleErrorReporter) WrapLogger(logging Logging, errorAffectsLabel string) errorForwardingLogger {
+	if _, alreadyWrapped := logging.(*errorForwardingLogger); alreadyWrapped {
+		panic("bug! this logger is already wrapped!")
+	}
 	return errorForwardingLogger{
 		wrappedLogger:     logging,
 		errorReporter:     g,
