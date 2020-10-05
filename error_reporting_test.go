@@ -27,23 +27,6 @@ func (g *googleErrorReportingClientMock) Flush() {
 	g.Called()
 }
 
-type mockErrorReporter struct {
-	mock.Mock
-}
-
-func (m *mockErrorReporter) Report(errReport ErrorReport) {
-	m.Called(errReport)
-}
-
-func (m *mockErrorReporter) FlushReports() {
-	m.Called()
-}
-
-func (m *mockErrorReporter) WrapLogger(logging Logging, errorAffectsLabel string) Logging {
-	args := m.Called(logging, errorAffectsLabel)
-	return args.Get(0).(Logging)
-}
-
 func (e *ErrorReportingTest) TestReport(c *C) {
 	client := &googleErrorReportingClientMock{}
 	reporter := &googleErrorReporter{client: client}
@@ -135,7 +118,7 @@ func (e *ErrorReportingTest) TestWarningf_OnlyForwards(c *C) {
 
 func (e *ErrorReportingTest) TestErrorf_ForwardsAndReports(c *C) {
 	wrapMe := &LoggingMock{Log: &NullLogger{}}
-	mockReporter := &mockErrorReporter{}
+	mockReporter := &ErrorReporterMock{}
 	forwardLog := &errorForwardingLogger{
 		wrappedLogger:     wrapMe,
 		errorReporter:     mockReporter,
@@ -158,7 +141,7 @@ func (e *ErrorReportingTest) TestErrorf_ForwardsAndReports(c *C) {
 
 func (e *ErrorReportingTest) TestCriticalf_ForwardsAndReports(c *C) {
 	wrapMe := &LoggingMock{Log: &NullLogger{}}
-	mockReporter := &mockErrorReporter{}
+	mockReporter := &ErrorReporterMock{}
 	forwardLog := &errorForwardingLogger{
 		wrappedLogger:     wrapMe,
 		errorReporter:     mockReporter,
@@ -181,7 +164,7 @@ func (e *ErrorReportingTest) TestCriticalf_ForwardsAndReports(c *C) {
 
 func (e *ErrorReportingTest) TestAddLabels_ErrorAffectsKeyIsSetToValue(c *C) {
 	wrapMe := &LoggingMock{Log: &NullLogger{}}
-	mockReporter := &mockErrorReporter{}
+	mockReporter := &ErrorReporterMock{}
 	forwardLog := &errorForwardingLogger{
 		wrappedLogger:     wrapMe,
 		errorReporter:     mockReporter,
@@ -223,7 +206,7 @@ func (e *ErrorReportingTest) TestAddLabels_ErrorAffectsKeyIsSetToValue(c *C) {
 
 func (e *ErrorReportingTest) TestRequest(c *C) {
 	wrapMe := &LoggingMock{Log: &NullLogger{}}
-	mockReporter := &mockErrorReporter{}
+	mockReporter := &ErrorReporterMock{}
 	forwardLog := &errorForwardingLogger{
 		wrappedLogger:     wrapMe,
 		errorReporter:     mockReporter,
