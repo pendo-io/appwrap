@@ -112,27 +112,6 @@ func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (
 	return false, nil
 }
 
-func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, error) {
-	ae, err := appengine.New(webClient(ai.c))
-	if err != nil {
-		return "", err
-	}
-
-	svc := appengine.NewAppsServicesService(ae)
-	call := svc.Get(ai.NativeProjectID(), moduleName)
-	if resp, err := call.Do(); err != nil {
-		return "", err
-	} else {
-		for version, allocation := range resp.Split.Allocations {
-			if allocation == 1 {
-				return version, nil
-			}
-		}
-
-		return "", errors.New("no default traffic split found")
-	}
-}
-
 func (ai AppengineInfoFlex) NumInstances(moduleName, version string) (int, error) {
 	ae, err := appengine.New(webClient(ai.c))
 	if err != nil {

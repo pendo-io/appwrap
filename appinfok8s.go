@@ -49,11 +49,6 @@ func (ai AppengineInfoK8s) ModuleHasTraffic(moduleName, moduleVersion string) (b
 	return false, nil
 }
 
-// ModuleDefaultVersionID not implemented in K8s
-func (ai AppengineInfoK8s) ModuleDefaultVersionID(moduleName string) (string, error) {
-	return "", nil
-}
-
 // NumInstances not implemented in K8s
 func (ai AppengineInfoK8s) NumInstances(moduleName, version string) (int, error) {
 	return 0, nil
