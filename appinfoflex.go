@@ -2,8 +2,9 @@ package appwrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"net/http"
 	"os"
 	"sync"
@@ -24,7 +25,18 @@ type AppengineInfoFlex struct {
 func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	// if running in K8s, K8S_POD will be set
 	if os.Getenv("K8S_POD") != "" {
-		return AppengineInfoK8s{c: c}
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+		}
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			panic(fmt.Sprintf("Cannot create K8s client: %s", err.Error()))
+		}
+		return AppengineInfoK8s{
+			c: c,
+			clientset: clientset,
+		}
 	}
 
 	return AppengineInfoFlex{c: c}
