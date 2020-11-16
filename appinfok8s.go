@@ -4,13 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type AppengineInfoK8s struct {
-	c context.Context
+	c         context.Context
+	clientset *kubernetes.Clientset
 }
 
-func (ai AppengineInfoK8s) AppID() string {
+func (ai AppengineInfoK8s) DataProjectID() string {
+	if project := os.Getenv("GOOGLE_CLOUD_DATA_PROJECT"); project != "" {
+		return project
+	}
+
+	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+}
+
+func (ai AppengineInfoK8s) NativeProjectID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }
 
@@ -24,7 +36,7 @@ func (ai AppengineInfoK8s) ModuleHostname(version, module, app string) (string, 
 		module = ai.ModuleName()
 	}
 	if app == "" {
-		app = ai.AppID()
+		app = ai.NativeProjectID()
 	}
 
 	domain := os.Getenv("K8S_DOMAIN")
@@ -49,7 +61,13 @@ func (ai AppengineInfoK8s) ModuleHasTraffic(moduleName, moduleVersion string) (b
 	return false, nil
 }
 
-// NumInstances not implemented in K8s
 func (ai AppengineInfoK8s) NumInstances(moduleName, version string) (int, error) {
-	return 0, nil
+	namespace := ai.DataProjectID()
+	deploymentName := ai.ModuleName()
+	d, err := ai.clientset.AppsV1().Deployments(namespace).Get(deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("Error getting deployment: %s", err)
+	}
+
+	return int(d.Status.AvailableReplicas), nil
 }
