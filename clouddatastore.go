@@ -276,7 +276,7 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 				transaction: transaction,
 			}
 			return f(ct)
-		})
+		}, datastore.MaxAttempts(1))
 		return err
 	})
 
