@@ -57,7 +57,7 @@ func (ai AppengineInfoK8s) VersionID() string {
 
 func (ai AppengineInfoK8s) Zone() string {
 	//This uses GCE metadata service, which is available on the nodes of this pod
-	return Zone()
+	return getZone()
 }
 
 //There is no one way to achieve traffic management in k8s. This implementation assumes using Istio.
@@ -110,7 +110,7 @@ func (ai AppengineInfoK8s) NumInstances(moduleName, version string) (int, error)
 	} else {
 		instances := 0
 		for _, set := range rs.Items {
-			instances = +int(set.Status.ReadyReplicas)
+			instances += int(set.Status.ReadyReplicas)
 		}
 		return instances, nil
 	}

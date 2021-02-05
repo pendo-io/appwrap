@@ -97,6 +97,46 @@ func (t *AppengineInterfacesTest) TestNumInstancesK8s_InstancesReportedWhenReady
 	c.Assert(num, Equals, 2)
 }
 
+func (t *AppengineInterfacesTest) TestNumInstancesK8s_InstancesFromDifferentRSFound(c *C) {
+	clientset := fake.NewSimpleClientset(&v1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "agentlogs-1",
+			Namespace: "theapp",
+			Labels: map[string]string{
+				"app":     "jobs-large",
+				"version": "liveversion",
+			},
+		},
+		Status: v1.ReplicaSetStatus{
+			ReadyReplicas:     2,
+			AvailableReplicas: 3,
+		},
+	},
+		&v1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "agentlogs-experiment",
+				Namespace: "theapp",
+				Labels: map[string]string{
+					"app":     "jobs-large",
+					"version": "liveversion",
+				},
+			},
+			Status: v1.ReplicaSetStatus{
+				ReadyReplicas:     2,
+				AvailableReplicas: 3,
+			},
+		},
+	)
+	ai := AppengineInfoK8s{
+		c:         context.Background(),
+		clientset: clientset,
+	}
+	num, err := ai.NumInstances("jobs-large", "liveversion")
+
+	c.Assert(err, IsNil)
+	c.Assert(num, Equals, 4)
+}
+
 func (t *AppengineInterfacesTest) TestModuleHasTraffic(c *C) {
 	clientset := istiofake.NewSimpleClientset(&v1beta1.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{

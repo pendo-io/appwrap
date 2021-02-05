@@ -58,7 +58,7 @@ func (ai AppengineInfoFlex) VersionID() string {
 }
 
 func (ai AppengineInfoFlex) Zone() string {
-	return Zone()
+	return getZone()
 }
 
 func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {

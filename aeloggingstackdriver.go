@@ -61,7 +61,7 @@ const (
 
 func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *logging.Logger {
 	return lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
-		Type: "gae_app",
+		Type: monitoredType(),
 		Labels: map[string]string{
 			"module_id":  aeInfo.ModuleName(),
 			"version_id": aeInfo.VersionID(),

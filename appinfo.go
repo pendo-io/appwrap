@@ -35,7 +35,7 @@ var (
 	zoneMtx sync.Mutex
 )
 
-func Zone() string {
+func getZone() string {
 	zoneMtx.Lock()
 	defer zoneMtx.Unlock()
 
@@ -50,6 +50,11 @@ func Zone() string {
 	return zone
 }
 
+func inKubernetes() bool {
+	// if running in K8s, the following environment variable will always be set
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
+}
+
 var (
 	IsDevAppServer = false
 	IsFlex         = appengine.IsFlex
@@ -59,8 +64,7 @@ var (
 
 // Don't call this.  It exists to make NewAppengineInfoFromContext mockable
 func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
-	// if running in K8s, the following environment variable will always be set
-	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+	if inKubernetes() {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
