@@ -2,27 +2,19 @@ package appwrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
 
-	"cloud.google.com/go/compute/metadata"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	appengine "google.golang.org/api/appengine/v1"
+	"google.golang.org/api/appengine/v1"
 )
 
 var googleScopes = []string{appengine.CloudPlatformScope}
 
 type AppengineInfoFlex struct {
 	c context.Context
-}
-
-// Don't call this.  It exists to make NewAppengineInfoFromContext mockable
-func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
-	return AppengineInfoFlex{c: c}
 }
 
 var NewAppengineInfoFromContext = InternalNewAppengineInfoFromContext
@@ -65,24 +57,8 @@ func (ai AppengineInfoFlex) VersionID() string {
 	return os.Getenv("GAE_VERSION")
 }
 
-var (
-	zone    string
-	zoneMtx sync.Mutex
-)
-
 func (ai AppengineInfoFlex) Zone() string {
-	zoneMtx.Lock()
-	defer zoneMtx.Unlock()
-
-	if zone == "" {
-		z, err := metadata.Zone()
-		if err != nil {
-			panic(err)
-		}
-		zone = z
-	}
-
-	return zone
+	return getZone()
 }
 
 func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
@@ -105,27 +81,6 @@ func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (
 	}
 
 	return false, nil
-}
-
-func (ai AppengineInfoFlex) ModuleDefaultVersionID(moduleName string) (string, error) {
-	ae, err := appengine.New(webClient(ai.c))
-	if err != nil {
-		return "", err
-	}
-
-	svc := appengine.NewAppsServicesService(ae)
-	call := svc.Get(ai.NativeProjectID(), moduleName)
-	if resp, err := call.Do(); err != nil {
-		return "", err
-	} else {
-		for version, allocation := range resp.Split.Allocations {
-			if allocation == 1 {
-				return version, nil
-			}
-		}
-
-		return "", errors.New("no default traffic split found")
-	}
 }
 
 func (ai AppengineInfoFlex) NumInstances(moduleName, version string) (int, error) {

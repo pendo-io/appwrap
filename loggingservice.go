@@ -127,11 +127,19 @@ func (sl *StackdriverLoggingService) CreateLog(labels map[string]string, logName
 // basicAppEngineOptions creates labels that will map the correct app engine instance to Stackdriver
 func basicAppEngineOptions(moduleName, projectId, versionId string) logging.LoggerOption {
 	return logging.CommonResource(&mrpb.MonitoredResource{
-		Type: "gae_app",
+		Type: monitoredType(),
 		Labels: map[string]string{
 			"module_id":  moduleName,
 			"project_id": projectId,
 			"version_id": versionId,
 		},
 	})
+}
+
+func monitoredType() string {
+	if inKubernetes() {
+		return "k8s_pod"
+	} else {
+		return "gae_app"
+	}
 }
