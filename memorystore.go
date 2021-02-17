@@ -298,10 +298,31 @@ func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo 
 					Addr:     addrs[i],
 					Password: "",
 					DB:       0,
-					PoolSize: 4 * runtime.GOMAXPROCS(0),
+
+					// Do not ever use internal retries; let the user of this
+					// library deal with retrying themselves if they see fit.
+					MaxRetries: -1,
+
+					// These are set by environment variable; see the init() function.
+					ReadTimeout: memorystoreReadTimeout,
+					PoolSize:    memorystorePoolSize,
+					PoolTimeout: memorystorePoolTimeout,
 				}
+
+				if ops.PoolSize == 0 {
+					ops.PoolSize = 4 * runtime.GOMAXPROCS(0)
+				}
+
 				if rateLimitersProvided {
 					ops.Limiter = createLimiter(i, log)
+				}
+
+				shard := i
+				ipaddr := addrs[i]
+				ops.OnConnect = func(ctx context.Context, cn *redis.Conn) error {
+					log := NewStackdriverLogging(ctx)
+					log.Infof("memorystore: created new connection to shard %d (%s)", shard, ipaddr)
+					return nil
 				}
 
 				client := redis.NewClient(ops)
@@ -781,4 +802,60 @@ func (ms Memorystore) Namespace(ns string) Memcache {
 
 func defaultKeyHashFn(key string, shardCount int) int {
 	return int(xxhash.Sum64String(key) % uint64(shardCount))
+}
+
+const (
+	envMemorystoreReadTimeoutMs = "memorystore_read_timeout_ms"
+	envMemorystorePoolSize      = "memorystore_pool_size"
+	envMemorystorePoolTimeoutMs = "memorystore_pool_timeout_ms"
+)
+
+var (
+	memorystoreReadTimeout time.Duration
+	memorystorePoolSize    int
+	memorystorePoolTimeout time.Duration
+)
+
+func init() {
+	readTimeoutMsStr := os.Getenv(envMemorystoreReadTimeoutMs)
+	if readTimeoutMsStr != "" {
+		timeoutMs, err := strconv.ParseInt(readTimeoutMsStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemorystoreReadTimeoutMs, readTimeoutMsStr, err)
+		} else if timeoutMs < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemorystorePoolSize)
+		} else {
+			memorystoreReadTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
+
+	memorystorePoolSizeStr := os.Getenv(envMemorystorePoolSize)
+	if memorystorePoolSizeStr != "" {
+		poolSize, err := strconv.ParseInt(memorystorePoolSizeStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemorystorePoolSize, memorystorePoolSizeStr, err)
+		} else if poolSize < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemorystorePoolSize)
+		} else {
+			memorystorePoolSize = int(poolSize)
+		}
+	}
+
+	poolTimeoutStr := os.Getenv(envMemorystorePoolTimeoutMs)
+	if poolTimeoutStr != "" {
+		timeoutMs, err := strconv.ParseInt(poolTimeoutStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemorystorePoolTimeoutMs, poolTimeoutStr, err)
+		} else if timeoutMs < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemorystorePoolTimeoutMs)
+		} else {
+			memorystorePoolTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
 }
