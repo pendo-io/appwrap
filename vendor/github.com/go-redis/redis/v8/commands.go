@@ -124,6 +124,7 @@ type Cmdable interface {
 	MSet(ctx context.Context, values ...interface{}) *StatusCmd
 	MSetNX(ctx context.Context, values ...interface{}) *BoolCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *StatusCmd
+	SetEX(ctx context.Context, key string, value interface{}, expiration time.Duration) *StatusCmd
 	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *BoolCmd
 	SetXX(ctx context.Context, key string, value interface{}, expiration time.Duration) *BoolCmd
 	SetRange(ctx context.Context, key string, offset int64, value string) *IntCmd
@@ -140,6 +141,7 @@ type Cmdable interface {
 	BitField(ctx context.Context, key string, args ...interface{}) *IntSliceCmd
 
 	Scan(ctx context.Context, cursor uint64, match string, count int64) *ScanCmd
+	ScanType(ctx context.Context, cursor uint64, match string, count int64, keyType string) *ScanCmd
 	SScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
 	HScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
 	ZScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
@@ -167,6 +169,8 @@ type Cmdable interface {
 	LInsertAfter(ctx context.Context, key string, pivot, value interface{}) *IntCmd
 	LLen(ctx context.Context, key string) *IntCmd
 	LPop(ctx context.Context, key string) *StringCmd
+	LPos(ctx context.Context, key string, value string, args LPosArgs) *IntCmd
+	LPosCount(ctx context.Context, key string, value string, count int64, args LPosArgs) *IntSliceCmd
 	LPush(ctx context.Context, key string, values ...interface{}) *IntCmd
 	LPushX(ctx context.Context, key string, values ...interface{}) *IntCmd
 	LRange(ctx context.Context, key string, start, stop int64) *StringSliceCmd
@@ -219,6 +223,7 @@ type Cmdable interface {
 	XTrim(ctx context.Context, key string, maxLen int64) *IntCmd
 	XTrimApprox(ctx context.Context, key string, maxLen int64) *IntCmd
 	XInfoGroups(ctx context.Context, key string) *XInfoGroupsCmd
+	XInfoStream(ctx context.Context, key string) *XInfoStreamCmd
 
 	BZPopMax(ctx context.Context, timeout time.Duration, keys ...string) *ZWithKeyCmd
 	BZPopMin(ctx context.Context, timeout time.Duration, keys ...string) *ZWithKeyCmd
@@ -783,6 +788,13 @@ func (c cmdable) Set(ctx context.Context, key string, value interface{}, expirat
 	return cmd
 }
 
+// Redis `SETEX key expiration value` command.
+func (c cmdable) SetEX(ctx context.Context, key string, value interface{}, expiration time.Duration) *StatusCmd {
+	cmd := NewStatusCmd(ctx, "setex", key, formatSec(ctx, expiration), value)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
 // Redis `SET key value [expiration] NX` command.
 //
 // Zero expiration means the key has no expiration time.
@@ -948,6 +960,22 @@ func (c cmdable) Scan(ctx context.Context, cursor uint64, match string, count in
 	}
 	if count > 0 {
 		args = append(args, "count", count)
+	}
+	cmd := NewScanCmd(ctx, c, args...)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+func (c cmdable) ScanType(ctx context.Context, cursor uint64, match string, count int64, keyType string) *ScanCmd {
+	args := []interface{}{"scan", cursor}
+	if match != "" {
+		args = append(args, "match", match)
+	}
+	if count > 0 {
+		args = append(args, "count", count)
+	}
+	if keyType != "" {
+		args = append(args, "type", keyType)
 	}
 	cmd := NewScanCmd(ctx, c, args...)
 	_ = c(ctx, cmd)
@@ -1175,6 +1203,37 @@ func (c cmdable) LLen(ctx context.Context, key string) *IntCmd {
 
 func (c cmdable) LPop(ctx context.Context, key string) *StringCmd {
 	cmd := NewStringCmd(ctx, "lpop", key)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+type LPosArgs struct {
+	Rank, MaxLen int64
+}
+
+func (c cmdable) LPos(ctx context.Context, key string, value string, a LPosArgs) *IntCmd {
+	args := []interface{}{"lpos", key, value}
+	if a.Rank != 0 {
+		args = append(args, "rank", a.Rank)
+	}
+	if a.MaxLen != 0 {
+		args = append(args, "maxlen", a.MaxLen)
+	}
+
+	cmd := NewIntCmd(ctx, args...)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+func (c cmdable) LPosCount(ctx context.Context, key string, value string, count int64, a LPosArgs) *IntSliceCmd {
+	args := []interface{}{"lpos", key, value, "count", count}
+	if a.Rank != 0 {
+		args = append(args, "rank", a.Rank)
+	}
+	if a.MaxLen != 0 {
+		args = append(args, "maxlen", a.MaxLen)
+	}
+	cmd := NewIntSliceCmd(ctx, args...)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -1504,16 +1563,20 @@ type XReadArgs struct {
 func (c cmdable) XRead(ctx context.Context, a *XReadArgs) *XStreamSliceCmd {
 	args := make([]interface{}, 0, 5+len(a.Streams))
 	args = append(args, "xread")
+
+	keyPos := int8(1)
 	if a.Count > 0 {
 		args = append(args, "count")
 		args = append(args, a.Count)
+		keyPos += 2
 	}
 	if a.Block >= 0 {
 		args = append(args, "block")
 		args = append(args, int64(a.Block/time.Millisecond))
+		keyPos += 2
 	}
-
 	args = append(args, "streams")
+	keyPos++
 	for _, s := range a.Streams {
 		args = append(args, s)
 	}
@@ -1522,6 +1585,7 @@ func (c cmdable) XRead(ctx context.Context, a *XReadArgs) *XStreamSliceCmd {
 	if a.Block >= 0 {
 		cmd.setReadTimeout(a.Block)
 	}
+	cmd.setFirstKeyPos(keyPos)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -1575,16 +1639,22 @@ type XReadGroupArgs struct {
 func (c cmdable) XReadGroup(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd {
 	args := make([]interface{}, 0, 8+len(a.Streams))
 	args = append(args, "xreadgroup", "group", a.Group, a.Consumer)
+
+	keyPos := int8(1)
 	if a.Count > 0 {
 		args = append(args, "count", a.Count)
+		keyPos += 2
 	}
 	if a.Block >= 0 {
 		args = append(args, "block", int64(a.Block/time.Millisecond))
+		keyPos += 2
 	}
 	if a.NoAck {
 		args = append(args, "noack")
+		keyPos++
 	}
 	args = append(args, "streams")
+	keyPos++
 	for _, s := range a.Streams {
 		args = append(args, s)
 	}
@@ -1593,6 +1663,7 @@ func (c cmdable) XReadGroup(ctx context.Context, a *XReadGroupArgs) *XStreamSlic
 	if a.Block >= 0 {
 		cmd.setReadTimeout(a.Block)
 	}
+	cmd.setFirstKeyPos(keyPos)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -1683,6 +1754,12 @@ func (c cmdable) XTrimApprox(ctx context.Context, key string, maxLen int64) *Int
 
 func (c cmdable) XInfoGroups(ctx context.Context, key string) *XInfoGroupsCmd {
 	cmd := NewXInfoGroupsCmd(ctx, key)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+func (c cmdable) XInfoStream(ctx context.Context, key string) *XInfoStreamCmd {
+	cmd := NewXInfoStreamCmd(ctx, key)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -1871,6 +1948,7 @@ func (c cmdable) ZInterStore(ctx context.Context, destination string, store *ZSt
 		args = append(args, "aggregate", store.Aggregate)
 	}
 	cmd := NewIntCmd(ctx, args...)
+	cmd.setFirstKeyPos(3)
 	_ = c(ctx, cmd)
 	return cmd
 }
@@ -2105,7 +2183,9 @@ func (c cmdable) ZUnionStore(ctx context.Context, dest string, store *ZStore) *I
 	if store.Aggregate != "" {
 		args = append(args, "aggregate", store.Aggregate)
 	}
+
 	cmd := NewIntCmd(ctx, args...)
+	cmd.setFirstKeyPos(3)
 	_ = c(ctx, cmd)
 	return cmd
 }

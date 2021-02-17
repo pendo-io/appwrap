@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8/internal"
+	"github.com/go-redis/redis/v8/internal/hscan"
 	"github.com/go-redis/redis/v8/internal/proto"
 	"github.com/go-redis/redis/v8/internal/util"
 )
@@ -18,6 +19,8 @@ type Cmder interface {
 	Args() []interface{}
 	String() string
 	stringArg(int) string
+	firstKeyPos() int8
+	setFirstKeyPos(int8)
 
 	readTimeout() *time.Duration
 	readReply(rd *proto.Reader) error
@@ -57,6 +60,10 @@ func writeCmd(wr *proto.Writer, cmd Cmder) error {
 }
 
 func cmdFirstKeyPos(cmd Cmder, info *CommandInfo) int {
+	if pos := cmd.firstKeyPos(); pos != 0 {
+		return int(pos)
+	}
+
 	switch cmd.Name() {
 	case "eval", "evalsha":
 		if cmd.stringArg(2) != "0" {
@@ -73,10 +80,10 @@ func cmdFirstKeyPos(cmd Cmder, info *CommandInfo) int {
 		}
 	}
 
-	if info == nil {
-		return 0
+	if info != nil {
+		return int(info.FirstKeyPos)
 	}
-	return int(info.FirstKeyPos)
+	return 0
 }
 
 func cmdString(cmd Cmder, val interface{}) string {
@@ -103,9 +110,10 @@ func cmdString(cmd Cmder, val interface{}) string {
 //------------------------------------------------------------------------------
 
 type baseCmd struct {
-	ctx  context.Context
-	args []interface{}
-	err  error
+	ctx    context.Context
+	args   []interface{}
+	err    error
+	keyPos int8
 
 	_readTimeout *time.Duration
 }
@@ -145,6 +153,14 @@ func (cmd *baseCmd) stringArg(pos int) string {
 	}
 	s, _ := cmd.args[pos].(string)
 	return s
+}
+
+func (cmd *baseCmd) firstKeyPos() int8 {
+	return cmd.keyPos
+}
+
+func (cmd *baseCmd) setFirstKeyPos(keyPos int8) {
+	cmd.keyPos = keyPos
 }
 
 func (cmd *baseCmd) SetErr(e error) {
@@ -354,6 +370,26 @@ func (cmd *SliceCmd) Result() ([]interface{}, error) {
 
 func (cmd *SliceCmd) String() string {
 	return cmdString(cmd, cmd.val)
+}
+
+// Scan scans the results from the map into a destination struct. The map keys
+// are matched in the Redis struct fields by the `redis:"field"` tag.
+func (cmd *SliceCmd) Scan(dst interface{}) error {
+	if cmd.err != nil {
+		return cmd.err
+	}
+
+	// Pass the list of keys and values.
+	// Skip the first two args for: HMGET key
+	var args []interface{}
+	if cmd.args[0] == "hmget" {
+		args = cmd.args[2:]
+	} else {
+		// Otherwise, it's: MGET field field ...
+		args = cmd.args[1:]
+	}
+
+	return hscan.Scan(dst, args, cmd.val)
 }
 
 func (cmd *SliceCmd) readReply(rd *proto.Reader) error {
@@ -902,6 +938,27 @@ func (cmd *StringStringMapCmd) String() string {
 	return cmdString(cmd, cmd.val)
 }
 
+// Scan scans the results from the map into a destination struct. The map keys
+// are matched in the Redis struct fields by the `redis:"field"` tag.
+func (cmd *StringStringMapCmd) Scan(dst interface{}) error {
+	if cmd.err != nil {
+		return cmd.err
+	}
+
+	strct, err := hscan.Struct(dst)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range cmd.val {
+		if err := strct.Scan(k, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (cmd *StringStringMapCmd) readReply(rd *proto.Reader) error {
 	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
 		cmd.val = make(map[string]string, n/2)
@@ -1058,47 +1115,57 @@ func (cmd *XMessageSliceCmd) String() string {
 }
 
 func (cmd *XMessageSliceCmd) readReply(rd *proto.Reader) error {
-	v, err := rd.ReadArrayReply(xMessageSliceParser)
-	if err != nil {
-		return err
-	}
-	cmd.val = v.([]XMessage)
-	return nil
+	var err error
+	cmd.val, err = readXMessageSlice(rd)
+	return err
 }
 
-// xMessageSliceParser implements proto.MultiBulkParse.
-func xMessageSliceParser(rd *proto.Reader, n int64) (interface{}, error) {
+func readXMessageSlice(rd *proto.Reader) ([]XMessage, error) {
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return nil, err
+	}
+
 	msgs := make([]XMessage, n)
-	for i := 0; i < len(msgs); i++ {
-		i := i
-		_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-			id, err := rd.ReadString()
-			if err != nil {
-				return nil, err
-			}
-
-			var values map[string]interface{}
-
-			v, err := rd.ReadArrayReply(stringInterfaceMapParser)
-			if err != nil {
-				if err != proto.Nil {
-					return nil, err
-				}
-			} else {
-				values = v.(map[string]interface{})
-			}
-
-			msgs[i] = XMessage{
-				ID:     id,
-				Values: values,
-			}
-			return nil, nil
-		})
+	for i := 0; i < n; i++ {
+		var err error
+		msgs[i], err = readXMessage(rd)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return msgs, nil
+}
+
+func readXMessage(rd *proto.Reader) (XMessage, error) {
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return XMessage{}, err
+	}
+	if n != 2 {
+		return XMessage{}, fmt.Errorf("got %d, wanted 2", n)
+	}
+
+	id, err := rd.ReadString()
+	if err != nil {
+		return XMessage{}, err
+	}
+
+	var values map[string]interface{}
+
+	v, err := rd.ReadArrayReply(stringInterfaceMapParser)
+	if err != nil {
+		if err != proto.Nil {
+			return XMessage{}, err
+		}
+	} else {
+		values = v.(map[string]interface{})
+	}
+
+	return XMessage{
+		ID:     id,
+		Values: values,
+	}, nil
 }
 
 // stringInterfaceMapParser implements proto.MultiBulkParse.
@@ -1171,14 +1238,14 @@ func (cmd *XStreamSliceCmd) readReply(rd *proto.Reader) error {
 					return nil, err
 				}
 
-				v, err := rd.ReadArrayReply(xMessageSliceParser)
+				msgs, err := readXMessageSlice(rd)
 				if err != nil {
 					return nil, err
 				}
 
 				cmd.val[i] = XStream{
 					Stream:   stream,
-					Messages: v.([]XMessage),
+					Messages: msgs,
 				}
 				return nil, nil
 			})
@@ -1380,10 +1447,10 @@ func (cmd *XPendingExtCmd) readReply(rd *proto.Reader) error {
 
 type XInfoGroupsCmd struct {
 	baseCmd
-	val []XInfoGroups
+	val []XInfoGroup
 }
 
-type XInfoGroups struct {
+type XInfoGroup struct {
 	Name            string
 	Consumers       int64
 	Pending         int64
@@ -1401,11 +1468,11 @@ func NewXInfoGroupsCmd(ctx context.Context, stream string) *XInfoGroupsCmd {
 	}
 }
 
-func (cmd *XInfoGroupsCmd) Val() []XInfoGroups {
+func (cmd *XInfoGroupsCmd) Val() []XInfoGroup {
 	return cmd.val
 }
 
-func (cmd *XInfoGroupsCmd) Result() ([]XInfoGroups, error) {
+func (cmd *XInfoGroupsCmd) Result() ([]XInfoGroup, error) {
 	return cmd.val, cmd.err
 }
 
@@ -1414,58 +1481,152 @@ func (cmd *XInfoGroupsCmd) String() string {
 }
 
 func (cmd *XInfoGroupsCmd) readReply(rd *proto.Reader) error {
-	_, err := rd.ReadArrayReply(func(rd *proto.Reader, n int64) (interface{}, error) {
-		for i := int64(0); i < n; i++ {
-			v, err := rd.ReadReply(xGroupInfoParser)
-			if err != nil {
-				return nil, err
-			}
-			cmd.val = append(cmd.val, v.(XInfoGroups))
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return err
+	}
+
+	cmd.val = make([]XInfoGroup, n)
+
+	for i := 0; i < n; i++ {
+		cmd.val[i], err = readXGroupInfo(rd)
+		if err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+	}
+
+	return nil
 }
 
-func xGroupInfoParser(rd *proto.Reader, n int64) (interface{}, error) {
-	if n != 8 {
-		return nil, fmt.Errorf("redis: got %d elements in XINFO GROUPS reply,"+
-			"wanted 8", n)
+func readXGroupInfo(rd *proto.Reader) (XInfoGroup, error) {
+	var group XInfoGroup
+
+	n, err := rd.ReadArrayLen()
+	if err != nil {
+		return group, err
 	}
-	var (
-		err error
-		grp XInfoGroups
-		key string
-		val string
-	)
+	if n != 8 {
+		return group, fmt.Errorf("redis: got %d elements in XINFO GROUPS reply, wanted 8", n)
+	}
 
 	for i := 0; i < 4; i++ {
-		key, err = rd.ReadString()
+		key, err := rd.ReadString()
 		if err != nil {
-			return nil, err
+			return group, err
 		}
-		val, err = rd.ReadString()
+
+		val, err := rd.ReadString()
+		if err != nil {
+			return group, err
+		}
+
+		switch key {
+		case "name":
+			group.Name = val
+		case "consumers":
+			group.Consumers, err = strconv.ParseInt(val, 0, 64)
+			if err != nil {
+				return group, err
+			}
+		case "pending":
+			group.Pending, err = strconv.ParseInt(val, 0, 64)
+			if err != nil {
+				return group, err
+			}
+		case "last-delivered-id":
+			group.LastDeliveredID = val
+		default:
+			return group, fmt.Errorf("redis: unexpected content %s in XINFO GROUPS reply", key)
+		}
+	}
+
+	return group, nil
+}
+
+//------------------------------------------------------------------------------
+
+type XInfoStreamCmd struct {
+	baseCmd
+	val *XInfoStream
+}
+
+type XInfoStream struct {
+	Length          int64
+	RadixTreeKeys   int64
+	RadixTreeNodes  int64
+	Groups          int64
+	LastGeneratedID string
+	FirstEntry      XMessage
+	LastEntry       XMessage
+}
+
+var _ Cmder = (*XInfoStreamCmd)(nil)
+
+func NewXInfoStreamCmd(ctx context.Context, stream string) *XInfoStreamCmd {
+	return &XInfoStreamCmd{
+		baseCmd: baseCmd{
+			ctx:  ctx,
+			args: []interface{}{"xinfo", "stream", stream},
+		},
+	}
+}
+
+func (cmd *XInfoStreamCmd) Val() *XInfoStream {
+	return cmd.val
+}
+
+func (cmd *XInfoStreamCmd) Result() (*XInfoStream, error) {
+	return cmd.val, cmd.err
+}
+
+func (cmd *XInfoStreamCmd) String() string {
+	return cmdString(cmd, cmd.val)
+}
+
+func (cmd *XInfoStreamCmd) readReply(rd *proto.Reader) error {
+	v, err := rd.ReadReply(xStreamInfoParser)
+	if err != nil {
+		return err
+	}
+	cmd.val = v.(*XInfoStream)
+	return nil
+}
+
+func xStreamInfoParser(rd *proto.Reader, n int64) (interface{}, error) {
+	if n != 14 {
+		return nil, fmt.Errorf("redis: got %d elements in XINFO STREAM reply,"+
+			"wanted 14", n)
+	}
+	var info XInfoStream
+	for i := 0; i < 7; i++ {
+		key, err := rd.ReadString()
 		if err != nil {
 			return nil, err
 		}
 		switch key {
-		case "name":
-			grp.Name = val
-		case "consumers":
-			grp.Consumers, err = strconv.ParseInt(val, 0, 64)
-		case "pending":
-			grp.Pending, err = strconv.ParseInt(val, 0, 64)
-		case "last-delivered-id":
-			grp.LastDeliveredID = val
+		case "length":
+			info.Length, err = rd.ReadIntReply()
+		case "radix-tree-keys":
+			info.RadixTreeKeys, err = rd.ReadIntReply()
+		case "radix-tree-nodes":
+			info.RadixTreeNodes, err = rd.ReadIntReply()
+		case "groups":
+			info.Groups, err = rd.ReadIntReply()
+		case "last-generated-id":
+			info.LastGeneratedID, err = rd.ReadString()
+		case "first-entry":
+			info.FirstEntry, err = readXMessage(rd)
+		case "last-entry":
+			info.LastEntry, err = readXMessage(rd)
 		default:
 			return nil, fmt.Errorf("redis: unexpected content %s "+
-				"in XINFO GROUPS reply", key)
+				"in XINFO STREAM reply", key)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	return grp, err
+	return &info, nil
 }
 
 //------------------------------------------------------------------------------
@@ -2242,7 +2403,7 @@ func (cmd *SlowLogCmd) readReply(rd *proto.Reader) error {
 			}
 
 			cmdString := make([]string, cmdLen)
-			for i := 0; i < int(cmdLen); i++ {
+			for i := 0; i < cmdLen; i++ {
 				cmdString[i], err = rd.ReadString()
 				if err != nil {
 					return nil, err
@@ -2250,7 +2411,7 @@ func (cmd *SlowLogCmd) readReply(rd *proto.Reader) error {
 			}
 
 			var address, name string
-			for i := 4; i < int(n); i++ {
+			for i := 4; i < n; i++ {
 				str, err := rd.ReadString()
 				if err != nil {
 					return nil, err
