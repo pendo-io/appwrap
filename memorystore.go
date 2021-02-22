@@ -56,6 +56,7 @@ type redisAPIService interface {
 type redisCommonInterface interface {
 	Del(ctx context.Context, keys ...string) error
 	Exists(ctx context.Context, keys ...string) (int64, error)
+	Failover(ctx context.Context) error
 	FlushAll(ctx context.Context) error
 	FlushAllAsync(ctx context.Context) error
 	Get(ctx context.Context, key string) ([]byte, error)
@@ -86,6 +87,10 @@ func (rci *redisClientImplementation) Del(ctx context.Context, keys ...string) e
 
 func (rci *redisClientImplementation) Exists(ctx context.Context, keys ...string) (int64, error) {
 	return rci.common.Exists(ctx, keys...).Result()
+}
+
+func (rci *redisClientImplementation) Failover(ctx context.Context) error {
+	return rci.client.ClusterFailover(ctx).Err()
 }
 
 func (rci *redisClientImplementation) FlushAll(ctx context.Context) error {
@@ -565,6 +570,13 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 	return nil
 }
 
+func (ms Memorystore) Failover(shard int) error {
+	if err := ms.shardCheck(shard); err != nil {
+		return err
+	}
+	return ms.clients[shard].Failover(ms.c)
+}
+
 func (ms Memorystore) Flush() error {
 	return errors.New("please don't call this on memorystore")
 	/*
@@ -585,10 +597,17 @@ func (ms Memorystore) Flush() error {
 }
 
 func (ms Memorystore) FlushShard(shard int) error {
+	if err := ms.shardCheck(shard); err != nil {
+		return err
+	}
+	return ms.clients[shard].FlushAllAsync(ms.c)
+}
+
+func (ms Memorystore) shardCheck(shard int) error {
 	if shard < 0 || shard >= len(ms.clients) {
 		return fmt.Errorf("shard must be in range [0, %d), got %d", len(ms.clients), shard)
 	}
-	return ms.clients[shard].FlushAllAsync(ms.c)
+	return nil
 }
 
 func (ms Memorystore) Get(key string) (*CacheItem, error) {

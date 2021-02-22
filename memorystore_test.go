@@ -44,6 +44,11 @@ func (m *redisClientMock) Exists(ctx context.Context, keys ...string) (int64, er
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *redisClientMock) Failover(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func (m *redisClientMock) FlushAll(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
@@ -731,6 +736,38 @@ func (s *MemorystoreTest) TestFlush(c *C) {
 		c.Assert(err, DeepEquals, MultiError{fatalErr})
 		checkMocks()
 	*/
+}
+
+func (s *MemorystoreTest) TestFailoverShard(c *C) {
+	ms, clientMocks := s.newMemstore()
+
+	checkMocks := func() {
+		clientMocks[0].AssertExpectations(c)
+		clientMocks[1].AssertExpectations(c)
+	}
+
+	clientMocks[0].On("Failover", ms.c).Return(nil).Once()
+	err := ms.Failover(0)
+	c.Assert(err, IsNil)
+	checkMocks()
+
+	clientMocks[1].On("Failover", ms.c).Return(nil).Once()
+	err = ms.Failover(1)
+	c.Assert(err, IsNil)
+	checkMocks()
+
+	err = ms.Failover(-1)
+	c.Assert(err, ErrorMatches, "shard must be in range.*")
+	checkMocks()
+
+	err = ms.Failover(2)
+	c.Assert(err, ErrorMatches, "shard must be in range.*")
+	checkMocks()
+
+	clientMocks[0].On("Failover", ms.c).Return(errors.New("client error")).Once()
+	err = ms.Failover(0)
+	c.Assert(err, NotNil)
+	checkMocks()
 }
 
 func (s *MemorystoreTest) TestFlushShard(c *C) {
