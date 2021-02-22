@@ -47,6 +47,7 @@ func NewRedisAPIService(ctx context.Context) (redisAPIService, error) {
 // redisAPIService captures the behavior of *redispb.CloudRedisClient, to make it mockable to testing.
 type redisAPIService interface {
 	io.Closer
+	FailoverInstance(ctx context.Context, req *redispb.FailoverInstanceRequest, opts ...gax.CallOption) (*cloudms.FailoverInstanceOperation, error)
 	GetInstance(context.Context, *redispb.GetInstanceRequest, ...gax.CallOption) (*redispb.Instance, error)
 }
 

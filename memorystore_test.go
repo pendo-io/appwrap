@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/go-redis/redis/v8"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
@@ -24,6 +25,12 @@ type redisAPIServiceMock struct {
 func (r redisAPIServiceMock) Close() error {
 	return r.Called().Error(0)
 }
+
+func (r redisAPIServiceMock) FailoverInstance(ctx context.Context, req *redispb.FailoverInstanceRequest, opts ...gax.CallOption) (*cloudms.FailoverInstanceOperation, error) {
+	ret := r.Called(ctx, req, opts)
+	return ret.Get(0).(*cloudms.FailoverInstanceOperation), ret.Error(1)
+}
+
 func (r redisAPIServiceMock) GetInstance(ctx context.Context, req *redispb.GetInstanceRequest, opts ...gax.CallOption) (*redispb.Instance, error) {
 	ret := r.Called(ctx, req, opts)
 	inst, _ := ret.Get(0).(*redispb.Instance) // converts untyped-nil Get(0) to typed-nil *redispb.Instance
