@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -163,7 +164,7 @@ func AddSharedLogClientToBackgroundContext(c context.Context, logName string) co
 	})
 }
 
-func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl string, fn func(log Logging)) {
+func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl, traceId string, fn func(log Logging)) {
 	ctxVal := c.Value(sharedClientCtxKey)
 	if ctxVal == nil {
 		panic("must wrap context with AddSharedLogClientToBackgroundContext")
@@ -176,7 +177,11 @@ func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl string, fn func(
 
 	sharedClientCtxVal := ctxVal.(*sharedClientLogCtxVal)
 
-	logCtxVal := getLogCtxVal(sharedClientCtxVal.aeInfo, req, sharedClientCtxVal.logger, sharedClientCtxVal.parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
+	if traceId == "" {
+		traceId = strconv.FormatInt(rand.Int63(), 10)
+	}
+
+	logCtxVal := getLogCtxVal(sharedClientCtxVal.aeInfo, req, sharedClientCtxVal.logger, sharedClientCtxVal.parent+"/traces/"+traceId)
 	fctx := context.WithValue(c, loggingCtxKey, logCtxVal)
 
 	dedicatedLogger := NewStackdriverLogging(fctx)

@@ -19,6 +19,7 @@ import (
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/pendo-io/appwrap/internal/metrics"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
@@ -434,7 +435,14 @@ func (ms Memorystore) namespacedKeyAndShard(key string) (string, int) {
 
 func (ms Memorystore) Add(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	if added, err := ms.clients[shard].SetNX(ms.c, fullKey, item.Value, item.Expiration); err != nil {
+
+	c, span := trace.StartSpan(ms.c, traceMemorystoreAdd)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
+	if added, err := ms.clients[shard].SetNX(c, fullKey, item.Value, item.Expiration); err != nil {
 		return err
 	} else if !added {
 		return CacheErrNotStored
@@ -443,14 +451,29 @@ func (ms Memorystore) Add(item *CacheItem) error {
 }
 
 func (ms Memorystore) AddMulti(items []*CacheItem) error {
+	c, span := trace.StartSpan(ms.c, traceMemorystoreAddMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(items))))
 
 	addMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) ([]redis.Cmder, error) {
+		if len(shardKeys) == 0 {
+			return nil, nil
+		}
+
+		c, span := trace.StartSpan(c, traceMemorystoreAddMultiShard)
+		defer span.End()
+
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, shardKeys[0]))
+		span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(shardKeys))))
+		span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
 		pipe := ms.clients[shard].TxPipeline()
 		for _, key := range shardKeys {
 			item := items[itemIndices[key]]
-			pipe.SetNX(ms.c, key, item.Value, item.Expiration)
+			pipe.SetNX(c, key, item.Value, item.Expiration)
 		}
-		return pipe.Exec(ms.c)
+		return pipe.Exec(c)
 	}
 
 	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardResults []redis.Cmder, errList []error) bool {
@@ -524,10 +547,17 @@ func (ms Memorystore) AddMulti(items []*CacheItem) error {
 
 func (ms Memorystore) CompareAndSwap(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	if err := ms.clients[shard].Watch(ms.c, func(tx *redis.Tx) error {
+
+	c, span := trace.StartSpan(ms.c, traceMemorystoreCAS)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
+	if err := ms.clients[shard].Watch(c, func(tx *redis.Tx) error {
 		// Watch is an optimistic lock
 		txClient := &redisClientImplementation{tx, nil}
-		return ms.doCompareAndSwap(item, txClient, fullKey)
+		return ms.doCompareAndSwap(c, item, txClient, fullKey)
 	}, fullKey); err == redis.TxFailedErr {
 		return CacheErrCASConflict
 	} else {
@@ -535,8 +565,8 @@ func (ms Memorystore) CompareAndSwap(item *CacheItem) error {
 	}
 }
 
-func (ms Memorystore) doCompareAndSwap(item *CacheItem, tx redisCommonInterface, fullKey string) error {
-	val, err := tx.Get(ms.c, fullKey)
+func (ms Memorystore) doCompareAndSwap(c context.Context, item *CacheItem, tx redisCommonInterface, fullKey string) error {
+	val, err := tx.Get(c, fullKey)
 	if err == ErrCacheMiss {
 		// Does item exist?  If not, can't swap it
 		return CacheErrNotStored
@@ -552,8 +582,8 @@ func (ms Memorystore) doCompareAndSwap(item *CacheItem, tx redisCommonInterface,
 	// This extends the TTL of the item
 	// The set will succeed even if the item has expired since we entered WATCH
 	pipe := tx.TxPipeline()
-	pipe.Set(ms.c, fullKey, item.Value, item.Expiration)
-	_, err = pipe.Exec(ms.c)
+	pipe.Set(c, fullKey, item.Value, item.Expiration)
+	_, err = pipe.Exec(c)
 	return err
 }
 
@@ -564,6 +594,11 @@ func (ms Memorystore) Delete(key string) error {
 }
 
 func (ms Memorystore) DeleteMulti(keys []string) error {
+	c, span := trace.StartSpan(ms.c, traceMemorystoreDeleteMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
 	namespacedKeys, _, _ := ms.shardedNamespacedKeys(keys)
 	errList := make(MultiError, 0, len(ms.clients))
 
@@ -573,10 +608,19 @@ func (ms Memorystore) DeleteMulti(keys []string) error {
 		if len(shardKeys) == 0 {
 			continue
 		}
-		if err := client.Del(ms.c, shardKeys...); err != nil {
-			errList = append(errList, err)
-			haveErrors = true
-		}
+
+		func() {
+			c, span := trace.StartSpan(c, traceMemorystoreDeleteMultiShard)
+			defer span.End()
+
+			span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, shardKeys[0]))
+			span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(shardKeys))))
+			span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(i)))
+			if err := client.Del(c, shardKeys...); err != nil {
+				errList = append(errList, err)
+				haveErrors = true
+			}
+		}()
 
 	}
 
@@ -614,8 +658,15 @@ func (ms Memorystore) FlushShard(shard int) error {
 }
 
 func (ms Memorystore) Get(key string) (*CacheItem, error) {
+	c, span := trace.StartSpan(ms.c, traceMemorystoreGet)
+	defer span.End()
+
 	fullKey, shard := ms.namespacedKeyAndShard(key)
-	if val, err := ms.clients[shard].Get(ms.c, fullKey); err != nil {
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
+	if val, err := ms.clients[shard].Get(c, fullKey); err != nil {
 		// redis.Nil (ErrCacheMiss) will be returned if they key doesn't exist
 		return nil, err
 	} else {
@@ -630,9 +681,22 @@ func (ms Memorystore) Get(key string) (*CacheItem, error) {
 }
 
 func (ms Memorystore) GetMulti(keys []string) (map[string]*CacheItem, error) {
+	c, span := trace.StartSpan(ms.c, traceMemorystoreGetMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
 
 	getMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) ([]interface{}, error) {
-		return ms.clients[shard].MGet(ms.c, shardKeys...)
+		if len(shardKeys) == 0 {
+			return nil, nil
+		}
+		c, span := trace.StartSpan(c, traceMemorystoreGetMultiShard)
+		defer span.End()
+
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, shardKeys[0]))
+		span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(shardKeys))))
+		span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+		return ms.clients[shard].MGet(c, shardKeys...)
 	}
 
 	handleReturn := func(shard int, itemIndices map[string]int, shardKeys []string, shardVals []interface{}, results map[string]*CacheItem) {
@@ -719,12 +783,18 @@ func (ms Memorystore) convertToByteSlice(v interface{}) []byte {
 
 func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (incr uint64, err error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
+	c, span := trace.StartSpan(ms.c, traceMemorystoreIncr)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
 	pipe := ms.clients[shard].TxPipeline()
-	pipe.SetNX(ms.c, fullKey, initialValue, time.Duration(0))
-	pipe.IncrBy(ms.c, fullKey, amount)
+	pipe.SetNX(c, fullKey, initialValue, time.Duration(0))
+	pipe.IncrBy(c, fullKey, amount)
 
 	var res []redis.Cmder
-	if res, err = pipe.Exec(ms.c); err == nil {
+	if res, err = pipe.Exec(c); err == nil {
 		incr = uint64(res[1].(intCmdInterface).Val())
 	}
 	return incr, err
@@ -732,8 +802,14 @@ func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (
 
 func (ms Memorystore) IncrementExisting(key string, amount int64) (uint64, error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
-	if res, err := ms.clients[shard].Exists(ms.c, fullKey); err == nil && res == 1 {
-		val, err := ms.clients[shard].IncrBy(ms.c, fullKey, amount)
+	c, span := trace.StartSpan(ms.c, traceMemorystoreIncrExisting)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
+	if res, err := ms.clients[shard].Exists(c, fullKey); err == nil && res == 1 {
+		val, err := ms.clients[shard].IncrBy(c, fullKey, amount)
 		return uint64(val), err
 	} else if err != nil {
 		return 0, err
@@ -744,17 +820,39 @@ func (ms Memorystore) IncrementExisting(key string, amount int64) (uint64, error
 
 func (ms Memorystore) Set(item *CacheItem) error {
 	fullKey, shard := ms.namespacedKeyAndShard(item.Key)
-	return ms.clients[shard].Set(ms.c, fullKey, item.Value, item.Expiration)
+	c, span := trace.StartSpan(ms.c, traceMemorystoreSet)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
+	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
+	return ms.clients[shard].Set(c, fullKey, item.Value, item.Expiration)
 }
 
 func (ms Memorystore) SetMulti(items []*CacheItem) error {
+	c, span := trace.StartSpan(ms.c, traceMemorystoreSetMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(items))))
+
 	setMultiForShard := func(shard int, itemIndices map[string]int, shardKeys []string) error {
+		if len(shardKeys) == 0 {
+			return nil
+		}
+
+		c, span := trace.StartSpan(c, traceMemorystoreSetMultiShard)
+		defer span.End()
+
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, shardKeys[0]))
+		span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(shardKeys))))
+		span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
+
 		pipe := ms.clients[shard].TxPipeline()
 		for i, key := range shardKeys {
 			item := items[itemIndices[shardKeys[i]]]
-			pipe.Set(ms.c, key, item.Value, item.Expiration)
+			pipe.Set(c, key, item.Value, item.Expiration)
 		}
-		_, err := pipe.Exec(ms.c)
+		_, err := pipe.Exec(c)
 		if err != nil {
 			return err
 		}
