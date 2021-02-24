@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
+	"go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -167,8 +168,8 @@ func withTimeout(parent context.Context, timeout time.Duration, f func(context.C
 	return withDeadline(parent, time.Now().Add(timeout), f)
 }
 
-func (cds CloudDatastore) withDefaultTimeout(f func(context.Context) error) error {
-	return withTimeout(cds.ctx, cds.timeout, f)
+func (cds CloudDatastore) withDefaultTimeout(parent context.Context, f func(context.Context) error) error {
+	return withTimeout(parent, cds.timeout, f)
 }
 
 func (cds CloudDatastore) Deadline(t time.Time) Datastore {
@@ -183,8 +184,11 @@ func (cds CloudDatastore) Namespace(ns string) Datastore {
 }
 
 func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreAllocateIds)
+	defer span.End()
+
 	var res []*DatastoreKey
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		var err error
 		res, err = cds.client.AllocateIDs(tctx, incompleteKeys)
 		return err
@@ -193,28 +197,57 @@ func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*Data
 }
 
 func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreDeleteMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		return cds.client.DeleteMulti(tctx, keys)
 	})
 	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreGet)
+	defer span.End()
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		return cds.client.Get(tctx, key, dst)
 	})
 	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreGetMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		return cds.client.GetMulti(tctx, keys, dst)
 	})
 	return convertIfMultiError(err)
 }
 
 func (cds CloudDatastore) Kinds() (kinds []string, err error) {
-	keys, err := cds.NewQuery("__kind__").KeysOnly().GetAll(nil)
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreKinds)
+	defer span.End()
+
+	q := cds.NewQuery("__kind__").KeysOnly()
+	cq := q.(CloudDatastoreQuery)
+	cq.ctx = c
+
+	keys, err := q.GetAll(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -240,8 +273,13 @@ func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 }
 
 func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
+	c, span := trace.StartSpan(cds.ctx, traceDatastorePut)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+
 	var res *DatastoreKey
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		var err error
 		res, err = cds.client.Put(tctx, key, src)
 		return err
@@ -251,8 +289,17 @@ func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey
 }
 
 func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
+	c, span := trace.StartSpan(cds.ctx, traceDatastorePutMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
 	var res []*DatastoreKey
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		var err error
 		res, err = cds.client.PutMulti(tctx, keys, src)
 		return err
@@ -265,8 +312,11 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 		panic("transaction options not supported")
 	}
 
+	c, span := trace.StartSpan(cds.ctx, traceDatastoreRunInTransaction)
+	defer span.End()
+
 	var commit *datastore.Commit
-	err := cds.withDefaultTimeout(func(tctx context.Context) error {
+	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		var err error
 		commit, err = cds.client.RunInTransaction(tctx, func(transaction *datastore.Transaction) error {
 			ct := CloudTransaction{
@@ -284,6 +334,11 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 }
 
 func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
+	_, span := trace.StartSpan(cds.ctx, traceDatastoreNewQuery)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKind, kind))
+
 	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, timeout: cds.timeout, q: datastore.NewQuery(kind)}
 	if cds.namespace != "" {
 		q.q = q.q.Namespace(cds.namespace)
@@ -300,16 +355,39 @@ type CloudTransaction struct {
 }
 
 func (ct CloudTransaction) DeleteMulti(keys []*DatastoreKey) error {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionDeleteMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
 	err := ct.transaction.DeleteMulti(keys)
 	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) Get(key *DatastoreKey, dst interface{}) error {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionGet)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+
 	err := ct.transaction.Get(key, dst)
 	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionGetMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
 	err := ct.transaction.GetMulti(keys, dst)
 	return convertIfMultiError(err)
 }
@@ -322,6 +400,11 @@ func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *Da
 }
 
 func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionNewQuery)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKind, kind))
+
 	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, timeout: 0 /* no timeout since ct.ctx already has deadline */, q: datastore.NewQuery(kind)}
 	q.q = q.q.Transaction(ct.transaction)
 	if ct.namespace != "" {
@@ -332,11 +415,25 @@ func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
 }
 
 func (ct CloudTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionPut)
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+
 	res, err := ct.transaction.Put(key, src)
 	return res, convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
+	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionPutMulti)
+	defer span.End()
+
+	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+
+	if len(keys) > 0 {
+		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+	}
+
 	res, err := ct.transaction.PutMulti(keys, src)
 	return res, convertIfMultiError(err)
 }
@@ -424,6 +521,9 @@ func (cdq CloudDatastoreQuery) Run() DatastoreIterator {
 }
 
 func (cdq CloudDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
+	_, span := trace.StartSpan(cdq.ctx, traceDatastoreQueryGetAll)
+	defer span.End()
+
 	var keys []*DatastoreKey
 	err := withTimeout(cdq.ctx, cdq.timeout, func(tctx context.Context) error {
 		var err error
