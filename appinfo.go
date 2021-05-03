@@ -50,7 +50,7 @@ func getZone() string {
 	return zone
 }
 
-func inKubernetes() bool {
+func InKubernetes() bool {
 	// if running in K8s, the following environment variable will always be set
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
@@ -64,7 +64,7 @@ var (
 
 // Don't call this.  It exists to make NewAppengineInfoFromContext mockable
 func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
-	if inKubernetes() {
+	if InKubernetes() {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
