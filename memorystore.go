@@ -305,9 +305,10 @@ func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo 
 					MaxRetries: -1,
 
 					// These are set by environment variable; see the init() function.
-					ReadTimeout: memorystoreReadTimeout,
+					IdleTimeout: memorystoreIdleTimeout,
 					PoolSize:    memorystorePoolSize,
 					PoolTimeout: memorystorePoolTimeout,
+					ReadTimeout: memorystoreReadTimeout,
 				}
 
 				if ops.PoolSize == 0 {
@@ -903,15 +904,17 @@ func defaultKeyHashFn(key string, shardCount int) int {
 }
 
 const (
-	envMemorystoreReadTimeoutMs = "memorystore_read_timeout_ms"
+	envMemorystoreIdleTimeoutMs = "memorystore_idle_timeout_ms"
 	envMemorystorePoolSize      = "memorystore_pool_size"
 	envMemorystorePoolTimeoutMs = "memorystore_pool_timeout_ms"
+	envMemorystoreReadTimeoutMs = "memorystore_read_timeout_ms"
 )
 
 var (
-	memorystoreReadTimeout time.Duration
+	memorystoreIdleTimeout time.Duration
 	memorystorePoolSize    int
 	memorystorePoolTimeout time.Duration
+	memorystoreReadTimeout time.Duration
 )
 
 func init() {
@@ -954,6 +957,29 @@ func init() {
 				envMemorystorePoolTimeoutMs)
 		} else {
 			memorystorePoolTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
+
+	// From https://cloud.google.com/memorystore/docs/redis/redis-configs:
+	// The default idle timeout on the managed Redis servers used by Memorystore
+	// is 0, which is to say the connections are _never_ disconnected by the server.
+	// The go-redis documentation says that any client-specified value should always
+	// be less than the Redis server's value, or disabled.
+	//
+	// To disable idle connection reaping, specify -1.
+	idleTimeoutStr := os.Getenv(envMemorystoreIdleTimeoutMs)
+	if idleTimeoutStr != "" {
+		timeoutMs, err := strconv.ParseInt(idleTimeoutStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemorystoreIdleTimeoutMs, idleTimeoutStr, err)
+		} else if timeoutMs == -1 {
+			memorystoreIdleTimeout = -1
+		} else if timeoutMs < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be either a non-zero non-negative integer, or -1 to disable idle timeout\n",
+				envMemorystoreIdleTimeoutMs)
+		} else {
+			memorystoreIdleTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
 	}
 }
