@@ -1,3 +1,5 @@
+// +build !memcached
+
 package appwrap
 
 import (
@@ -28,16 +30,6 @@ var ErrCacheMiss = redis.Nil
 var CacheErrNotStored = errors.New("item not stored")
 var CacheErrCASConflict = errors.New("compare-and-swap conflict")
 var CacheErrServerError = errors.New("redis: server error")
-
-type CacheItem struct {
-	Key        string
-	Value      []byte
-	Object     interface{}
-	Flags      uint32
-	Expiration time.Duration
-	// Used for CompareAndSwap, invisible to client
-	valueOnLastGet []byte
-}
 
 type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
 
