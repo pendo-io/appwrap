@@ -5,9 +5,6 @@ import (
 
 	"context"
 	. "gopkg.in/check.v1"
-	networkingv1beta1 "istio.io/api/networking/v1beta1"
-	"istio.io/client-go/pkg/apis/networking/v1beta1"
-	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -138,44 +135,28 @@ func (t *AppengineInterfacesTest) TestNumInstancesK8s_InstancesFromDifferentRSFo
 }
 
 func (t *AppengineInterfacesTest) TestModuleHasTraffic(c *C) {
-	clientset := istiofake.NewSimpleClientset(&v1beta1.VirtualService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "default-vs",
-			Namespace: "theapp",
-			Labels: map[string]string{
-				"app": "default",
-			},
-		},
-		Spec: networkingv1beta1.VirtualService{
-			Tls: []*networkingv1beta1.TLSRoute{
-				{
-					Route: []*networkingv1beta1.RouteDestination{
-						{
-							Weight: int32(80),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version3",
-							},
-						},
-						{
-							Weight: int32(20),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version2",
-							},
-						},
-						{
-							Weight: int32(0),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version1",
-							},
-						},
-					},
-				},
-			},
-		},
+	mem := t.newDatastore()
+	key1 := mem.NewKey("TrafficRecord", "default-version3", 0, nil)
+	_, _ = mem.Put(key1, &TrafficRecord{
+		Service: "default",
+		Version: "version3",
+		Weight:  80,
+	})
+	key2 := mem.NewKey("TrafficRecord", "default-version2", 0, nil)
+	_, _ = mem.Put(key2, &TrafficRecord{
+		Service: "default",
+		Version: "version2",
+		Weight:  20,
+	})
+	key3 := mem.NewKey("TrafficRecord", "default-version1", 0, nil)
+	_, _ = mem.Put(key3, &TrafficRecord{
+		Service: "default",
+		Version: "version1",
+		Weight:  0,
 	})
 	ai := AppengineInfoK8s{
 		c:        context.Background(),
-		istioset: clientset,
+		datastore: mem,
 	}
 
 	hasTraffic, err := ai.ModuleHasTraffic("default", "version1")
@@ -189,58 +170,8 @@ func (t *AppengineInterfacesTest) TestModuleHasTraffic(c *C) {
 	hasTraffic, err = ai.ModuleHasTraffic("default", "version3")
 	c.Assert(err, IsNil)
 	c.Assert(hasTraffic, IsTrue)
-}
 
-func (t *AppengineInterfacesTest) TestModuleHasTraffic_Http(c *C) {
-	clientset := istiofake.NewSimpleClientset(&v1beta1.VirtualService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "default-vs",
-			Namespace: "theapp",
-			Labels: map[string]string{
-				"app": "default",
-			},
-		},
-		Spec: networkingv1beta1.VirtualService{
-			Http: []*networkingv1beta1.HTTPRoute{
-				{
-					Route: []*networkingv1beta1.HTTPRouteDestination{
-						{
-							Weight: int32(80),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version3",
-							},
-						},
-						{
-							Weight: int32(20),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version2",
-							},
-						},
-						{
-							Weight: int32(0),
-							Destination: &networkingv1beta1.Destination{
-								Subset: "version1",
-							},
-						},
-					},
-				},
-			},
-		},
-	})
-	ai := AppengineInfoK8s{
-		c:        context.Background(),
-		istioset: clientset,
-	}
-
-	hasTraffic, err := ai.ModuleHasTraffic("default", "version1")
+	hasTraffic, err = ai.ModuleHasTraffic("default", "version4")
 	c.Assert(err, IsNil)
 	c.Assert(hasTraffic, IsFalse)
-
-	hasTraffic, err = ai.ModuleHasTraffic("default", "version2")
-	c.Assert(err, IsNil)
-	c.Assert(hasTraffic, IsTrue)
-
-	hasTraffic, err = ai.ModuleHasTraffic("default", "version3")
-	c.Assert(err, IsNil)
-	c.Assert(hasTraffic, IsTrue)
 }

@@ -8,7 +8,6 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/appengine"
-	istio "istio.io/client-go/pkg/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -34,6 +33,8 @@ var (
 	zone    string
 	zoneMtx sync.Mutex
 )
+
+const dsNamespace = "ops_traffic_monitor"
 
 func getZone() string {
 	zoneMtx.Lock()
@@ -73,14 +74,9 @@ func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 		if err != nil {
 			panic(fmt.Sprintf("Cannot create K8s client: %s", err.Error()))
 		}
-		istioset, err := istio.NewForConfig(config)
-		if err != nil {
-			panic(fmt.Sprintf("Cannot create Istio k8s client: %s", err.Error()))
-		}
 		return AppengineInfoK8s{
 			c:         c,
 			clientset: clientset,
-			istioset:  istioset,
 		}
 	}
 

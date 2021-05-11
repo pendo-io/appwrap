@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	istio "istio.io/client-go/pkg/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -14,7 +13,13 @@ import (
 type AppengineInfoK8s struct {
 	c         context.Context
 	clientset kubernetes.Interface
-	istioset  istio.Interface
+	datastore Datastore
+}
+
+type TrafficRecord struct {
+	Service string
+	Version string
+	Weight int32
 }
 
 func (ai AppengineInfoK8s) DataProjectID() string {
@@ -62,39 +67,34 @@ func (ai AppengineInfoK8s) Zone() string {
 
 //There is no one way to achieve traffic management in k8s. This implementation assumes using Istio.
 //
-//This implementation will attempt to find a corresponding virtual service resource labeled app=<module_name>.
-//We will attempt to find a destination rule will a subset named moduleVersion, and derive traffic weight from this
+//This implementation will attempt to read TrafficRecords from the datastore put there by traffic-monitor
+//https://github.com/pendo-io/traffic-monitor
+//keys must be moduleNmae-moduleVersion. We also double check the rest of the record for due diligence
 func (ai AppengineInfoK8s) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
-	namespace := ai.NativeProjectID()
-	labelSet := labels.Set{
-		"app": moduleName,
+	//We're unable to set this in the constructor of AppengineInfoK8s since NewCloudDatastore makes a call to
+	//NewAppengineInfoFromContext which will be an endless loop. Will only update if the datastore field is empty
+	if ai.datastore == nil {
+		datastore, err := NewCloudDatastore(ai.c)
+		if err != nil {
+			panic(fmt.Sprintf("Cannot create Traffic Monitor datastore client: %s", err.Error()))
+		}
+		ai.datastore = datastore.Namespace(dsNamespace)
 	}
-	if vsl, err := ai.istioset.NetworkingV1beta1().VirtualServices(namespace).List(ai.c, metav1.ListOptions{
-		LabelSelector: labelSet.String(),
-	}); err != nil {
-		return false, fmt.Errorf("could not get virtual service for %s in namespace %s, error was: %s", moduleName, namespace, err.Error())
-	} else {
-		for _, svc := range vsl.Items {
-			httpRoutes := svc.Spec.Http
-			tlsRoutes := svc.Spec.Tls
-			//Find a tls or http route. Although same named attributes, different structures, so we loop through independently
-			for _, route := range tlsRoutes {
-				for _, tlsDest := range route.Route {
-					if tlsDest.Destination.Subset == moduleVersion && tlsDest.Weight > 0 {
-						return true, nil
-					}
-				}
-			}
-			for _, route := range httpRoutes {
-				for _, httpDest := range route.Route {
-					if httpDest.Destination.Subset == moduleVersion && httpDest.Weight > 0 {
-						return true, nil
-					}
-				}
-			}
+
+	var trafficRecord TrafficRecord
+	dsKey := ai.datastore.NewKey("TrafficRecord", fmt.Sprintf("%s-%s", moduleName, moduleVersion), 0, nil)
+	if err := ai.datastore.Get(dsKey, &trafficRecord); err != nil {
+		if err == ErrNoSuchEntity {
+			return false, nil
+		} else {
+			return false, err
 		}
 	}
-	return false, nil
+	if trafficRecord.Service == moduleName && trafficRecord.Version == moduleVersion && trafficRecord.Weight > 0 {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
 func (ai AppengineInfoK8s) NumInstances(moduleName, version string) (int, error) {
