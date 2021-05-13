@@ -137,7 +137,7 @@ func basicAppEngineOptions(moduleName, projectId, versionId string) logging.Logg
 }
 
 func monitoredType() string {
-	if inKubernetes() {
+	if InKubernetes() {
 		return "k8s_pod"
 	} else {
 		return "gae_app"
