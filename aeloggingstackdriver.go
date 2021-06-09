@@ -60,14 +60,26 @@ const (
 	loggingFlushCountTrigger = 5000
 )
 
-func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *logging.Logger {
-	return lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
-		Type: monitoredType(),
-		Labels: map[string]string{
+func resourceLabels(aeInfo AppengineInfo) map[string]string {
+	if InKubernetes() {
+		return map[string]string{
+			"project_id":     aeInfo.DataProjectID(),
+			"namespace_name": aeInfo.DataProjectID(),
+			"pod_name":       aeInfo.InstanceID(),
+		}
+	} else {
+		return map[string]string{
 			"module_id":  aeInfo.ModuleName(),
 			"version_id": aeInfo.VersionID(),
 			"project_id": aeInfo.NativeProjectID(),
-		},
+		}
+	}
+}
+
+func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *logging.Logger {
+	return lc.Logger(logName, logging.CommonResource(&mrpb.MonitoredResource{
+		Type:   monitoredType(),
+		Labels: resourceLabels(aeInfo),
 	}), logging.DelayThreshold(loggingFlushTimeTrigger), logging.EntryByteThreshold(loggingFlushSizeTrigger), logging.EntryCountThreshold(loggingFlushCountTrigger))
 }
 
@@ -82,6 +94,8 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 		hreq:   hreq,
 		labels: map[string]string{
 			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+			"pendo.io/service":                       aeInfo.ModuleName(),
+			"pendo.io/version":                       aeInfo.VersionID(),
 			"pendo.io/request_host":                  hreq.Host,
 			"pendo.io/request_method":                hreq.Method,
 			"pendo.io/request_url":                   hreq.URL.String(),
