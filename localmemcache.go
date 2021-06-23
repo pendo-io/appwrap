@@ -57,7 +57,7 @@ func (mc *LocalMemcache) CompareAndSwap(item *CacheItem) error {
 		return CacheErrNotStored
 	} else if err != nil {
 		return err
-	} else if !entry.Object.(time.Time).Equal(item.Object.(time.Time)) {
+	} else if !entry.casTime.(time.Time).Equal(item.casTime.(time.Time)) {
 		return CacheErrCASConflict
 	}
 
@@ -126,7 +126,11 @@ func (mc *LocalMemcache) Get(key string) (*CacheItem, error) {
 		mc.delete(key)
 		return nil, ErrCacheMiss
 	} else {
-		return &CacheItem{Key: key, Value: item.value, Object: item.addedAt}, nil
+		return &CacheItem{
+			Key:     key,
+			Value:   item.value,
+			casTime: item.addedAt,
+		}, nil
 	}
 }
 
@@ -191,7 +195,7 @@ func (mc *LocalMemcache) Set(item *CacheItem) error {
 	var expires time.Time
 
 	if item.Expiration > 0 {
-		expires = time.Now().Add(item.Expiration)
+		expires = time.Now().Add(time.Duration(item.Expiration))
 	} else {
 		expires = time.Time{}
 	}

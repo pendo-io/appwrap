@@ -1,5 +1,7 @@
 package appwrap
 
+import "time"
+
 type Memcache interface {
 	Add(item *CacheItem) error
 	AddMulti(item []*CacheItem) error
@@ -20,3 +22,13 @@ type Memcache interface {
 type CacheLocation string
 type CacheName string
 type CacheShards int64
+
+type CacheItem struct {
+	Key        string
+	Value      []byte
+	casTime    interface{} // used by localmemcache for CAS
+	Flags      uint32
+	Expiration time.Duration
+	// Used for CompareAndSwap, invisible to client
+	valueOnLastGet []byte
+}
