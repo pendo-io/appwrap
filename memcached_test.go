@@ -1,5 +1,3 @@
-// +build memcached
-
 package appwrap
 
 import (
@@ -77,7 +75,6 @@ func (s *MemcachedTest) newFixture() memcachedTestFixture {
 			ctx:    context.Background(),
 			client: m,
 			ns:     "test-ns",
-			log:    NullLogger{},
 		},
 		fatalErr:      errors.New("fatal-err"),
 		memcachedMock: m,

@@ -1,5 +1,3 @@
-// +build !memcached
-
 package appwrap
 
 import (
@@ -25,11 +23,6 @@ import (
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 )
-
-var ErrCacheMiss = redis.Nil
-var CacheErrNotStored = errors.New("item not stored")
-var CacheErrCASConflict = errors.New("compare-and-swap conflict")
-var CacheErrServerError = errors.New("redis: server error")
 
 type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
 
@@ -252,19 +245,19 @@ func (ms *memorystoreService) getRedisAddr(c context.Context, appInfo AppengineI
 	return ms.addrs, nil
 }
 
-func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
-	return GlobalService.NewMemcache(c, appInfo, loc, name, shards)
+func NewMemorystore(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
+	return GlobalService.NewMemorystore(c, appInfo, loc, name, shards)
 }
 
-func NewAppengineRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiters func(shard int, log Logging) redis.Limiter) (Memcache, error) {
-	return GlobalService.NewRateLimitedMemcache(c, appInfo, loc, name, shards, log, createLimiters)
+func NewRateLimitedMemorystore(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiters func(shard int, log Logging) redis.Limiter) (Memcache, error) {
+	return GlobalService.NewRateLimitedMemorystore(c, appInfo, loc, name, shards, log, createLimiters)
 }
 
-func (ms *memorystoreService) NewMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
-	return ms.NewRateLimitedMemcache(c, appInfo, loc, name, shards, nil, nil)
+func (ms *memorystoreService) NewMemorystore(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
+	return ms.NewRateLimitedMemorystore(c, appInfo, loc, name, shards, nil, nil)
 }
 
-func (ms *memorystoreService) NewRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiter func(shard int, log Logging) redis.Limiter) (Memcache, error) {
+func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiter func(shard int, log Logging) redis.Limiter) (Memcache, error) {
 	// We don't use sync.Once here because we do actually want to execute the long path again in case of failures to initialize.
 	ourClients := ms.clients
 
@@ -560,7 +553,7 @@ func (ms Memorystore) CompareAndSwap(item *CacheItem) error {
 
 func (ms Memorystore) doCompareAndSwap(c context.Context, item *CacheItem, tx redisCommonInterface, fullKey string) error {
 	val, err := tx.Get(c, fullKey)
-	if err == ErrCacheMiss {
+	if err == redis.Nil {
 		// Does item exist?  If not, can't swap it
 		return CacheErrNotStored
 	} else if err != nil {
@@ -659,8 +652,9 @@ func (ms Memorystore) Get(key string) (*CacheItem, error) {
 	span.AddAttributes(trace.StringAttribute(traceLabelKey, fullKey))
 	span.AddAttributes(trace.Int64Attribute(traceLabelShard, int64(shard)))
 
-	if val, err := ms.clients[shard].Get(c, fullKey); err != nil {
-		// redis.Nil (ErrCacheMiss) will be returned if they key doesn't exist
+	if val, err := ms.clients[shard].Get(c, fullKey); err == redis.Nil {
+		return nil, ErrCacheMiss
+	} else if err != nil {
 		return nil, err
 	} else {
 		valCopy := make([]byte, len(val))
