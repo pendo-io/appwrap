@@ -732,6 +732,14 @@ func (mq memoryQuery) inequalityField() (string, error) {
 	return inequalityField, nil
 }
 
+func (mq memoryQuery) numFilters() int {
+	num := len(mq.filters)
+	if mq.ancestor != nil {
+		num++
+	}
+	return num
+}
+
 func (mq memoryQuery) needsIndex(debug func(string, ...interface{})) (bool, error) {
 	// A simple sort order (only one one field that's not [key descending]
 	// is treated differently.
@@ -758,13 +766,13 @@ func (mq memoryQuery) needsIndex(debug func(string, ...interface{})) (bool, erro
 	if mq.localDs.index == nil {
 		debug("    no index defined")
 		return false, nil
-	} else if len(mq.filters) == 0 && !complicatedOrder && !projecting {
+	} else if mq.numFilters() == 0 && !complicatedOrder && !projecting {
 		debug("    no index needed for no filters")
 		return false, nil
-	} else if len(mq.filters) == 1 && !isOrdered && !hasAncestor && !projecting {
+	} else if mq.numFilters() == 1 && !isOrdered && !hasAncestor && !projecting {
 		debug("    no index needed on single field")
 		return false, nil
-	} else if len(mq.filters) == 1 && len(orderFields) == 1 {
+	} else if mq.numFilters() == 1 && len(orderFields) == 1 {
 		field := ""
 		for f := range mq.filters {
 			field = f
@@ -786,7 +794,7 @@ func (mq memoryQuery) needsIndex(debug func(string, ...interface{})) (bool, erro
 		return false, nil
 	}
 
-	if len(mq.filters) == 0 && len(mq.project) == 1 && len(orderFields) < 2 {
+	if mq.numFilters() == 0 && len(mq.project) == 1 && len(orderFields) < 2 {
 		if len(orderFields) == 0 {
 			debug("    only projecting on single field")
 			return false, nil
@@ -856,6 +864,10 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 
 	if len(orderFields) > 0 {
 		debug("    order %v", orderFields)
+	}
+
+	if mq.ancestor != nil {
+		debug("    ancestor: true")
 	}
 
 	if inequalityField != "" {

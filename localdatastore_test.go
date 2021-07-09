@@ -283,6 +283,14 @@ func (dsit *AppengineInterfacesTest) TestCheckIndexNeedIndexFor(c *C) {
   properties:
     - name: D`
 
+	iDAncestorOrder := `
+- kind: testKindWithIndex
+  ancestor: yes
+  properties:
+    - name: D
+      direction: desc
+`
+
 	iKeyDesc := `
 - kind: testKindWithIndex
   properties:
@@ -445,6 +453,15 @@ func (dsit *AppengineInterfacesTest) TestCheckIndexNeedIndexFor(c *C) {
 	indexSatisfies(func(m Datastore) DatastoreQuery {
 		return m.NewQuery("testKindWithIndex").Filter("zigzag =", 0).Filter("join =", 0).Order("merge")
 	}, iZigzag, unsupportedButSatisfies)
+
+	// ancestor queries with a single order filter require an index
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Ancestor(testKey).Order("-D")
+	}, iDAncestorOrder, satisfies)
+
+	indexSatisfies(func(m Datastore) DatastoreQuery {
+		return m.NewQuery("testKindWithIndex").Ancestor(testKey).Order("-D")
+	}, iDAncestor, doesNotSatisfy)
 }
 
 func (dsit *AppengineInterfacesTest) TestMemDsAllocateIds(c *C) {
