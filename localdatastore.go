@@ -230,6 +230,7 @@ type LocalDatastore struct {
 	entities        map[string]*dsItem
 	emptyContext    context.Context
 	mtx             *sync.Mutex
+	namespace       string
 	namespaces      map[string]*LocalDatastore
 	parent          *LocalDatastore
 	addEntityFields bool
@@ -277,6 +278,7 @@ func (ds *LocalDatastore) Namespace(ns string) Datastore {
 
 	if _, exists := ds.namespaces[ns]; !exists {
 		ds.namespaces[ns] = NewLocalDatastore(ds.addEntityFields, nil).(*LocalDatastore)
+		ds.namespaces[ns].namespace = ns
 		ds.namespaces[ns].parent = ds
 	}
 
@@ -525,6 +527,7 @@ func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 	dsCopy := &LocalDatastore{
 		lastId:       ds.lastId,
 		entities:     make(map[string]*dsItem),
+		namespace:    ds.namespace,
 		emptyContext: StubContext(),
 		mtx:          &sync.Mutex{},
 	}
