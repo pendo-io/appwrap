@@ -575,3 +575,56 @@ func (dsit *AppengineInterfacesTest) TestGetWithIncompleteKeyShouldFail(c *C) {
 	c.Assert(me[0], Equals, ErrNoSuchEntity)
 	c.Assert(me[1], Equals, ErrInvalidKey)
 }
+
+func (dsit *AppengineInterfacesTest) TestLocalDatastoreNamespacing(c *C) {
+	rootDs := dsit.newDatastore()
+
+	parentKey := rootDs.NewKey("sootsprite", "", 1, nil)
+	c.Assert(KeyNamespace(parentKey), Equals, "s~memds")
+
+	childKey := rootDs.NewKey("sootsprite", "", 2, parentKey)
+	c.Assert(KeyNamespace(childKey), Equals, "s~memds")
+
+	nsDs := rootDs.Namespace("chihiro")
+	nsParentKey := nsDs.NewKey("otherthing", "", 3, nil)
+	c.Assert(KeyNamespace(nsParentKey), Equals, "chihiro")
+
+	nsChildKey := nsDs.NewKey("otherthing", "", 4, nsParentKey)
+	c.Assert(KeyNamespace(nsChildKey), Equals, "chihiro")
+
+	// ensure that we use the parent's key's namespace if we mix the two
+	crossNamespaceKey := nsDs.NewKey("otherthing", "", 5, parentKey)
+	c.Assert(KeyNamespace(crossNamespaceKey), Equals, "s~memds")
+}
+
+func (dsit *AppengineInterfacesTest) TestLocalDatastoreNamespaceInTransaction(c *C) {
+	rootDs := dsit.newDatastore()
+	nsDs := rootDs.Namespace("other_place")
+
+	type e struct {
+		Foo string
+		Bar string
+	}
+
+	entity := e{"hello", "banana"}
+	k, err := nsDs.Put(nsDs.NewKey("spoon", "too_big", 0, nil), &entity)
+	c.Assert(KeyNamespace(k), Equals, "other_place")
+	c.Assert(err, IsNil)
+
+	_, err = nsDs.RunInTransaction(func(txn DatastoreTransaction) error {
+		var txnEntity e
+		txnK := txn.NewKey("spoon", "too_big", 0, nil)
+		c.Assert(KeyNamespace(txnK), Equals, "other_place")
+		if getErr := txn.Get(txnK, &txnEntity); getErr != nil {
+			return getErr
+		}
+		txnEntity.Bar = "potato"
+		_, putErr := txn.Put(k, &txnEntity)
+		return putErr
+	}, nil)
+	c.Assert(err, IsNil)
+
+	var updatedEntity e
+	getErr := nsDs.Get(k, &updatedEntity)
+	c.Assert(getErr, IsNil)
+}

@@ -602,6 +602,8 @@ func (ds *LocalDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 	var namespace string
 	if parent != nil {
 		namespace = parent.Namespace
+	} else if ds.namespace != "" {
+		namespace = ds.namespace
 	} else {
 		namespace = "s~memds" // this mirrors StubContext
 	}
