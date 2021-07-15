@@ -1,5 +1,3 @@
-// +build memcached
-
 package appwrap
 
 import (
@@ -11,7 +9,6 @@ import (
 	"time"
 
 	cloudmemcache "cloud.google.com/go/memcache/apiv1"
-	"github.com/go-redis/redis/v8"
 	"github.com/pendo-io/gomemcache/memcache"
 	"go.opencensus.io/trace"
 	memcachepb "google.golang.org/genproto/googleapis/cloud/memcache/v1"
@@ -63,25 +60,32 @@ type memcached struct {
 	ctx    context.Context
 	client memcachedClient
 	ns     string
-	log    Logging
 }
 
-var memcacheClient *memcache.Client
-var memcacheMtx sync.Mutex
-var addrs []string
+type memcacheService struct {
+	client            *memcache.Client
+	lock              sync.Mutex
+	discoveryEndpoint string
+}
 
-func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards) (Memcache, error) {
-	if memcacheClient == nil {
-		memcacheMtx.Lock()
-		defer memcacheMtx.Unlock()
-		if memcacheClient == nil {
+var globalMemcacheService memcacheService
+
+func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName) (Memcache, error) {
+	return globalMemcacheService.NewAppengineMemcache(c, appInfo, loc, name)
+}
+
+func (m *memcacheService) NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName) (Memcache, error) {
+	if m.client == nil {
+		m.lock.Lock()
+		defer m.lock.Unlock()
+		if m.client == nil {
 			var err error
-			addr, err := getDiscoveryAddress(loc, name)
+			addr, err := m.getDiscoveryAddress(appInfo, loc, name)
 			if err != nil {
 				return nil, err
 			}
-			memcacheClient, err = memcache.NewDiscoveryClient(addr, 5*time.Second)
-			memcacheClient.MaxIdleConns = 10 // complete guess - per address
+			m.client, err = memcache.NewDiscoveryClient(addr, 5*time.Second)
+			m.client.MaxIdleConns = 10 // complete guess - per address
 			if err != nil {
 				return nil, err
 			}
@@ -90,17 +94,15 @@ func NewAppengineMemcache(c context.Context, appInfo AppengineInfo, loc CacheLoc
 
 	return memcached{
 		ctx:    c,
-		client: memcacheClient,
-		log:    NewStackdriverLogging(c),
+		client: m.client,
 	}, nil
 }
 
-func getDiscoveryAddress(loc CacheLocation, name CacheName) (string, error) {
-	if len(addrs) > 0 {
-		return addrs[0], nil
+func (m *memcacheService) getDiscoveryAddress(appInfo AppengineInfo, loc CacheLocation, name CacheName) (string, error) {
+	if m.discoveryEndpoint != "" {
+		return m.discoveryEndpoint, nil
 	}
 
-	appInfo := NewAppengineInfoFromContext(context.Background())
 	projectId := appInfo.NativeProjectID()
 
 	client, err := cloudmemcache.NewCloudMemcacheClient(context.Background())
@@ -118,16 +120,15 @@ func getDiscoveryAddress(loc CacheLocation, name CacheName) (string, error) {
 		return "", err
 	}
 
-	addrs = []string{instance.DiscoveryEndpoint}
-	return instance.DiscoveryEndpoint, nil
+	m.discoveryEndpoint = instance.DiscoveryEndpoint
+	return m.discoveryEndpoint, nil
 }
 
-func NewAppengineRateLimitedMemcache(c context.Context, appInfo AppengineInfo, loc CacheLocation, name CacheName, shards CacheShards, log Logging, createLimiters func(shard int, log Logging) redis.Limiter) (Memcache, error) {
-	return NewAppengineMemcache(c, appInfo, loc, name, shards)
-}
-
-func InitializeRedisAddrs(newAddrs []string) {
-	addrs = newAddrs
+func InitializeMemcacheDiscovery(endpoint string) {
+	globalMemcacheService.lock.Lock()
+	defer globalMemcacheService.lock.Unlock()
+	globalMemcacheService.client = nil
+	globalMemcacheService.discoveryEndpoint = endpoint
 }
 
 func (m memcached) namespacedKey(key string) string {
@@ -138,7 +139,7 @@ func (m memcached) namespacedKey(key string) string {
 		truncatedKey = truncatedKey + base64.StdEncoding.EncodeToString(hash[:])
 		nsKey = truncatedKey
 	}
-	m.log.Debugf("Key: %s", nsKey)
+
 	return nsKey
 }
 
@@ -315,7 +316,6 @@ func (m memcached) Namespace(ns string) Memcache {
 		ctx:    m.ctx,
 		client: m.client,
 		ns:     ns,
-		log:    m.log,
 	}
 }
 
