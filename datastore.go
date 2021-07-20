@@ -47,7 +47,7 @@ type Datastore interface {
 	NewQuery(kind string) DatastoreQuery
 	Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error)
 	PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error)
-	RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOptions) (Commit, error)
+	RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOption) (Commit, error)
 }
 
 type Commit interface {

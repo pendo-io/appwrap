@@ -515,7 +515,7 @@ func (lds localDatastoreTransaction) PutMulti(keys []*DatastoreKey, src interfac
 	return pendingKeys, err
 }
 
-func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOptions) (Commit, error) {
+func (ds *LocalDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOption) (Commit, error) {
 	// The datastore must be locked while running a transaction, since the transaction will need to
 	// put the new entities in place on commit (as well as the new lastId), or just go back to the original
 	// datastore on state.
