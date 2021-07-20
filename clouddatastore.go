@@ -307,7 +307,7 @@ func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*Da
 	return res, convertIfMultiError(err)
 }
 
-func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
+func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOptions) (Commit, error) {
 	if opts != nil {
 		panic("transaction options not supported")
 	}
