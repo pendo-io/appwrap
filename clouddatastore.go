@@ -25,7 +25,7 @@ type DatastoreKey = datastore.Key
 type DatastoreProperty = datastore.Property
 type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
-type DatastoreTransactionOptions datastore.TransactionOption
+type DatastoreTransactionOption datastore.TransactionOption
 type GeoPoint = datastore.GeoPoint
 type PendingKey = datastore.PendingKey
 
@@ -307,9 +307,10 @@ func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*Da
 	return res, convertIfMultiError(err)
 }
 
-func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts *DatastoreTransactionOptions) (Commit, error) {
-	if opts != nil {
-		panic("transaction options not supported")
+func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) error, opts ...DatastoreTransactionOption) (Commit, error) {
+	var transOpts []datastore.TransactionOption
+	for _, opt := range opts {
+		transOpts = append(transOpts, opt)
 	}
 
 	c, span := trace.StartSpan(cds.ctx, traceDatastoreRunInTransaction)
@@ -326,11 +327,15 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 				transaction: transaction,
 			}
 			return f(ct)
-		}, datastore.MaxAttempts(1))
+		}, transOpts...)
 		return err
 	})
 
 	return CloudDatastoreCommit{ctx: cds.ctx, commit: commit}, convertIfMultiError(err)
+}
+
+func DatastoreMaxAttempts(attempts int) DatastoreTransactionOption {
+	return datastore.MaxAttempts(attempts)
 }
 
 func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
