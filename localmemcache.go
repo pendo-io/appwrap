@@ -15,11 +15,13 @@ type cachedItem struct {
 
 type LocalMemcache struct {
 	items map[string]cachedItem
-	mtx   sync.Mutex
+	mtx   sync.Locker
 }
 
 func NewLocalMemcache() Memcache {
-	l := &LocalMemcache{}
+	l := &LocalMemcache{
+		mtx: noopMutex{},
+	}
 	l.Flush()
 	return l
 }

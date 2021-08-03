@@ -229,7 +229,7 @@ type LocalDatastore struct {
 	lastId          int64
 	entities        map[string]*dsItem
 	emptyContext    context.Context
-	mtx             *sync.Mutex
+	mtx             sync.Locker
 	namespace       string
 	namespaces      map[string]*LocalDatastore
 	parent          *LocalDatastore
@@ -255,12 +255,17 @@ func StubContext() context.Context {
 	return stubContext
 }
 
+type noopMutex struct{}
+
+func (n noopMutex) Lock()   {}
+func (n noopMutex) Unlock() {}
+
 func NewLocalDatastore(addField bool, index DatastoreIndex) Datastore {
 	return &LocalDatastore{
 		lastId:          1 << 30,
 		entities:        make(map[string]*dsItem),
 		emptyContext:    StubContext(),
-		mtx:             &sync.Mutex{},
+		mtx:             noopMutex{},
 		namespaces:      make(map[string]*LocalDatastore),
 		addEntityFields: addField,
 		index:           index,
