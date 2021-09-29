@@ -37,7 +37,7 @@ type configPoller struct {
 	once sync.Once
 
 	// reference to selector which will used to update the servers for the main client
-	serverList *ServerList
+	serverList DiscoveryServerSelector
 
 	mc *Client
 
@@ -46,7 +46,7 @@ type configPoller struct {
 }
 
 // creates a new cluster config poller
-func newConfigPoller(frequency time.Duration, servers *ServerList, mc *Client) *configPoller {
+func newConfigPoller(frequency time.Duration, servers DiscoveryServerSelector, mc *Client) *configPoller {
 
 	poller := &configPoller{
 		pollingFrequency: frequency,

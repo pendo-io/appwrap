@@ -128,23 +128,28 @@ var (
 // discoveryAddress should be in following form "ipv4-address:port"
 // Note: pollingDuration should be at least 1 second.
 func NewDiscoveryClient(discoveryAddress string, pollingDuration time.Duration) (*Client, error) {
+	ss := new(ServerList)
+	return NewDiscoveryClientFromSelector(discoveryAddress, pollingDuration, ss)
+}
+
+func NewDiscoveryClientFromSelector(discoveryAddress string, pollingDuration time.Duration, ss DiscoveryServerSelector) (*Client, error) {
 	// Validate pollingDuration
 	if pollingDuration.Seconds() < 1.0 {
 		return nil, ErrInvalidPollingDuration
 	}
-	return newDiscoveryClient(discoveryAddress, pollingDuration)
+
+	return newDiscoveryClient(discoveryAddress, pollingDuration, ss)
 }
 
 // for the unit test
-func newDiscoveryClient(discoveryAddress string, pollingDuration time.Duration) (*Client, error) {
+func newDiscoveryClient(discoveryAddress string, pollingDuration time.Duration, ss DiscoveryServerSelector) (*Client, error) {
 	// creates a new ServerList object which contains all the server eventually.
 	rand.Seed(time.Now().UnixNano())
-	ss := new(ServerList)
 	mcCfgPollerHelper := New(discoveryAddress)
 	cfgPoller := newConfigPoller(pollingDuration, ss, mcCfgPollerHelper)
 	// cfgPoller starts polling immediately.
 	mcClient := NewFromSelector(ss)
-	mcClient.stopPolling = cfgPoller.stopPolling
+	mcClient.StopPolling = cfgPoller.stopPolling
 	return mcClient, nil
 }
 
@@ -180,7 +185,7 @@ type Client struct {
 	MaxIdleConns int
 
 	selector    ServerSelector
-	stopPolling stop
+	StopPolling stop
 
 	lk       sync.Mutex
 	freeconn map[string][]*conn

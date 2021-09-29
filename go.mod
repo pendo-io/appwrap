@@ -13,7 +13,7 @@ require (
 	github.com/golang/protobuf v1.5.1
 	github.com/googleapis/gax-go/v2 v2.0.5
 	github.com/masukomi/check v0.0.0-20150227023654-e0a72205c0f3 // indirect
-	github.com/pendo-io/gomemcache v0.0.0-20210507184315-4b09653ab589
+	github.com/pendo-io/gomemcache v0.0.0-20210929173820-dbbfec06157c
 	github.com/stretchr/testify v1.6.1
 	go.opencensus.io v0.23.0
 	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0 // indirect
