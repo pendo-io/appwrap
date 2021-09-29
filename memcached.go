@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"hash/crc32"
 	"math/rand"
 	"net"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	cloudmemcache "cloud.google.com/go/memcache/apiv1"
+	"github.com/cespare/xxhash/v2"
 	"github.com/pendo-io/gomemcache/memcache"
 	"go.opencensus.io/trace"
 	memcachepb "google.golang.org/genproto/googleapis/cloud/memcache/v1"
@@ -360,7 +360,7 @@ func (m memcached) SetMulti(items []*CacheItem) error {
 const numEntriesPerServer = 20
 
 type hashedServer struct {
-	hash uint32
+	hash uint64
 	addr net.Addr
 }
 
@@ -423,7 +423,7 @@ func (s *consistentHashServerSelector) PickServer(key string) (net.Addr, error) 
 
 	list := *s.list
 
-	keyHash := crc32.ChecksumIEEE([]byte(key))
+	keyHash := xxhash.Sum64String(key)
 
 	idx := sort.Search(len(list), func(i int) bool {
 		return list[i].hash > keyHash
@@ -482,7 +482,7 @@ func (s *consistentHashServerSelector) SetServers(servers ...string) error {
 
 		for i := 0; i < numEntriesPerServer; i++ {
 			list = append(list, hashedServer{
-				hash: crc32.ChecksumIEEE([]byte(server + strconv.FormatInt(int64(i), 10))),
+				hash: xxhash.Sum64String(server + strconv.FormatInt(int64(i), 10)),
 				addr: staticAddr,
 			})
 		}
