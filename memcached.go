@@ -5,6 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"hash/crc32"
+	"math/rand"
+	"net"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,7 +90,7 @@ func (m *memcacheService) NewAppengineMemcache(c context.Context, appInfo Appeng
 			if err != nil {
 				return nil, err
 			}
-			m.client, err = memcache.NewDiscoveryClient(addr, 5*time.Second)
+			m.client, err = memcache.NewDiscoveryClientFromSelector(addr, 5*time.Second, &consistentHashServerSelector{})
 			m.client.MaxIdleConns = 10 // complete guess - per address
 			if err != nil {
 				return nil, err
@@ -348,5 +354,145 @@ func (m memcached) SetMulti(items []*CacheItem) error {
 		return errList
 	}
 
+	return nil
+}
+
+const numEntriesPerServer = 20
+
+type hashedServer struct {
+	hash uint32
+	addr net.Addr
+}
+
+// see 	"github.com/google/gomemcache/memcache" in selector.go
+// staticAddr caches the Network() and String() values from any net.Addr.
+type staticAddr struct {
+	ntw, str string
+}
+
+func newStaticAddr(a net.Addr) net.Addr {
+	return &staticAddr{
+		ntw: a.Network(),
+		str: a.String(),
+	}
+}
+
+func (s *staticAddr) Network() string { return s.ntw }
+func (s *staticAddr) String() string  { return s.str }
+
+type serverList []hashedServer
+
+func (s serverList) Less(i, j int) bool {
+	return s[i].hash < s[j].hash
+}
+
+func (s serverList) Len() int {
+	return len(s)
+}
+
+func (s serverList) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s serverList) String() string {
+	b := strings.Builder{}
+	b.WriteString("[")
+	for _, entry := range s {
+		b.WriteString(" ")
+		b.WriteString("{" + strconv.FormatInt(int64(entry.hash), 10) + ": " + entry.addr.String() + "}")
+	}
+	b.WriteString("]")
+	return b.String()
+}
+
+type consistentHashServerSelector struct {
+	// pointers to allow us atomic access without requiring a mutex
+	// anything that reads any list should first make a copy of the dereferenced pointer
+	// anything that sets any list should create a NEW list and assign the new address
+	//
+	// do NOT dereference these pointers multiple times in the same function.
+	// you're asking for out-of-bounds errors
+	list      *serverList
+	uniqAddrs *[]net.Addr
+}
+
+func (s *consistentHashServerSelector) PickServer(key string) (net.Addr, error) {
+	if s.list == nil {
+		return nil, memcache.ErrNoServers
+	}
+
+	list := *s.list
+
+	keyHash := crc32.ChecksumIEEE([]byte(key))
+
+	idx := sort.Search(len(list), func(i int) bool {
+		return list[i].hash > keyHash
+	})
+
+	if idx == len(list) {
+		idx = 0
+	}
+
+	return list[idx].addr, nil
+}
+
+func (s *consistentHashServerSelector) PickAnyServer() (net.Addr, error) {
+	if s.list == nil {
+		return nil, memcache.ErrNoServers
+	}
+
+	list := *s.list
+
+	idx := rand.Intn(len(list))
+	return list[idx].addr, nil
+}
+
+func (s *consistentHashServerSelector) Each(f func(net.Addr) error) error {
+	if s.list == nil {
+		return memcache.ErrNoServers
+	}
+
+	list := *s.uniqAddrs
+
+	for _, addr := range list {
+		if err := f(addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *consistentHashServerSelector) SetServers(servers ...string) error {
+	if len(servers) == 0 {
+		return nil
+	}
+
+	list := make(serverList, 0, len(servers)*numEntriesPerServer)
+
+	uniqAddrs := make([]net.Addr, 0, len(servers))
+	for _, server := range servers {
+		tcpaddr, err := net.ResolveTCPAddr("tcp", server)
+		if err != nil {
+			return err
+		}
+
+		staticAddr := newStaticAddr(tcpaddr)
+		uniqAddrs = append(uniqAddrs, staticAddr)
+
+		for i := 0; i < numEntriesPerServer; i++ {
+			list = append(list, hashedServer{
+				hash: crc32.ChecksumIEEE([]byte(server + strconv.FormatInt(int64(i), 10))),
+				addr: staticAddr,
+			})
+		}
+	}
+
+	sort.Sort(list)
+
+	s.uniqAddrs = &uniqAddrs
+
+	// set list last - it's what we use to make sure we're initialized
+	s.list = &list
 	return nil
 }

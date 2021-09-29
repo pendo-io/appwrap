@@ -95,7 +95,7 @@ github.com/jstemmer/go-junit-report/parser
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/pendo-io/gomemcache v0.0.0-20210507184315-4b09653ab589
+# github.com/pendo-io/gomemcache v0.0.0-20210929173820-dbbfec06157c
 ## explicit
 github.com/pendo-io/gomemcache/memcache
 # github.com/pmezard/go-difflib v1.0.0

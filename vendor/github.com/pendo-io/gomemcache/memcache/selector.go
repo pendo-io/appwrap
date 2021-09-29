@@ -44,6 +44,11 @@ type ServerSelector interface {
 	Each(func(net.Addr) error) error
 }
 
+type DiscoveryServerSelector interface {
+	ServerSelector
+	SetServers(servers ...string) error
+}
+
 // ServerList is a simple ServerSelector. Its zero value is usable.
 type ServerList struct {
 	mu    sync.RWMutex

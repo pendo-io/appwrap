@@ -251,6 +251,8 @@ github.com/pendo-io/check v0.0.0-20180220194651-af5907e7f8ac h1:NCbRNWwWsYq68QM0
 github.com/pendo-io/check v0.0.0-20180220194651-af5907e7f8ac/go.mod h1:1ESstOCfcbXdcG57cZ9qcQqdkaaCsLk0mYSjbJGgt9I=
 github.com/pendo-io/gomemcache v0.0.0-20210507184315-4b09653ab589 h1:xg+efeYwGu2asG1ypk+vJhtnxLpDj+0NatNQ0NxWIF8=
 github.com/pendo-io/gomemcache v0.0.0-20210507184315-4b09653ab589/go.mod h1:DbZkDcGApIN6VBREF1gPYwLVf8N+oC16ztgeiGkIY94=
+github.com/pendo-io/gomemcache v0.0.0-20210929173820-dbbfec06157c h1:8VXxxOQU+dZTVIjnS0PkcpwS6RaEMo6LQNh52Gt4HVA=
+github.com/pendo-io/gomemcache v0.0.0-20210929173820-dbbfec06157c/go.mod h1:DbZkDcGApIN6VBREF1gPYwLVf8N+oC16ztgeiGkIY94=
 github.com/peterbourgon/diskv v2.0.1+incompatible/go.mod h1:uqqh8zWWbv1HBMNONnaR/tNboyR3/BZd58JJSHlUSCU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
