@@ -3,6 +3,8 @@ package appwrap
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"time"
 
 	"github.com/pendo-io/gomemcache/memcache"
@@ -486,4 +488,106 @@ func (s *MemcachedTest) TestSetMultiError(c *C) {
 
 	c.Assert(err, DeepEquals, MultiError{nil, f.fatalErr})
 	f.assertExpectations(c)
+}
+
+func (s *MemcachedTest) TestConsistentHashServerSelector(c *C) {
+	sel := &consistentHashServerSelector{}
+
+	addr, err := sel.PickServer("k1")
+	c.Assert(err, Equals, memcache.ErrNoServers)
+	c.Assert(addr, IsNil)
+	addr, err = sel.PickAnyServer()
+	c.Assert(err, Equals, memcache.ErrNoServers)
+	c.Assert(addr, IsNil)
+	err = sel.Each(nil)
+	c.Assert(err, Equals, memcache.ErrNoServers)
+	c.Assert(addr, IsNil)
+
+	err = sel.SetServers("1.1.1.1:11211")
+	c.Assert(err, IsNil)
+
+	addr, err = sel.PickServer("k1")
+	c.Assert(err, IsNil)
+	c.Assert(addr.String(), Equals, "1.1.1.1:11211")
+
+	addr, err = sel.PickAnyServer()
+	c.Assert(err, IsNil)
+	c.Assert(addr.String(), Equals, "1.1.1.1:11211")
+
+	err = sel.SetServers("1.1.1.1:11211", "2.2.2.2:11211")
+	c.Assert(err, IsNil)
+
+	seenServers := make(map[string]bool, 2)
+
+	err = sel.Each(func(addr net.Addr) error {
+		str := addr.String()
+		if _, ok := seenServers[str]; ok {
+			// seen twice
+			return errors.New("aaaah")
+		}
+		seenServers[str] = true
+		return nil
+	})
+	c.Assert(err, IsNil)
+	c.Assert(seenServers, DeepEquals, map[string]bool{
+		"1.1.1.1:11211": true,
+		"2.2.2.2:11211": true,
+	})
+}
+
+func (s *MemcachedTest) TestConsistenHashServerSelectorHashing(c *C) {
+	keys := []string{
+		"key00",
+		"key01",
+		"key02",
+		"key03",
+		"key04",
+		"key05",
+		"key06",
+		"key07",
+		"key08",
+		"key09",
+	}
+
+	testCases := []struct {
+		servers  []string
+		expected []string
+	}{
+		{
+			servers:  []string{"1.1.1.1:1"},
+			expected: []string{"1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1"},
+		},
+		{ // around 5 keys should change from above result
+			servers:  []string{"1.1.1.1:1", "2.2.2.2:2"},
+			expected: []string{"1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "2.2.2.2:2", "1.1.1.1:1", "2.2.2.2:2", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "2.2.2.2:2"},
+		},
+		{ // around 3 keys should change from above result
+			servers:  []string{"1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3"},
+			expected: []string{"1.1.1.1:1", "3.3.3.3:3", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "3.3.3.3:3", "1.1.1.1:1", "1.1.1.1:1", "3.3.3.3:3"},
+		},
+		{ // around 3 keys should change from above result
+			servers:  []string{"1.1.1.1:1", "4.4.4.4:4", "2.2.2.2:2", "3.3.3.3:3"},
+			expected: []string{"1.1.1.1:1", "3.3.3.3:3", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "4.4.4.4:4", "1.1.1.1:1", "1.1.1.1:1", "4.4.4.4:4"},
+		},
+		{ // server order should not matter, same as previous result
+			servers:  []string{"2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
+			expected: []string{"1.1.1.1:1", "3.3.3.3:3", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "4.4.4.4:4", "1.1.1.1:1", "1.1.1.1:1", "4.4.4.4:4"},
+		},
+	}
+
+	for i, tc := range testCases {
+		fmt.Printf("case %d\n", i)
+		actual := make([]string, len(keys))
+		sel := consistentHashServerSelector{}
+		err := sel.SetServers(tc.servers...)
+		c.Assert(err, IsNil)
+
+		for i, k := range keys {
+			server, err := sel.PickServer(k)
+			c.Assert(err, IsNil)
+			actual[i] = server.String()
+		}
+
+		c.Assert(actual, DeepEquals, tc.expected)
+	}
 }
