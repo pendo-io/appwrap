@@ -133,12 +133,18 @@ func (m *memcacheService) getDiscoveryAddress(appInfo AppengineInfo, loc CacheLo
 func InitializeMemcacheDiscovery(endpoint string) {
 	globalMemcacheService.lock.Lock()
 	defer globalMemcacheService.lock.Unlock()
-	globalMemcacheService.client = nil
-	globalMemcacheService.discoveryEndpoint = endpoint
+	if globalMemcacheService.discoveryEndpoint != endpoint {
+		if globalMemcacheService.client != nil {
+			globalMemcacheService.client.StopPolling()
+		}
+		globalMemcacheService.client = nil
+		globalMemcacheService.discoveryEndpoint = endpoint
+	}
 }
 
-func (m memcached) namespacedKey(key string) string {
-	nsKey := m.ns + ":" + key
+func (m memcached) encodedNamespacedKey(key string) string {
+	nsKey := base64.StdEncoding.EncodeToString([]byte(m.ns + ":" + key))
+
 	if len(nsKey) > 250 {
 		truncatedKey := nsKey[:200]
 		hash := sha256.Sum256([]byte(nsKey))
@@ -157,7 +163,7 @@ func (m memcached) Add(item *CacheItem) error {
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
 	mItem := item.toMemcacheItem()
-	mItem.Key = m.namespacedKey(item.Key)
+	mItem.Key = m.encodedNamespacedKey(item.Key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
 
 	return m.client.Add(mItem)
@@ -189,7 +195,7 @@ func (m memcached) CompareAndSwap(item *CacheItem) error {
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
 	mItem := item.toMemcacheItem()
-	mItem.Key = m.namespacedKey(item.Key)
+	mItem.Key = m.encodedNamespacedKey(item.Key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
 
 	return m.client.CompareAndSwap(mItem)
@@ -202,7 +208,7 @@ func (m memcached) Delete(key string) error {
 	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
-	key = m.namespacedKey(key)
+	key = m.encodedNamespacedKey(key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
 
 	return m.client.Delete(key)
@@ -241,7 +247,7 @@ func (m memcached) Get(key string) (*CacheItem, error) {
 	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
-	nsKey := m.namespacedKey(key)
+	nsKey := m.encodedNamespacedKey(key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, nsKey))
 
 	res, err := m.client.Get(nsKey)
@@ -256,7 +262,7 @@ func (m memcached) GetMulti(keys []string) (map[string]*CacheItem, error) {
 	nsKeys := make([]string, len(keys))
 	nsKeyToRegularKey := make(map[string]string, len(keys))
 	for i, key := range keys {
-		nsKey := m.namespacedKey(key)
+		nsKey := m.encodedNamespacedKey(key)
 		nsKeys[i] = nsKey
 		nsKeyToRegularKey[nsKey] = key
 	}
@@ -288,7 +294,7 @@ func (m memcached) Increment(key string, amount int64, initialValue uint64) (uin
 	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
-	key = m.namespacedKey(key)
+	key = m.encodedNamespacedKey(key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
 
 	var amt uint64
@@ -311,7 +317,7 @@ func (m memcached) IncrementExisting(key string, amount int64) (uint64, error) {
 	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
-	key = m.namespacedKey(key)
+	key = m.encodedNamespacedKey(key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
 
 	return m.client.Increment(key, uint64(amount))
@@ -333,7 +339,7 @@ func (m memcached) Set(item *CacheItem) error {
 	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
 
 	mItem := item.toMemcacheItem()
-	mItem.Key = m.namespacedKey(item.Key)
+	mItem.Key = m.encodedNamespacedKey(item.Key)
 	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
 
 	return m.client.Set(mItem)
@@ -357,7 +363,7 @@ func (m memcached) SetMulti(items []*CacheItem) error {
 	return nil
 }
 
-const numEntriesPerServer = 20
+const numEntriesPerServer = 1000
 
 type hashedServer struct {
 	hash uint64
