@@ -64,6 +64,7 @@ type memcachedTestFixture struct {
 	client        memcached
 	fatalErr      error
 	memcachedMock *memcachedMock
+	fullKey       func(key string) string
 }
 
 func (f *memcachedTestFixture) assertExpectations(c *C) {
@@ -71,15 +72,18 @@ func (f *memcachedTestFixture) assertExpectations(c *C) {
 }
 
 func (s *MemcachedTest) newFixture() memcachedTestFixture {
-	m := &memcachedMock{}
+	mm := &memcachedMock{}
+	m := memcached{
+		ctx:    context.Background(),
+		client: mm,
+		ns:     "test-ns",
+	}
+
 	return memcachedTestFixture{
-		client: memcached{
-			ctx:    context.Background(),
-			client: m,
-			ns:     "test-ns",
-		},
+		client:        m,
 		fatalErr:      errors.New("fatal-err"),
-		memcachedMock: m,
+		memcachedMock: mm,
+		fullKey:       m.encodedNamespacedKey,
 	}
 }
 
@@ -134,26 +138,24 @@ func (s *MemcachedTest) TestMemcacheItemToCacheItem(c *C) {
 func (s *MemcachedTest) TestNamespacedKey(c *C) {
 	f := s.newFixture()
 	regularKey := "key1"
-	nsKey := f.client.namespacedKey(regularKey)
-	c.Assert(nsKey, Equals, "test-ns:key1")
+	nsKey := f.client.encodedNamespacedKey(regularKey)
+	c.Assert(nsKey, Equals, "dGVzdC1uczprZXkx")
 
 	longKey := "reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-" +
 		"reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-" +
 		"reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-" +
 		"reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey"
 
-	nsLongKey := f.client.namespacedKey(longKey)
+	nsLongKey := f.client.encodedNamespacedKey(longKey)
 	c.Assert(len(nsLongKey) < 250, IsTrue)
-	c.Assert(nsLongKey, Equals, "test-ns:reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-"+
-		"reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-reallylongkey-"+
-		"reallylongkey-reallylongDGy/3SH4iRDYHL7m7ASbK/WsCAkBQ4YBHdu4F1Yl0a8=")
+	c.Assert(nsLongKey, Equals, "dGVzdC1uczpyZWFsbHlsb25na2V5LXJlYWxseWxvbmdrZXktcmVhbGx5bG9uZ2tleS1yZWFsbHlsb25na2V5LXJlYWxseWxvbmdrZXktcmVhbGx5bG9uZ2tleS1yZWFsbHlsb25na2V5LXJlYWxseWxvbmdrZXktcmVhbGx5bG9uZ2tleS1yZWFsbHlsb25na2V5LXJli1UTTI9tJkwI1Pz3hxWXlnfHc43z6R4dHz5Y7M80b0o=")
 }
 
 func (s *MemcachedTest) TestAdd(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:        "test-ns:key",
+		Key:        f.fullKey("key"),
 		Value:      []byte("aaaah"),
 		Expiration: 5,
 	}).Return(nil).Once()
@@ -172,12 +174,12 @@ func (s *MemcachedTest) TestAddMulti(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:        "test-ns:key1",
+		Key:        f.fullKey("key1"),
 		Value:      []byte("aaaah1"),
 		Expiration: 3,
 	}).Return(nil).Once()
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:        "test-ns:key2",
+		Key:        f.fullKey("key2"),
 		Value:      []byte("aaaah2"),
 		Expiration: 5,
 	}).Return(nil).Once()
@@ -203,12 +205,12 @@ func (s *MemcachedTest) TestAddMultiError(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:        "test-ns:key1",
+		Key:        f.fullKey("key1"),
 		Value:      []byte("aaaah1"),
 		Expiration: 3,
 	}).Return(nil).Once()
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:        "test-ns:key2",
+		Key:        f.fullKey("key2"),
 		Value:      []byte("aaaah2"),
 		Expiration: 5,
 	}).Return(f.fatalErr).Once()
@@ -234,7 +236,7 @@ func (s *MemcachedTest) TestCompareAndSwap(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("CompareAndSwap", &memcache.Item{
-		Key:        "test-ns:key",
+		Key:        f.fullKey("key"),
 		Value:      []byte("aaaah"),
 		Expiration: 5,
 	}).Return(nil).Once()
@@ -252,7 +254,7 @@ func (s *MemcachedTest) TestCompareAndSwap(c *C) {
 func (s *MemcachedTest) TestDelete(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Delete", "test-ns:key").Return(nil).Once()
+	f.memcachedMock.On("Delete", f.fullKey("key")).Return(nil).Once()
 
 	err := f.client.Delete("key")
 
@@ -263,8 +265,8 @@ func (s *MemcachedTest) TestDelete(c *C) {
 func (s *MemcachedTest) TestDeleteMulti(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Delete", "test-ns:key1").Return(nil).Once()
-	f.memcachedMock.On("Delete", "test-ns:key2").Return(nil).Once()
+	f.memcachedMock.On("Delete", f.fullKey("key1")).Return(nil).Once()
+	f.memcachedMock.On("Delete", f.fullKey("key2")).Return(nil).Once()
 
 	err := f.client.DeleteMulti([]string{"key1", "key2"})
 
@@ -275,8 +277,8 @@ func (s *MemcachedTest) TestDeleteMulti(c *C) {
 func (s *MemcachedTest) TestDeleteMultiError(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Delete", "test-ns:key1").Return(f.fatalErr).Once()
-	f.memcachedMock.On("Delete", "test-ns:key2").Return(nil).Once()
+	f.memcachedMock.On("Delete", f.fullKey("key1")).Return(f.fatalErr).Once()
+	f.memcachedMock.On("Delete", f.fullKey("key2")).Return(nil).Once()
 
 	err := f.client.DeleteMulti([]string{"key1", "key2"})
 
@@ -309,8 +311,8 @@ func (s *MemcachedTest) TestFlushShard(c *C) {
 func (s *MemcachedTest) TestGet(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Get", "test-ns:key").Return(&memcache.Item{
-		Key:        "test-ns:key",
+	f.memcachedMock.On("Get", f.fullKey("key")).Return(&memcache.Item{
+		Key:        f.fullKey("key"),
 		Value:      []byte("aaaah"),
 		Expiration: 5,
 	}, nil).Once()
@@ -329,16 +331,16 @@ func (s *MemcachedTest) TestGetMulti(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("GetMulti", []string{
-		"test-ns:key1",
-		"test-ns:key2",
+		f.fullKey("key1"),
+		f.fullKey("key2"),
 	}).Return(map[string]*memcache.Item{
-		"test-ns:key1": {
-			Key:        "test-ns:key1",
+		f.fullKey("key1"): {
+			Key:        f.fullKey("key1"),
 			Value:      []byte("aaaah1"),
 			Expiration: 5,
 		},
-		"test-ns:key2": {
-			Key:        "test-ns:key2",
+		f.fullKey("key2"): {
+			Key:        f.fullKey("key2"),
 			Value:      []byte("aaaah2"),
 			Expiration: 3,
 		},
@@ -364,7 +366,7 @@ func (s *MemcachedTest) TestGetMulti(c *C) {
 func (s *MemcachedTest) TestIncrement_AlreadyInCache(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Increment", "test-ns:key", uint64(5)).Return(uint64(12), nil).Once()
+	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(12), nil).Once()
 
 	amt, err := f.client.Increment("key", 5, 10)
 	c.Assert(err, IsNil)
@@ -375,12 +377,12 @@ func (s *MemcachedTest) TestIncrement_AlreadyInCache(c *C) {
 func (s *MemcachedTest) TestIncrement_NotInCache(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Increment", "test-ns:key", uint64(5)).Return(uint64(0), ErrCacheMiss).Once()
+	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(0), ErrCacheMiss).Once()
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:   "test-ns:key",
+		Key:   f.fullKey("key"),
 		Value: []byte("10"),
 	}).Return(nil).Once()
-	f.memcachedMock.On("Increment", "test-ns:key", uint64(5)).Return(uint64(15), nil).Once()
+	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(15), nil).Once()
 
 	amt, err := f.client.Increment("key", 5, 10)
 	c.Assert(err, IsNil)
@@ -391,7 +393,7 @@ func (s *MemcachedTest) TestIncrement_NotInCache(c *C) {
 func (s *MemcachedTest) TestIncrementExisting(c *C) {
 	f := s.newFixture()
 
-	f.memcachedMock.On("Increment", "test-ns:key", uint64(5)).Return(uint64(12), nil).Once()
+	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(12), nil).Once()
 
 	amt, err := f.client.IncrementExisting("key", 5)
 	c.Assert(err, IsNil)
@@ -413,7 +415,7 @@ func (s *MemcachedTest) TestSet(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Set", &memcache.Item{
-		Key:        "test-ns:key",
+		Key:        f.fullKey("key"),
 		Value:      []byte("aaaah"),
 		Expiration: 5,
 	}).Return(nil).Once()
@@ -432,12 +434,12 @@ func (s *MemcachedTest) TestSetMulti(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Set", &memcache.Item{
-		Key:        "test-ns:key1",
+		Key:        f.fullKey("key1"),
 		Value:      []byte("aaaah1"),
 		Expiration: 3,
 	}).Return(nil).Once()
 	f.memcachedMock.On("Set", &memcache.Item{
-		Key:        "test-ns:key2",
+		Key:        f.fullKey("key2"),
 		Value:      []byte("aaaah2"),
 		Expiration: 5,
 	}).Return(nil).Once()
@@ -463,12 +465,12 @@ func (s *MemcachedTest) TestSetMultiError(c *C) {
 	f := s.newFixture()
 
 	f.memcachedMock.On("Set", &memcache.Item{
-		Key:        "test-ns:key1",
+		Key:        f.fullKey("key1"),
 		Value:      []byte("aaaah1"),
 		Expiration: 3,
 	}).Return(nil).Once()
 	f.memcachedMock.On("Set", &memcache.Item{
-		Key:        "test-ns:key2",
+		Key:        f.fullKey("key2"),
 		Value:      []byte("aaaah2"),
 		Expiration: 5,
 	}).Return(f.fatalErr).Once()
@@ -505,6 +507,8 @@ func (s *MemcachedTest) TestConsistentHashServerSelector(c *C) {
 
 	err = sel.SetServers("1.1.1.1:11211")
 	c.Assert(err, IsNil)
+	c.Assert(*sel.list, HasLen, numEntriesPerServer)
+	c.Assert(*sel.uniqAddrs, HasLen, 1)
 
 	addr, err = sel.PickServer("k1")
 	c.Assert(err, IsNil)
@@ -516,6 +520,8 @@ func (s *MemcachedTest) TestConsistentHashServerSelector(c *C) {
 
 	err = sel.SetServers("1.1.1.1:11211", "2.2.2.2:11211")
 	c.Assert(err, IsNil)
+	c.Assert(*sel.list, HasLen, 2*numEntriesPerServer)
+	c.Assert(*sel.uniqAddrs, HasLen, 2)
 
 	seenServers := make(map[string]bool, 2)
 
@@ -537,16 +543,16 @@ func (s *MemcachedTest) TestConsistentHashServerSelector(c *C) {
 
 func (s *MemcachedTest) TestConsistenHashServerSelectorHashing(c *C) {
 	keys := []string{
-		"keys00",
-		"keys01",
-		"keys02",
-		"keys03",
-		"keys04",
-		"keys05",
-		"keys06",
-		"keys07",
-		"keys08",
-		"keys09",
+		"key-aaaaaaaa",
+		"key-bbbbbbbb",
+		"key-cccccccc",
+		"key-dddddddd",
+		"key-eeeeeeee",
+		"key-ffffffff",
+		"key-gggggggg",
+		"key-hhhhhhhh",
+		"key-iiiiiiii",
+		"key-jjjjjjjj",
 	}
 
 	testCases := []struct {
@@ -559,35 +565,35 @@ func (s *MemcachedTest) TestConsistenHashServerSelectorHashing(c *C) {
 		},
 		{ // around 5 keys should change from above result
 			servers:  []string{"1.1.1.1:1", "2.2.2.2:2"},
-			expected: []string{"1.1.1.1:1", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "1.1.1.1:1", "2.2.2.2:2", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1"},
+			expected: []string{"1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2"},
 		},
 		{ // around 3 keys should change from above result
 			servers:  []string{"1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3"},
-			expected: []string{"3.3.3.3:3", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "1.1.1.1:1", "2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "3.3.3.3:3"},
+			expected: []string{"1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "2.2.2.2:2"},
 		},
 		{ // around 3 keys should change from above result
 			servers:  []string{"1.1.1.1:1", "4.4.4.4:4", "2.2.2.2:2", "3.3.3.3:3"},
-			expected: []string{"4.4.4.4:4", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "1.1.1.1:1", "4.4.4.4:4", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
+			expected: []string{"1.1.1.1:1", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "4.4.4.4:4", "2.2.2.2:2", "4.4.4.4:4"},
 		},
 		{ // server order should not matter, same as previous result
 			servers:  []string{"2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
-			expected: []string{"4.4.4.4:4", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "1.1.1.1:1", "4.4.4.4:4", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
+			expected: []string{"1.1.1.1:1", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "2.2.2.2:2", "4.4.4.4:4", "2.2.2.2:2", "4.4.4.4:4"},
 		},
 		{ // more servers
 			servers:  []string{"5.5.5.5:5", "2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
-			expected: []string{"5.5.5.5:5", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "5.5.5.5:5", "4.4.4.4:4", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4"},
+			expected: []string{"5.5.5.5:5", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "3.3.3.3:3", "5.5.5.5:5", "5.5.5.5:5", "2.2.2.2:2", "5.5.5.5:5"},
 		},
 		{ // more servers
 			servers:  []string{"5.5.5.5:5", "2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "4.4.4.4:4", "6.6.6.6:6"},
-			expected: []string{"5.5.5.5:5", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "6.6.6.6:6", "6.6.6.6:6", "4.4.4.4:4", "1.1.1.1:1", "6.6.6.6:6", "4.4.4.4:4"},
+			expected: []string{"5.5.5.5:5", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "6.6.6.6:6", "5.5.5.5:5", "5.5.5.5:5", "2.2.2.2:2", "5.5.5.5:5"},
 		},
 		{ // more servers
 			servers:  []string{"5.5.5.5:5", "2.2.2.2:2", "1.1.1.1:1", "3.3.3.3:3", "7.7.7.7:7", "4.4.4.4:4", "6.6.6.6:6"},
-			expected: []string{"5.5.5.5:5", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "6.6.6.6:6", "7.7.7.7:7", "4.4.4.4:4", "1.1.1.1:1", "6.6.6.6:6", "4.4.4.4:4"},
+			expected: []string{"7.7.7.7:7", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "7.7.7.7:7", "5.5.5.5:5", "5.5.5.5:5", "2.2.2.2:2", "5.5.5.5:5"},
 		},
 		{ // since none of the keys are on 3 at the moment, removing 3 should not change anything
 			servers:  []string{"5.5.5.5:5", "2.2.2.2:2", "1.1.1.1:1", "7.7.7.7:7", "4.4.4.4:4", "6.6.6.6:6"},
-			expected: []string{"5.5.5.5:5", "2.2.2.2:2", "2.2.2.2:2", "2.2.2.2:2", "6.6.6.6:6", "7.7.7.7:7", "4.4.4.4:4", "1.1.1.1:1", "6.6.6.6:6", "4.4.4.4:4"},
+			expected: []string{"7.7.7.7:7", "4.4.4.4:4", "4.4.4.4:4", "1.1.1.1:1", "2.2.2.2:2", "7.7.7.7:7", "5.5.5.5:5", "5.5.5.5:5", "2.2.2.2:2", "5.5.5.5:5"},
 		},
 	}
 
