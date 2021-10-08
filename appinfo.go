@@ -33,7 +33,28 @@ type AppengineInfo interface {
 var (
 	zone    string
 	zoneMtx sync.Mutex
+	config *rest.Config
+	k8sClientSet *kubernetes.Clientset
+	istioClientSet *istio.Clientset
 )
+
+func init() {
+	var err error
+	if InKubernetes() {
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+		}
+		k8sClientSet, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			panic(fmt.Sprintf("Cannot create K8s client: %s", err.Error()))
+		}
+		istioClientSet, err = istio.NewForConfig(config)
+		if err != nil {
+			panic(fmt.Sprintf("Cannot create Istio k8s client: %s", err.Error()))
+		}
+	}
+}
 
 func getZone() string {
 	zoneMtx.Lock()
@@ -65,22 +86,10 @@ var (
 // Don't call this.  It exists to make NewAppengineInfoFromContext mockable
 func InternalNewAppengineInfoFromContext(c context.Context) AppengineInfo {
 	if InKubernetes() {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
-		}
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			panic(fmt.Sprintf("Cannot create K8s client: %s", err.Error()))
-		}
-		istioset, err := istio.NewForConfig(config)
-		if err != nil {
-			panic(fmt.Sprintf("Cannot create Istio k8s client: %s", err.Error()))
-		}
 		return AppengineInfoK8s{
 			c:         c,
-			clientset: clientset,
-			istioset:  istioset,
+			clientset: k8sClientSet,
+			istioset:  istioClientSet,
 		}
 	}
 
