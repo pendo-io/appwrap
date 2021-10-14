@@ -44,7 +44,12 @@ func (ai AppengineInfoK8s) ModuleHostname(version, module, app string) (string, 
 
 	domain := os.Getenv("K8S_DOMAIN")
 
-	return fmt.Sprintf("%s-dot-%s.%s", module, app, domain), nil
+	host := fmt.Sprintf("%s-dot-%s.%s", module, app, domain)
+	if version == "" {
+		return host, nil
+	} else {
+		return fmt.Sprintf("%s-dot-%s", version, host), nil
+	}
 }
 
 func (ai AppengineInfoK8s) ModuleName() string {
