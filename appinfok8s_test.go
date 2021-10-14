@@ -25,10 +25,10 @@ func (t *AppengineInterfacesTest) TestModuleHostnameK8s(c *C) {
 	os.Setenv("K8S_SERVICE", "theservice")
 	os.Setenv("K8S_DOMAIN", "domain.com")
 	ck("", "", "", "theservice-dot-theapp.domain.com")
-	ck("v", "", "", "theservice-dot-theapp.domain.com")
+	ck("v", "", "", "v-dot-theservice-dot-theapp.domain.com")
 	ck("", "s", "", "s-dot-theapp.domain.com")
 	ck("", "", "a", "theservice-dot-a.domain.com")
-	ck("v", "s", "a", "s-dot-a.domain.com")
+	ck("v", "s", "a", "v-dot-s-dot-a.domain.com")
 	os.Setenv("K8S_SERVICE", "")
 	os.Setenv("K8S_DOMAIN", "")
 }
