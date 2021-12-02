@@ -11,6 +11,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	gkeServiceAccountAnnotationField = "iam.gke.io/gcp-service-account"
+)
+
 type AppengineInfoK8s struct {
 	c         context.Context
 	clientset kubernetes.Interface
@@ -118,5 +122,29 @@ func (ai AppengineInfoK8s) NumInstances(moduleName, version string) (int, error)
 			instances += int(set.Status.ReadyReplicas)
 		}
 		return instances, nil
+	}
+}
+
+func (ai AppengineInfoK8s) GcpServiceAccountName() (string, error) {
+	var saName string
+	namespace := ai.NativeProjectID()
+	if pod, err := ai.clientset.CoreV1().Pods(namespace).Get(ai.c, ai.InstanceID(), metav1.GetOptions{}); err != nil {
+		return "", fmt.Errorf("unable to get service account name from pod spec, error was: %s", err.Error())
+	} else {
+		if pod.Spec.ServiceAccountName != "" {
+			saName = pod.Spec.ServiceAccountName
+		} else {
+			return "", fmt.Errorf("unable to get service account name from pod spec")
+		}
+	}
+
+	if sa, err := ai.clientset.CoreV1().ServiceAccounts(namespace).Get(ai.c, saName, metav1.GetOptions{}); err != nil {
+		return "", fmt.Errorf("could not get service account %s in namespace %s, error was: %s", saName, namespace, err.Error())
+	} else {
+		if value, ok := sa.Annotations[gkeServiceAccountAnnotationField]; !ok {
+			return "", fmt.Errorf("unable to read annotation field \"iam.gke.io/gcp-service-account\" for service account: %s", saName)
+		} else {
+			return value, nil
+		}
 	}
 }
