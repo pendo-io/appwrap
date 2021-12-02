@@ -28,6 +28,7 @@ type AppengineInfo interface {
 	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
 	Zone() string
+	GcpServiceAccountName(saName string) (string, error)
 }
 
 var (
