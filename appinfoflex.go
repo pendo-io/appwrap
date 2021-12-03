@@ -111,3 +111,7 @@ func webClient(c context.Context) *http.Client {
 	}
 
 }
+
+func (ai AppengineInfoFlex) GcpServiceAccountName() (string, error) {
+	return fmt.Sprintf("%s@appspot.gserviceaccount.com", ai.DataProjectID()), nil
+}
