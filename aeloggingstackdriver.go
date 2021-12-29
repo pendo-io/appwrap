@@ -146,8 +146,8 @@ type sharedClientLogCtxVal struct {
 	parentLogger *logging.Logger
 }
 
-func AddSharedLogClientToBackgroundContext(c context.Context, logName string) context.Context {
-	if IsDevAppServer {
+func AddSharedLogClientToBackgroundContext(c context.Context, logName string, mockClient bool) context.Context {
+	if IsDevAppServer && !mockClient {
 		return c
 	}
 
@@ -157,9 +157,18 @@ func AddSharedLogClientToBackgroundContext(c context.Context, logName string) co
 		panic("aelog: no GCP project set in environment")
 	}
 	parent := "projects/" + project
-	lc, err := logging.NewClient(c, parent)
-	if err != nil {
-		panic(err)
+
+	var (
+		err error
+		lc  *logging.Client
+	)
+	if mockClient {
+		lc = &logging.Client{}
+	} else {
+		lc, err = logging.NewClient(c, parent)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	if logName == "" {
