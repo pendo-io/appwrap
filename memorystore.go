@@ -17,11 +17,12 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	redis "github.com/go-redis/redis/v8"
 	gax "github.com/googleapis/gax-go/v2"
-	"github.com/pendo-io/appwrap/internal/metrics"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
+
+	"github.com/pendo-io/appwrap/internal/metrics"
 )
 
 type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
@@ -308,7 +309,7 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 				ipaddr := addrs[i]
 				ops.OnConnect = func(ctx context.Context, cn *redis.Conn) error {
 					log := NewStackdriverLogging(ctx)
-					log.Infof("memorystore: created new connection to shard %d (%s)", shard, ipaddr)
+					log.Debugf("memorystore: created new connection to shard %d (%s)", shard, ipaddr)
 					return nil
 				}
 
