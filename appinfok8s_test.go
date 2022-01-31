@@ -9,7 +9,6 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1beta1"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v1 "k8s.io/api/apps/v1"
-	v1core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -244,42 +243,4 @@ func (t *AppengineInterfacesTest) TestModuleHasTraffic_Http(c *C) {
 	hasTraffic, err = ai.ModuleHasTraffic("default", "version3")
 	c.Assert(err, IsNil)
 	c.Assert(hasTraffic, IsTrue)
-}
-
-func (t *AppengineInterfacesTest) TestServiceAccountName(c *C) {
-	os.Setenv("K8S_POD", "thepod")
-	clientSet := fake.NewSimpleClientset(&v1core.ServiceAccount{
-		ObjectMeta:                   metav1.ObjectMeta{
-			Name:                       "user",
-			Namespace:                  "theapp",
-			Annotations: map[string]string{
-				gkeServiceAccountAnnotationField: "gcpSaName",
-			},
-		},
-	}, &v1core.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "thepod", Namespace: "theapp"},
-		Spec:       v1core.PodSpec{ServiceAccountName: "user"},
-	})
-
-	ai := AppengineInfoK8s{
-		c: context.Background(),
-		clientset: clientSet,
-	}
-
-	saName, err := ai.GcpServiceAccountName()
-	c.Assert(err, IsNil)
-	c.Assert(saName, Equals, "gcpSaName")
-}
-
-func (t *AppengineInterfacesTest) TestServiceAccountName_NotFound(c *C) {
-	clientSet := fake.NewSimpleClientset()
-
-	ai := AppengineInfoK8s{
-		c: context.Background(),
-		clientset: clientSet,
-	}
-
-	saName, err := ai.GcpServiceAccountName()
-	c.Assert(err, NotNil)
-	c.Assert(saName, Equals, "")
 }
