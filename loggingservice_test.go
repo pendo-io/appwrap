@@ -63,11 +63,6 @@ func (mock *AppengineInfoMock) Zone() string {
 	return mock.Called().String(0)
 }
 
-func (mock *AppengineInfoMock) GcpServiceAccountName() (string, error) {
-	args := mock.Called()
-	return args.String(0), args.Error(1)
-}
-
 type ClientMock struct {
 	mock.Mock
 }
