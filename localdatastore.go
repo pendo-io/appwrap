@@ -1114,12 +1114,6 @@ func (mq *memoryQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
 }
 
 func (mq *memoryQuery) getMatchingItems() ([]*dsItem, error) {
-	if !mq.inTransaction {
-		// all types of queries allowed
-	} else if mq.ancestor == nil {
-		return nil, errors.New("queries inside transactions must include an ancestor")
-	}
-
 	if err := mq.checkIndexes(false); err != nil {
 		return nil, err
 	}
