@@ -68,15 +68,25 @@ var (
 
 	// ErrClusterConfigMiss means that GetConfig failed as cluster config was not present
 	ErrClusterConfigMiss = errors.New("memcache: cluster config miss")
+
+	// ErrConnectionPoolTimeout means that the client was unable to acquire a new connection due to
+	// being at MaxActiveConns for longer than the pool timeout duration
+	ErrConnectionPoolTimeout = errors.New("memcache: connection pool timeout")
 )
 
 const (
 	// DefaultTimeout is the default socket read/write timeout.
 	DefaultTimeout = 100 * time.Millisecond
 
+	// DefaultPoolTimeout is the default time the client will wait for an active connection to become available.
+	DefaultPoolTimeout = 2 * DefaultTimeout
+
 	// DefaultMaxIdleConns is the default maximum number of idle connections
 	// kept for any single address.
 	DefaultMaxIdleConns = 2
+
+	// DefaultMaxActiveConns is the default maximum number of concurrent connections allowed to a single address.
+	DefaultMaxActiveConns = 10
 )
 
 const buffered = 8 // arbitrary buffered channel size, for readability
@@ -184,6 +194,19 @@ type Client struct {
 	// be set to a number higher than your peak parallel requests.
 	MaxIdleConns int
 
+	// PoolTimeout specifies the time that the client will wait for an active connection to become free once
+	// maxActiveConns is reached.
+	// If zero, DefaultPoolTimeout is used.
+	//
+	// This should be set higher than Timeout.
+	PoolTimeout time.Duration
+
+	// maxActiveConns is the maximum number of concurrent connections allowed to a given address.  This should be set
+	// higher than MaxIdleConns.  Set it with the public SetMaxActiveConns function.
+	// If zero, DefaultMaxActiveConns is used.
+	maxActiveConns int
+	activeConnLock map[string]chan struct{}
+
 	selector    ServerSelector
 	StopPolling stop
 
@@ -234,6 +257,8 @@ func (cn *conn) extendDeadline() {
 // cache miss).  The purpose is to not recycle TCP connections that
 // are bad.
 func (cn *conn) condRelease(err *error) {
+	defer cn.c.freeActiveConn(cn.addr)
+
 	if *err == nil || resumableError(*err) {
 		cn.release()
 	} else {
@@ -277,6 +302,33 @@ func (c *Client) netTimeout() time.Duration {
 	return DefaultTimeout
 }
 
+func (c *Client) poolTimeout() time.Duration {
+	if c.PoolTimeout != 0 {
+		return c.PoolTimeout
+	}
+	return DefaultPoolTimeout
+}
+
+// SetMaxActiveConns sets the maximum number of concurrent active connections allowed to a single address.
+// It can only be set once since we use channels to enforce the limit and cannot safely re-create those channels without
+// a resource leak.
+func (c *Client) SetMaxActiveConns(conns int) {
+	if c.maxActiveConns > 0 {
+		panic("cannot set maxActiveConns more than once")
+	}
+	if conns <= 0 {
+		panic("conns must be > 0")
+	}
+	c.maxActiveConns = conns
+}
+
+func (c *Client) maxConns() int {
+	if c.maxActiveConns > 0 {
+		return c.maxActiveConns
+	}
+	return DefaultMaxActiveConns
+}
+
 func (c *Client) maxIdleConns() int {
 	if c.MaxIdleConns > 0 {
 		return c.MaxIdleConns
@@ -313,7 +365,55 @@ func (c *Client) dial(addr net.Addr) (net.Conn, error) {
 	return nil, err
 }
 
+var timers = sync.Pool{
+	New: func() interface{} {
+		t := time.NewTimer(time.Hour)
+		t.Stop()
+		return t
+	},
+}
+
+func (c *Client) acquireActiveConn(addr net.Addr) error {
+	if c.activeConnLock == nil {
+		c.lk.Lock()
+		if c.activeConnLock == nil {
+			c.activeConnLock = make(map[string]chan struct{})
+		}
+		c.lk.Unlock()
+	}
+	if c.activeConnLock[addr.String()] == nil {
+		c.lk.Lock()
+		if c.activeConnLock[addr.String()] == nil {
+			c.activeConnLock[addr.String()] = make(chan struct{}, c.maxConns())
+		}
+		c.lk.Unlock()
+	}
+
+	t := timers.Get().(*time.Timer)
+	t.Reset(c.poolTimeout())
+
+	select {
+	case c.activeConnLock[addr.String()] <- struct{}{}:
+		if !t.Stop() {
+			<-t.C
+		}
+		timers.Put(t)
+	case <-t.C:
+		timers.Put(t)
+		return ErrConnectionPoolTimeout
+	}
+	return nil
+}
+
+func (c *Client) freeActiveConn(addr net.Addr) {
+	<-c.activeConnLock[addr.String()]
+}
+
 func (c *Client) getConn(addr net.Addr) (*conn, error) {
+	if err := c.acquireActiveConn(addr); err != nil {
+		return nil, err
+	}
+
 	cn, ok := c.getFreeConn(addr)
 	if ok {
 		cn.extendDeadline()
@@ -321,6 +421,7 @@ func (c *Client) getConn(addr net.Addr) (*conn, error) {
 	}
 	nc, err := c.dial(addr)
 	if err != nil {
+		c.freeActiveConn(addr)
 		return nil, err
 	}
 	cn = &conn{

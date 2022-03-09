@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -91,7 +92,10 @@ func (m *memcacheService) NewAppengineMemcache(c context.Context, appInfo Appeng
 				return nil, err
 			}
 			m.client, err = memcache.NewDiscoveryClientFromSelector(addr, 5*time.Second, &consistentHashServerSelector{})
-			m.client.MaxIdleConns = 10 // complete guess - per address
+			m.client.MaxIdleConns = memcachedPoolSize / 2
+			m.client.SetMaxActiveConns(memcachedPoolSize)
+			m.client.PoolTimeout = memcachedPoolTimeout
+			m.client.Timeout = memcachedOperationTimeout
 			if err != nil {
 				return nil, err
 			}
@@ -501,4 +505,60 @@ func (s *consistentHashServerSelector) SetServers(servers ...string) error {
 	// set list last - it's what we use to make sure we're initialized
 	s.list = &list
 	return nil
+}
+
+const (
+	envMemcachedOperationTimeoutMs = "memcached_operation_timeout_ms"
+	envMemcachedPoolSize           = "memcached_pool_size"
+	envMemcachedPoolTimeoutMs      = "memcached_pool_timeout_ms"
+)
+
+var (
+	memcachedOperationTimeout time.Duration
+	memcachedPoolSize         int = 10
+	memcachedPoolTimeout      time.Duration
+)
+
+func init() {
+	timeoutMsStr := os.Getenv(envMemcachedOperationTimeoutMs)
+	if timeoutMsStr != "" {
+		timeoutMs, err := strconv.ParseInt(timeoutMsStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemcachedOperationTimeoutMs, timeoutMsStr, err)
+		} else if timeoutMs < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemcachedOperationTimeoutMs)
+		} else {
+			memcachedOperationTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
+
+	poolSizeStr := os.Getenv(envMemcachedPoolSize)
+	if poolSizeStr != "" {
+		poolSize, err := strconv.ParseInt(poolSizeStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemcachedPoolSize, poolSizeStr, err)
+		} else if poolSize < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemcachedPoolSize)
+		} else {
+			memcachedPoolSize = int(poolSize)
+		}
+	}
+
+	poolTimeoutStr := os.Getenv(envMemcachedPoolTimeoutMs)
+	if poolTimeoutStr != "" {
+		timeoutMs, err := strconv.ParseInt(poolTimeoutStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+				envMemcachedPoolTimeoutMs, poolTimeoutStr, err)
+		} else if timeoutMs < 1 {
+			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+				envMemcachedPoolTimeoutMs)
+		} else {
+			memcachedPoolTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
 }
