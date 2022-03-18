@@ -25,7 +25,6 @@ import (
 	"io"
 	"math/rand"
 	"net"
-
 	"strconv"
 	"strings"
 	"sync"
@@ -205,7 +204,7 @@ type Client struct {
 	// higher than MaxIdleConns.  Set it with the public SetMaxActiveConns function.
 	// If zero, DefaultMaxActiveConns is used.
 	maxActiveConns int
-	activeConnLock map[string]chan struct{}
+	activeConnLock sync.Map
 
 	selector    ServerSelector
 	StopPolling stop
@@ -374,26 +373,19 @@ var timers = sync.Pool{
 }
 
 func (c *Client) acquireActiveConn(addr net.Addr) error {
-	if c.activeConnLock == nil {
-		c.lk.Lock()
-		if c.activeConnLock == nil {
-			c.activeConnLock = make(map[string]chan struct{})
-		}
-		c.lk.Unlock()
+	var activeConnLock chan struct{}
+
+	val, ok := c.activeConnLock.Load(addr.String());
+	if !ok {
+		val, _ = c.activeConnLock.LoadOrStore(addr.String(), make(chan struct{}, c.maxConns()))
 	}
-	if c.activeConnLock[addr.String()] == nil {
-		c.lk.Lock()
-		if c.activeConnLock[addr.String()] == nil {
-			c.activeConnLock[addr.String()] = make(chan struct{}, c.maxConns())
-		}
-		c.lk.Unlock()
-	}
+	activeConnLock = val.(chan struct{})
 
 	t := timers.Get().(*time.Timer)
 	t.Reset(c.poolTimeout())
 
 	select {
-	case c.activeConnLock[addr.String()] <- struct{}{}:
+	case activeConnLock <- struct{}{}:
 		if !t.Stop() {
 			<-t.C
 		}
@@ -406,7 +398,14 @@ func (c *Client) acquireActiveConn(addr net.Addr) error {
 }
 
 func (c *Client) freeActiveConn(addr net.Addr) {
-	<-c.activeConnLock[addr.String()]
+	if val, ok := c.activeConnLock.Load(addr.String()); !ok {
+		// we somehow acquired a lock without creating a channel for this address????
+		// not good
+		panic(fmt.Sprintf("No channel found for addr %s", addr.String()))
+	} else {
+		activeConnLock := val.(chan struct{})
+		<-activeConnLock
+	}
 }
 
 func (c *Client) getConn(addr net.Addr) (*conn, error) {
