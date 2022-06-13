@@ -109,6 +109,10 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 
 // for use in flex services with long-running tasks that don't handle http requests
 func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) (context.Context, func()) {
+	if IsDevAppServer {
+		return c, func() {}
+	}
+
 	aeInfo := NewAppengineInfoFromContext(c)
 
 	project := aeInfo.NativeProjectID()
