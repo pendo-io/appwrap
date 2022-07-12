@@ -1,6 +1,7 @@
 package hscan
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -38,12 +39,12 @@ func (s *structSpec) set(tag string, sf *structField) {
 }
 
 func newStructSpec(t reflect.Type, fieldTag string) *structSpec {
+	numField := t.NumField()
 	out := &structSpec{
-		m: make(map[string]*structField),
+		m: make(map[string]*structField, numField),
 	}
 
-	num := t.NumField()
-	for i := 0; i < num; i++ {
+	for i := 0; i < numField; i++ {
 		f := t.Field(i)
 
 		tag := f.Tag.Get(fieldTag)
@@ -83,5 +84,10 @@ func (s StructValue) Scan(key string, value string) error {
 	if !ok {
 		return nil
 	}
-	return field.fn(s.value.Field(field.index), value)
+	if err := field.fn(s.value.Field(field.index), value); err != nil {
+		t := s.value.Type()
+		return fmt.Errorf("cannot scan redis.result %s into struct field %s.%s of type %s, error-%s",
+			value, t.Name(), t.Field(field.index).Name, t.Field(field.index).Type, err.Error())
+	}
+	return nil
 }
