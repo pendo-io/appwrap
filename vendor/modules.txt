@@ -23,7 +23,7 @@ cloud.google.com/go/datastore/internal/gaepb
 cloud.google.com/go/logging
 cloud.google.com/go/logging/apiv2
 cloud.google.com/go/logging/internal
-# github.com/cespare/xxhash/v2 v2.1.1
+# github.com/cespare/xxhash/v2 v2.1.2
 ## explicit
 github.com/cespare/xxhash/v2
 # github.com/codegangsta/inject v0.0.0-20140425184007-37d7f8432a3e
