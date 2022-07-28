@@ -94,13 +94,6 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 		hreq:   hreq,
 		labels: map[string]string{
 			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
-			"pendo.io/service":                       aeInfo.ModuleName(),
-			"pendo.io/version":                       aeInfo.VersionID(),
-			"pendo.io/request_host":                  hreq.Host,
-			"pendo.io/request_method":                hreq.Method,
-			"pendo.io/request_url":                   hreq.URL.String(),
-			"pendo.io/remote_ip":                     remoteIp,
-			"pendo.io/useragent":                     hreq.UserAgent(),
 			"pendo_io_service":                       aeInfo.ModuleName(),
 			"pendo_io_version":                       aeInfo.VersionID(),
 			"pendo_io_request_host":                  hreq.Host,
