@@ -173,13 +173,13 @@ func (e *ErrorReportingTest) TestAddLabels_ErrorAffectsKeyIsSetToValue(c *C) {
 	forwardLog := &errorForwardingLogger{
 		wrappedLogger:     wrapMe,
 		errorReporter:     mockReporter,
-		errorAffectsLabel: "pendo.io/sub_name",
+		errorAffectsLabel: "pendo_io_sub_name",
 		labelsLock:        &sync.RWMutex{},
 		labels:            make(map[string]string),
 	}
 
 	labelsOne := map[string]string{
-		"pendo.io/sub_name": "testSub",
+		"pendo_io_sub_name": "testSub",
 		"another":           "label",
 	}
 	labelsTwo := map[string]string{
