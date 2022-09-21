@@ -121,7 +121,7 @@ func (e *ErrorReportingTest) TestWarningf_OnlyForwards(c *C) {
 	wrapMe.AssertExpectations(c)
 }
 
-func (e *ErrorReportingTest) TestErrorf_ForwardsAndReports(c *C) {
+func (e *ErrorReportingTest) TestErrorf_OnlyForwards(c *C) {
 	wrapMe := &LoggingMock{Log: &NullLogger{}}
 	mockReporter := &ErrorReporterMock{}
 	forwardLog := &errorForwardingLogger{
@@ -133,11 +133,6 @@ func (e *ErrorReportingTest) TestErrorf_ForwardsAndReports(c *C) {
 	}
 
 	wrapMe.On("Errorf", "silly %s. you broke it", "goose")
-	mockReporter.On("Report", ErrorReport{
-		Err:             forwardedError{msg: "silly goose. you broke it"},
-		Req:             nil,
-		ErrorAffectsKey: "",
-	})
 	forwardLog.Errorf("silly %s. you broke it", "goose")
 
 	wrapMe.AssertExpectations(c)
@@ -190,11 +185,6 @@ func (e *ErrorReportingTest) TestAddLabels_ErrorAffectsKeyIsSetToValue(c *C) {
 	wrapMe.On("AddLabels", labelsOne)
 	wrapMe.On("AddLabels", labelsTwo)
 	wrapMe.On("Errorf", "broken things!")
-	mockReporter.On("Report", ErrorReport{
-		Err:             forwardedError{msg: "broken things!"},
-		Req:             nil,
-		ErrorAffectsKey: "testSub",
-	})
 
 	err := forwardLog.AddLabels(labelsOne)
 	c.Assert(err, IsNil)
