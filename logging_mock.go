@@ -51,6 +51,10 @@ func (m *LoggingMock) AddLabels(labels map[string]string) error {
 	return m.Log.AddLabels(labels)
 }
 
+func (m *LoggingMock) TraceID() string {
+	return m.Mock.Called().String(0)
+}
+
 type LogServiceMock struct {
 	mock.Mock
 }

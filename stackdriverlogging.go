@@ -109,6 +109,10 @@ func (sl *StackdriverLogging) AddLabels(labels map[string]string) error {
 	return nil
 }
 
+func (sl *StackdriverLogging) TraceID() string {
+	return sl.traceContext
+}
+
 // Debug will log the specified data to the logging system with the debug log level
 func (sl *StackdriverLogging) Debug(data interface{}) {
 	sl.processLog(logging.Debug, data)

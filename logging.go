@@ -30,6 +30,7 @@ type Logging interface {
 	Criticalf(format string, args ...interface{})             // Critical message
 	Request(request, url, format string, args ...interface{}) // This is conditionally implemented
 	AddLabels(labels map[string]string) error                 // Adds labels to your log message
+	TraceID() string                                          // Trace ID for current request, or "" if N/A
 }
 
 // DataLogging for system logging that can accept json, strings, or structs
@@ -53,6 +54,7 @@ func (nl NullLogger) Errorf(format string, args ...interface{})                {
 func (nl NullLogger) Criticalf(format string, args ...interface{})             {}
 func (nl NullLogger) Request(request, url, format string, args ...interface{}) {}
 func (nl NullLogger) AddLabels(labels map[string]string) error                 { return nil }
+func (nl NullLogger) TraceID() string                                          { return "" }
 
 type FormatLogger struct {
 	Logf func(format string, args ...interface{})
@@ -89,6 +91,8 @@ func (fl FormatLogger) Request(request, url, format string, args ...interface{})
 func (fl FormatLogger) AddLabels(labels map[string]string) error {
 	return nil
 }
+
+func (fl FormatLogger) TraceID() string { return "" }
 
 type WriterLogger struct {
 	FormatLogger
@@ -181,6 +185,10 @@ func (ll *LevelLogger) emitRequest() {
 	}
 }
 
+func (ll *LevelLogger) TraceID() string {
+	return ll.wrappedLogger.TraceID()
+}
+
 type TeeLogging struct {
 	Logs []Logging
 }
@@ -230,6 +238,15 @@ func (tee TeeLogging) AddLabels(labels map[string]string) error {
 	return nil
 }
 
+func (tee TeeLogging) TraceID() string {
+	for _, log := range tee.Logs {
+		if id := log.TraceID(); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
 type PrefixLogger struct {
 	Logging
 	Prefix string
@@ -261,4 +278,8 @@ func (pl PrefixLogger) Request(request, url, format string, args ...interface{})
 
 func (pl PrefixLogger) AddLabels(labels map[string]string) error {
 	return pl.Logging.AddLabels(labels)
+}
+
+func (pl PrefixLogger) TraceID() string {
+	return pl.Logging.TraceID()
 }
