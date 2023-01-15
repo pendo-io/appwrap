@@ -110,6 +110,13 @@ func (e *errorForwardingLogger) AddLabels(labels map[string]string) error {
 	return e.wrappedLogger.AddLabels(labels)
 }
 
+func (e *errorForwardingLogger) TraceID() string {
+	if tlog, ok := e.wrappedLogger.(TraceLogging); ok {
+		return tlog.TraceID()
+	}
+	return ""
+}
+
 func (e *errorForwardingLogger) Errorf(format string, args ...interface{}) {
 	e.wrappedLogger.Errorf(format, args...)
 }

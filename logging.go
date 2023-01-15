@@ -43,6 +43,14 @@ type DataLogging interface {
 	Close(http.ResponseWriter)
 }
 
+// TraceLogging is implemented by loggers that have a per-request trace ID, used to locate that request's logs.
+// Even if a logger implements this, TraceID may always return ""; this can happen
+type TraceLogging interface {
+	// TraceID returns the log trace ID of the request the logger is associated with, or "" if no trace ID (when the
+	// logger has no associated request, or is a wrapper around a non-implementing inner logger).
+	TraceID() string
+}
+
 // Sometimes, you just need to satify the interface and do nothing.
 type NullLogger struct{}
 
@@ -181,6 +189,13 @@ func (ll *LevelLogger) emitRequest() {
 	}
 }
 
+func (ll *LevelLogger) TraceID() string {
+	if tlog, ok := ll.wrappedLogger.(TraceLogging); ok {
+		return tlog.TraceID()
+	}
+	return ""
+}
+
 type TeeLogging struct {
 	Logs []Logging
 }
@@ -230,6 +245,17 @@ func (tee TeeLogging) AddLabels(labels map[string]string) error {
 	return nil
 }
 
+func (tee TeeLogging) TraceID() string {
+	for _, log := range tee.Logs {
+		if tlog, ok := log.(TraceLogging); ok {
+			if trace := tlog.TraceID(); trace != "" {
+				return trace
+			}
+		}
+	}
+	return ""
+}
+
 type PrefixLogger struct {
 	Logging
 	Prefix string
@@ -261,4 +287,11 @@ func (pl PrefixLogger) Request(request, url, format string, args ...interface{})
 
 func (pl PrefixLogger) AddLabels(labels map[string]string) error {
 	return pl.Logging.AddLabels(labels)
+}
+
+func (pl PrefixLogger) TraceID() string {
+	if tlog, ok := pl.Logging.(TraceLogging); ok {
+		return tlog.TraceID()
+	}
+	return ""
 }
