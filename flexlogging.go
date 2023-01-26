@@ -101,6 +101,14 @@ func (sl stackdriverLogging) AddLabels(labels map[string]string) error {
 	return nil
 }
 
+func (sl stackdriverLogging) TraceID() string {
+	ctxVal := (sl.c).Value(loggingCtxKey)
+	if ctxVal == nil {
+		panic(errors.New("failed to add log labels, needs to have a logging context"))
+	}
+	return ctxVal.(*loggingCtxValue).trace
+}
+
 func (logCtxVal *loggingCtxValue) getLabels() map[string]string {
 	labelsMtx.RLock()
 	defer labelsMtx.RUnlock()
