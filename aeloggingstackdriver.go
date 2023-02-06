@@ -37,9 +37,14 @@ type statusWriter struct {
 	http.ResponseWriter
 	status int
 	length int
+	wrote  bool
 }
 
 func (w *statusWriter) WriteHeader(status int) {
+	if panicOnDoubleResponseWriter && w.wrote {
+		panic("statusWriter.WriteHeader(" + strconv.FormatInt(int64(status), 10) + ") called after already having calling Write or WriteHeader once")
+	}
+	w.wrote = true
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -48,6 +53,7 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	if w.status == 0 {
 		w.status = 200
 	}
+	w.wrote = true
 	n, err := w.ResponseWriter.Write(b)
 	w.length += n
 	return n, err
@@ -343,4 +349,17 @@ func Infof(ctx context.Context, format string, args ...interface{}) {
 
 func Warningf(ctx context.Context, format string, args ...interface{}) {
 	logFromContext(ctx, logtypepb.LogSeverity_WARNING, format, args...)
+}
+
+var panicOnDoubleResponseWriter = false
+
+func init() {
+	v := os.Getenv("panic_responsewriter_double_status")
+	if v == "" {
+		return
+	}
+
+	if enablePanic, err := strconv.ParseBool(v); err == nil && enablePanic {
+		panicOnDoubleResponseWriter = true
+	}
 }
