@@ -2,21 +2,20 @@ version: 2.1
 executors:
   go-build:
       docker:
-        - image: gcr.io/pendo-dev/go-build:1.14
+        - image: gcr.io/pendo-dev/go-build:1.19
           auth:
             username: _json_key
             password: $GCR_JSON_KEY_FILE
-      working_directory: /go/src/github.com/pendo-io/appwrap
 jobs:
   test:
     executor:
       name: go-build
     steps:
       - checkout:
-          path: /go/src/github.com/pendo-io/appwrap
+          path: ~/pendo-io/appwrap
       - run:
           name: Run tests
-          command: go test ./...
+          command: cd ~/pendo-io/appwrap && go test -v ./...
 workflows:
   version: 2
   default:
