@@ -1,3 +1,4 @@
+//go:build indexbehavior
 // +build indexbehavior
 
 // Package indexbehavior is meant to test our understanding of Google Datastore (well, Cloud Firestore in Datastore Mode) indexes.
@@ -37,12 +38,11 @@
 package indexbehavior
 
 import (
-	"cloud.google.com/go/datastore"
-	"golang.org/x/net/context"
-	"google.golang.org/api/iterator"
-
+	"context"
 	"testing"
 
+	"cloud.google.com/go/datastore"
+	"google.golang.org/api/iterator"
 	. "gopkg.in/check.v1"
 )
 

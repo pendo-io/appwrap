@@ -2,6 +2,7 @@ package appwrap
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +20,6 @@ import (
 	gax "github.com/googleapis/gax-go/v2"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
-	"golang.org/x/net/context"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 
 	"github.com/pendo-io/appwrap/internal/metrics"

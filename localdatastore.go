@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type dsItem struct {
