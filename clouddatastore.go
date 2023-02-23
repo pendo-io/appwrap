@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
@@ -11,7 +12,6 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"go.opencensus.io/trace"
-	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"

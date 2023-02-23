@@ -1,6 +1,7 @@
 package appwrap
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/logging"
-	"golang.org/x/net/context"
 )
 
 var labelsMtx = &sync.RWMutex{}

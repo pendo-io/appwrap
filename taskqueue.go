@@ -1,11 +1,10 @@
 package appwrap
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type Taskqueue interface {
