@@ -116,8 +116,8 @@ func NewWriterLogger(writer io.Writer) Logging {
 	}
 }
 
-// LevelLogger is a wrapper for any goisms.SimpleLogging that will filter out logging based on a minimum logging level. It emits
-// the request itself iff another log is emitted
+// LevelLogger is a wrapper for another Logging that will filter based on log level. It calls the inner Logging's
+// Request once any log message passes the filter.
 type LevelLogger struct {
 	minlevel                                 LogLevel
 	wrappedLogger                            Logging
@@ -125,7 +125,7 @@ type LevelLogger struct {
 	requestArgs                              []interface{}
 }
 
-func NewLevelLogger(minlevel LogLevel, wrappedLogger Logging) Logging {
+func NewLevelLogger(minlevel LogLevel, wrappedLogger Logging) *LevelLogger {
 	return &LevelLogger{minlevel: minlevel, wrappedLogger: wrappedLogger}
 }
 
@@ -187,6 +187,10 @@ func (ll *LevelLogger) emitRequest() {
 
 func (ll *LevelLogger) TraceID() string {
 	return ll.wrappedLogger.TraceID()
+}
+
+func (ll *LevelLogger) SetMinLevel(level LogLevel) {
+	ll.minlevel = level // unsynchronized write, since we don't care if it takes a bit to be observed by other callers
 }
 
 type TeeLogging struct {
