@@ -43,7 +43,7 @@
 //      path: /foo/bar
 //      host: 127.0.0.1
 //      port: 3100
-//      scheme: https
+//      scheme: HTTPS
 //      httpHeaders:
 //      - name: Lit-Header
 //        value: Im-The-Best
@@ -100,6 +100,9 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 // +kubetype-gen:groupVersion=networking.istio.io/v1alpha3
 // +genclient
 // +k8s:deepcopy-gen=true
+// -->
+// <!-- istio code generation tags
+// +istio.io/sync-start
 // -->
 type WorkloadGroup struct {
 	// Metadata that will be used for all corresponding `WorkloadEntries`.
