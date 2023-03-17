@@ -18,8 +18,11 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	networkingv1alpha3 "istio.io/client-go/pkg/applyconfiguration/networking/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -115,7 +118,7 @@ func (c *FakeWorkloadEntries) UpdateStatus(ctx context.Context, workloadEntry *v
 // Delete takes name of the workloadEntry and deletes it. Returns an error if one occurs.
 func (c *FakeWorkloadEntries) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(workloadentriesResource, c.ns, name), &v1alpha3.WorkloadEntry{})
+		Invokes(testing.NewDeleteActionWithOptions(workloadentriesResource, c.ns, name, opts), &v1alpha3.WorkloadEntry{})
 
 	return err
 }
@@ -132,6 +135,51 @@ func (c *FakeWorkloadEntries) DeleteCollection(ctx context.Context, opts v1.Dele
 func (c *FakeWorkloadEntries) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha3.WorkloadEntry, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(workloadentriesResource, c.ns, name, pt, data, subresources...), &v1alpha3.WorkloadEntry{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha3.WorkloadEntry), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied workloadEntry.
+func (c *FakeWorkloadEntries) Apply(ctx context.Context, workloadEntry *networkingv1alpha3.WorkloadEntryApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha3.WorkloadEntry, err error) {
+	if workloadEntry == nil {
+		return nil, fmt.Errorf("workloadEntry provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(workloadEntry)
+	if err != nil {
+		return nil, err
+	}
+	name := workloadEntry.Name
+	if name == nil {
+		return nil, fmt.Errorf("workloadEntry.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(workloadentriesResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha3.WorkloadEntry{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha3.WorkloadEntry), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeWorkloadEntries) ApplyStatus(ctx context.Context, workloadEntry *networkingv1alpha3.WorkloadEntryApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha3.WorkloadEntry, err error) {
+	if workloadEntry == nil {
+		return nil, fmt.Errorf("workloadEntry provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(workloadEntry)
+	if err != nil {
+		return nil, err
+	}
+	name := workloadEntry.Name
+	if name == nil {
+		return nil, fmt.Errorf("workloadEntry.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(workloadentriesResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha3.WorkloadEntry{})
 
 	if obj == nil {
 		return nil, err
