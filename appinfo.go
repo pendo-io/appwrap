@@ -3,6 +3,9 @@ package appwrap
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"k8s.io/client-go/util/cert"
+	"net"
 	"os"
 	"sync"
 
@@ -31,19 +34,41 @@ type AppengineInfo interface {
 }
 
 var (
-	zone    string
-	zoneMtx sync.Mutex
-	config *rest.Config
-	k8sClientSet *kubernetes.Clientset
+	zone           string
+	zoneMtx        sync.Mutex
+	config         *rest.Config
+	k8sClientSet   *kubernetes.Clientset
 	istioClientSet *istio.Clientset
 )
 
 func init() {
 	var err error
 	if InKubernetes() {
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+		if location, found := os.LookupEnv("TELEPRESENCE_ROOT"); found {
+			host, port := os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")
+			token, err := ioutil.ReadFile(fmt.Sprintf("%s/var/run/secrets/kubernetes.io/serviceaccount/token", location))
+			if err != nil {
+				panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+			}
+			tlsClientConfig := rest.TLSClientConfig{}
+
+			if _, err := cert.NewPool(fmt.Sprintf("%s/var/run/secrets/kubernetes.io/serviceaccount/ca.crt", location)); err != nil {
+				panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+			} else {
+				tlsClientConfig.CAFile = fmt.Sprintf("%s/var/run/secrets/kubernetes.io/serviceaccount/ca.crt", location)
+			}
+
+			config = &rest.Config{
+				Host:            "https://" + net.JoinHostPort(host, port),
+				TLSClientConfig: tlsClientConfig,
+				BearerToken:     string(token),
+				BearerTokenFile: fmt.Sprintf("%s/var/run/secrets/kubernetes.io/serviceaccount/token", location),
+			}
+		} else {
+			config, err = rest.InClusterConfig()
+			if err != nil {
+				panic(fmt.Sprintf("Cannot get K8s config: %s", err.Error()))
+			}
 		}
 		k8sClientSet, err = kubernetes.NewForConfig(config)
 		if err != nil {
@@ -61,11 +86,15 @@ func getZone() string {
 	defer zoneMtx.Unlock()
 
 	if zone == "" {
-		z, err := metadata.Zone()
-		if err != nil {
-			panic(err)
+		if _, found := os.LookupEnv("TELEPRESENCE_CONTAINER"); found {
+			zone = "us-central1-b"
+		} else {
+			z, err := metadata.Zone()
+			if err != nil {
+				panic(err)
+			}
+			zone = z
 		}
-		zone = z
 	}
 
 	return zone
