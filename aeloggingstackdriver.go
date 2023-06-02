@@ -89,19 +89,29 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 		remoteIp = strings.Split(addr, ",")[0]
 	}
 
+	labels := map[string]string{
+		"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+		"pendo_io_service":                       aeInfo.ModuleName(),
+		"pendo_io_version":                       aeInfo.VersionID(),
+		"pendo_io_request_host":                  hreq.Host,
+		"pendo_io_request_method":                hreq.Method,
+		"pendo_io_request_url":                   hreq.URL.String(),
+		"pendo_io_remote_ip":                     remoteIp,
+		"pendo_io_useragent":                     hreq.UserAgent(),
+	}
+
+	tlsVersionHeader, tlsCipherSuiteHeader := hreq.Header.Get("X-Client-TLS-Version"), hreq.Header.Get("X-Client-Cipher-Suite")
+	if tlsVersionHeader != "" {
+		labels["pendo_io_client_tls_version"] = tlsVersionHeader
+	}
+	if tlsCipherSuiteHeader != "" {
+		labels["pendo_io_client_cipher_suite"] = tlsCipherSuiteHeader
+	}
+
 	return &loggingCtxValue{
 		aeInfo: aeInfo,
 		hreq:   hreq,
-		labels: map[string]string{
-			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
-			"pendo_io_service":                       aeInfo.ModuleName(),
-			"pendo_io_version":                       aeInfo.VersionID(),
-			"pendo_io_request_host":                  hreq.Host,
-			"pendo_io_request_method":                hreq.Method,
-			"pendo_io_request_url":                   hreq.URL.String(),
-			"pendo_io_remote_ip":                     remoteIp,
-			"pendo_io_useragent":                     hreq.UserAgent(),
-		},
+		labels: labels,
 		logger: logger,
 		trace:  trace,
 	}
