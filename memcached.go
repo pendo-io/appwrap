@@ -135,6 +135,9 @@ func (m *memcacheService) getDiscoveryAddress(appInfo AppengineInfo, loc CacheLo
 }
 
 func InitializeMemcacheDiscovery(endpoint string) {
+	if LocalDebug {
+		return
+	}
 	globalMemcacheService.lock.Lock()
 	defer globalMemcacheService.lock.Unlock()
 	if globalMemcacheService.discoveryEndpoint != endpoint {
@@ -560,5 +563,9 @@ func init() {
 		} else {
 			memcachedPoolTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
+	}
+
+	if LocalDebug {
+		globalMemcacheService.client = memcache.New("127.0.0.1:11211")
 	}
 }
