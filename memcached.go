@@ -561,4 +561,8 @@ func init() {
 			memcachedPoolTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
 	}
+
+	if os.Getenv("LOCAL_DEBUG") == "true" {
+		globalMemcacheService.client = memcache.New("127.0.0.1:11211")
+	}
 }
