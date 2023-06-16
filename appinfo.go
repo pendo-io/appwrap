@@ -31,10 +31,10 @@ type AppengineInfo interface {
 }
 
 var (
-	zone    string
-	zoneMtx sync.Mutex
-	config *rest.Config
-	k8sClientSet *kubernetes.Clientset
+	zone           string
+	zoneMtx        sync.Mutex
+	config         *rest.Config
+	k8sClientSet   *kubernetes.Clientset
 	istioClientSet *istio.Clientset
 )
 
@@ -77,6 +77,7 @@ func InKubernetes() bool {
 }
 
 var (
+	LocalDebug     = os.Getenv("LOCAL_DEBUG") == "true"
 	IsDevAppServer = false
 	IsFlex         = appengine.IsFlex
 	IsSecondGen    = appengine.IsSecondGen
