@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -178,7 +179,7 @@ type memorystoreService struct {
 var GlobalService memorystoreService
 
 func InitializeRedisAddrs(addrs []string) {
-	if len(addrs) == 0 {
+	if len(addrs) == 0 || LocalDebug {
 		return
 	}
 	GlobalService.mtx.Lock()
@@ -968,5 +969,41 @@ func init() {
 		} else {
 			memorystoreIdleTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
+	}
+
+	if LocalDebug {
+		log.Println("Connecting redis to localhost")
+
+		clients := make([]redisClientInterface, 1)
+
+		ops := &redis.Options{
+			Addr:     "127.0.0.1:6379",
+			Password: "",
+			DB:       0,
+
+			// Do not ever use internal retries; let the user of this
+			// library deal with retrying themselves if they see fit.
+			MaxRetries: -1,
+
+			IdleTimeout: memorystoreIdleTimeout,
+			PoolSize:    memorystorePoolSize,
+			PoolTimeout: memorystorePoolTimeout,
+			ReadTimeout: memorystoreReadTimeout,
+		}
+
+		if ops.PoolSize == 0 {
+			ops.PoolSize = 4 * runtime.GOMAXPROCS(0)
+		}
+
+		ops.OnConnect = func(ctx context.Context, cn *redis.Conn) error {
+			log := NewStackdriverLogging(ctx)
+			log.Debugf("memorystore: created new connection to shard %d (%s)", 0, "127.0.0.1:6379")
+			return nil
+		}
+
+		client := redis.NewClient(ops)
+		clients[0] = &redisClientImplementation{client, client}
+
+		GlobalService.clients = &clients
 	}
 }

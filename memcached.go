@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -135,6 +136,9 @@ func (m *memcacheService) getDiscoveryAddress(appInfo AppengineInfo, loc CacheLo
 }
 
 func InitializeMemcacheDiscovery(endpoint string) {
+	if LocalDebug {
+		return
+	}
 	globalMemcacheService.lock.Lock()
 	defer globalMemcacheService.lock.Unlock()
 	if globalMemcacheService.discoveryEndpoint != endpoint {
@@ -559,6 +563,14 @@ func init() {
 				envMemcachedPoolTimeoutMs)
 		} else {
 			memcachedPoolTimeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
+
+	if LocalDebug {
+		log.Println("Connecting memcached to localhost")
+		globalMemcacheService.client = memcache.New("127.0.0.1:11211")
+		if err := globalMemcacheService.client.Ping(); err != nil {
+			log.Println("Error connecting to local memcache: " + err.Error())
 		}
 	}
 }
