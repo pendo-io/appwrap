@@ -8,8 +8,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"cloud.google.com/go/logging"
 )
 
 var labelsMtx = &sync.RWMutex{}
@@ -36,12 +34,7 @@ func NewAppengineLogging(c context.Context) Logging {
 }
 
 func NewAppEngineLoggingService(c context.Context, aeInfo AppengineInfo) LoggingServiceInterface {
-	client, err := logging.NewClient(c, aeInfo.NativeProjectID())
-	if err != nil {
-		panic(fmt.Sprintf("unable to configure stackdriver logger: %s", err.Error()))
-	}
-
-	stackdriverClient := newStackdriverClient(client)
+	stackdriverClient := newStackdriverClient()
 	loggingService := newStackdriverLoggingService(stackdriverClient, aeInfo, NewAppengineLogging(c)).(*StackdriverLoggingService)
 
 	return loggingService

@@ -1,14 +1,14 @@
 package appwrap
 
 import (
+	"cloud.google.com/go/logging"
 	"context"
 	"fmt"
+	mrpb "google.golang.org/genproto/googleapis/api/monitoredres"
 	"net/http"
 	"os"
 	"strings"
-
-	"cloud.google.com/go/logging"
-	mrpb "google.golang.org/genproto/googleapis/api/monitoredres"
+	"sync"
 )
 
 type LogName string
@@ -26,35 +26,84 @@ type LoggerInterface interface {
 }
 
 type StackdriverClient struct {
-	client *logging.Client
+	loggingClient *LoggingClient
 }
 
-func newStackdriverClient(client *logging.Client) LoggerClientInterface {
-	return &StackdriverClient{
-		client: client,
-	}
+type LoggingClient struct {
+	sync.Mutex
+	client      *logging.Client
+	initialized bool
 }
 
-// Logger creates a new logger to upload log entries
-func (c StackdriverClient) Logger(logID string, opts ...logging.LoggerOption) LoggerInterface {
-	return c.client.Logger(logID, opts...)
+var globalLoggingClient LoggingClient
+
+func (lc *LoggingClient) Logger(logID string, opts ...logging.LoggerOption) *logging.Logger {
+	return lc.client.Logger(logID, opts...)
 }
 
-// SetUpOnError sets up stackdriver logging to print errors to the Stderr whenever an internal error occurs on the logger
-func (c StackdriverClient) SetUpOnError() {
-	c.client.OnError = func(e error) {
+func (lc *LoggingClient) SetUpOnError() {
+	lc.client.OnError = func(e error) {
 		fmt.Fprintf(os.Stderr, "logging error: %v", e)
 	}
 }
 
+func (lc *LoggingClient) Ping(ctx context.Context) error {
+	return lc.client.Ping(ctx)
+}
+
+func (lc *LoggingClient) Close() error {
+	lc.Lock()
+	err := lc.client.Close()
+	lc.initialized = false
+	lc.Unlock()
+	return err
+}
+
+func CloseGlobalLoggingClient() error {
+	return globalLoggingClient.Close()
+}
+
+func GetOrCreateLoggingClient() *logging.Client {
+	globalLoggingClient.Lock()
+	if !globalLoggingClient.initialized {
+		c := context.Background()
+		aeInfo := NewAppengineInfoFromContext(c)
+		client, err := logging.NewClient(c, fmt.Sprintf("projects/%s", aeInfo.NativeProjectID()))
+		if err != nil {
+			panic(fmt.Sprintf("failed to create logging client %s", err.Error()))
+		}
+		globalLoggingClient.client, globalLoggingClient.initialized = client, true
+
+	}
+	globalLoggingClient.Unlock()
+	return globalLoggingClient.client
+}
+
+func newStackdriverClient() LoggerClientInterface {
+	GetOrCreateLoggingClient()
+	return &StackdriverClient{
+		loggingClient: &globalLoggingClient,
+	}
+}
+
+// Logger creates a new logger to upload log entries
+func (c *StackdriverClient) Logger(logID string, opts ...logging.LoggerOption) LoggerInterface {
+	return c.loggingClient.Logger(logID, opts...)
+}
+
+// SetUpOnError sets up stackdriver logging to print errors to the Stderr whenever an internal error occurs on the logger
+func (c *StackdriverClient) SetUpOnError() {
+	c.loggingClient.SetUpOnError()
+}
+
 // Ping will ping the stackdriver log
-func (c StackdriverClient) Ping(ctx context.Context) error {
-	return c.client.Ping(ctx)
+func (c *StackdriverClient) Ping(ctx context.Context) error {
+	return c.loggingClient.Ping(ctx)
 }
 
 // Close will close the logger and flush any pending log entries up to the stackdriver system
-func (c StackdriverClient) Close() error {
-	return c.client.Close()
+func (c *StackdriverClient) Close() error {
+	return c.loggingClient.Close()
 }
 
 type LoggingServiceInterface interface {
