@@ -130,7 +130,10 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 		panic("aelog: no GCP project set in environment")
 	}
 	parent := "projects/" + project
-	lc := GetOrCreateLoggingClient()
+	lc, err := logging.NewClient(c, parent)
+	if err != nil {
+		panic(err)
+	}
 	if logName == "" {
 		logName = ChildLogName
 	}
@@ -143,7 +146,7 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 
 	ctx := context.WithValue(c, loggingCtxKey, logCtxVal)
 	return ctx, func() {
-		_ = logger.Flush()
+		lc.Close()
 	}
 }
 
@@ -168,7 +171,10 @@ func AddSharedLogClientToBackgroundContext(c context.Context, logName string) co
 		panic("aelog: no GCP project set in environment")
 	}
 	parent := "projects/" + project
-	lc := GetOrCreateLoggingClient()
+	lc, err := logging.NewClient(c, parent)
+	if err != nil {
+		panic(err)
+	}
 
 	if logName == "" {
 		logName = ChildLogName
@@ -247,7 +253,10 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 	}
 	parent := "projects/" + project
 
-	lc := GetOrCreateLoggingClient()
+	lc, err := logging.NewClient(ctx, parent)
+	if err != nil {
+		panic(err)
+	}
 	if logName == "" {
 		logName = ChildLogName
 	}
