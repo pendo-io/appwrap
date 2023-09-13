@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
+	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type cloudTaskAppEngineImpl struct {
