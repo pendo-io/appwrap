@@ -132,6 +132,10 @@ func (m *intCmdMock) Val() int64 {
 	return args.Get(0).(int64)
 }
 
+func (m *intCmdMock) String() string {
+	return m.Called().String(0)
+}
+
 type boolCmdMock struct {
 	mock.Mock
 	redis.Cmder
@@ -144,6 +148,10 @@ func (m *boolCmdMock) Result() (bool, error) {
 
 func (m *boolCmdMock) Err() error {
 	return m.Called().Error(0)
+}
+
+func (m *boolCmdMock) String() string {
+	return m.Called().String(0)
 }
 
 type MemorystoreTest struct{}
