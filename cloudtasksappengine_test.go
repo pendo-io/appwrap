@@ -8,10 +8,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
+	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 )
 

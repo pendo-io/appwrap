@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/timestamp"
-	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
+	taskspb "cloud.google.com/go/cloudtasks/apiv2/cloudtaskspb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type cloudTaskHttpImpl struct {
@@ -17,7 +17,7 @@ type cloudTaskHttpImpl struct {
 func newHttpCloudTask(serviceAccount string) HttpTask {
 	return &cloudTaskHttpImpl{
 		task: &taskspb.Task{
-			DispatchDeadline: &duration.Duration{Seconds: 1800},
+			DispatchDeadline: &durationpb.Duration{Seconds: 1800},
 			MessageType: &taskspb.Task_HttpRequest{
 				HttpRequest: &taskspb.HttpRequest{
 					AuthorizationHeader: &taskspb.HttpRequest_OidcToken{
@@ -83,7 +83,7 @@ func (t *cloudTaskHttpImpl) SetDelay(delay time.Duration) {
 }
 
 func (t *cloudTaskHttpImpl) SetEta(eta time.Time) {
-	t.task.ScheduleTime = &timestamp.Timestamp{
+	t.task.ScheduleTime = &timestamppb.Timestamp{
 		Seconds: eta.Unix(),
 		Nanos:   int32(eta.Nanosecond()),
 	}

@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC.
+// Copyright 2023 Google LLC.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,35 +8,35 @@
 //
 // For product documentation, see: https://cloud.google.com/appengine/docs/admin-api/
 //
-// Creating a client
+// # Creating a client
 //
 // Usage example:
 //
-//   import "google.golang.org/api/appengine/v1"
-//   ...
-//   ctx := context.Background()
-//   appengineService, err := appengine.NewService(ctx)
+//	import "google.golang.org/api/appengine/v1"
+//	...
+//	ctx := context.Background()
+//	appengineService, err := appengine.NewService(ctx)
 //
 // In this example, Google Application Default Credentials are used for authentication.
 //
 // For information on how to create and obtain Application Default Credentials, see https://developers.google.com/identity/protocols/application-default-credentials.
 //
-// Other authentication options
+// # Other authentication options
 //
 // By default, all available scopes (see "Constants") are used to authenticate. To restrict scopes, use option.WithScopes:
 //
-//   appengineService, err := appengine.NewService(ctx, option.WithScopes(appengine.CloudPlatformReadOnlyScope))
+//	appengineService, err := appengine.NewService(ctx, option.WithScopes(appengine.CloudPlatformReadOnlyScope))
 //
 // To use an API key for authentication (note: some APIs do not support API keys), use option.WithAPIKey:
 //
-//   appengineService, err := appengine.NewService(ctx, option.WithAPIKey("AIza..."))
+//	appengineService, err := appengine.NewService(ctx, option.WithAPIKey("AIza..."))
 //
 // To use an OAuth token (e.g., a user token obtained via a three-legged OAuth flow), use option.WithTokenSource:
 //
-//   config := &oauth2.Config{...}
-//   // ...
-//   token, err := config.Exchange(ctx, ...)
-//   appengineService, err := appengine.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx, token)))
+//	config := &oauth2.Config{...}
+//	// ...
+//	token, err := config.Exchange(ctx, ...)
+//	appengineService, err := appengine.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx, token)))
 //
 // See https://godoc.org/google.golang.org/api/option/ for details on options.
 package appengine // import "google.golang.org/api/appengine/v1"
@@ -54,6 +54,7 @@ import (
 	"strings"
 
 	googleapi "google.golang.org/api/googleapi"
+	internal "google.golang.org/api/internal"
 	gensupport "google.golang.org/api/internal/gensupport"
 	option "google.golang.org/api/option"
 	internaloption "google.golang.org/api/option/internaloption"
@@ -74,6 +75,7 @@ var _ = errors.New
 var _ = strings.Replace
 var _ = context.Canceled
 var _ = internaloption.WithDefaultEndpoint
+var _ = internal.Version
 
 const apiId = "appengine:v1"
 const apiName = "appengine"
@@ -86,16 +88,18 @@ const (
 	// View and manage your applications deployed on Google App Engine
 	AppengineAdminScope = "https://www.googleapis.com/auth/appengine.admin"
 
-	// View and manage your data across Google Cloud Platform services
+	// See, edit, configure, and delete your Google Cloud data and see the
+	// email address for your Google Account.
 	CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 
-	// View your data across Google Cloud Platform services
+	// View your data across Google Cloud services and see the email address
+	// of your Google Account
 	CloudPlatformReadOnlyScope = "https://www.googleapis.com/auth/cloud-platform.read-only"
 )
 
 // NewService creates a new APIService.
 func NewService(ctx context.Context, opts ...option.ClientOption) (*APIService, error) {
-	scopesOption := option.WithScopes(
+	scopesOption := internaloption.WithDefaultScopes(
 		"https://www.googleapis.com/auth/appengine.admin",
 		"https://www.googleapis.com/auth/cloud-platform",
 		"https://www.googleapis.com/auth/cloud-platform.read-only",
@@ -129,6 +133,7 @@ func New(client *http.Client) (*APIService, error) {
 	}
 	s := &APIService{client: client, BasePath: basePath}
 	s.Apps = NewAppsService(s)
+	s.Projects = NewProjectsService(s)
 	return s, nil
 }
 
@@ -138,6 +143,8 @@ type APIService struct {
 	UserAgent string // optional additional User-Agent fragment
 
 	Apps *AppsService
+
+	Projects *ProjectsService
 }
 
 func (s *APIService) userAgent() string {
@@ -276,9 +283,53 @@ type AppsServicesVersionsInstancesService struct {
 	s *APIService
 }
 
+func NewProjectsService(s *APIService) *ProjectsService {
+	rs := &ProjectsService{s: s}
+	rs.Locations = NewProjectsLocationsService(s)
+	return rs
+}
+
+type ProjectsService struct {
+	s *APIService
+
+	Locations *ProjectsLocationsService
+}
+
+func NewProjectsLocationsService(s *APIService) *ProjectsLocationsService {
+	rs := &ProjectsLocationsService{s: s}
+	rs.Applications = NewProjectsLocationsApplicationsService(s)
+	return rs
+}
+
+type ProjectsLocationsService struct {
+	s *APIService
+
+	Applications *ProjectsLocationsApplicationsService
+}
+
+func NewProjectsLocationsApplicationsService(s *APIService) *ProjectsLocationsApplicationsService {
+	rs := &ProjectsLocationsApplicationsService{s: s}
+	rs.Services = NewProjectsLocationsApplicationsServicesService(s)
+	return rs
+}
+
+type ProjectsLocationsApplicationsService struct {
+	s *APIService
+
+	Services *ProjectsLocationsApplicationsServicesService
+}
+
+func NewProjectsLocationsApplicationsServicesService(s *APIService) *ProjectsLocationsApplicationsServicesService {
+	rs := &ProjectsLocationsApplicationsServicesService{s: s}
+	return rs
+}
+
+type ProjectsLocationsApplicationsServicesService struct {
+	s *APIService
+}
+
 // ApiConfigHandler: Google Cloud Endpoints
-// (https://cloud.google.com/appengine/docs/python/endpoints/)
-// configuration for API handlers.
+// (https://cloud.google.com/endpoints) configuration for API handlers.
 type ApiConfigHandler struct {
 	// AuthFailAction: Action to take when users access resources that
 	// require authentication. Defaults to redirect.
@@ -335,10 +386,10 @@ type ApiConfigHandler struct {
 
 	// ForceSendFields is a list of field names (e.g. "AuthFailAction") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AuthFailAction") to
@@ -364,10 +415,10 @@ type ApiEndpointHandler struct {
 
 	// ForceSendFields is a list of field names (e.g. "ScriptPath") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ScriptPath") to include in
@@ -393,10 +444,10 @@ type Application struct {
 	// Google Account.
 	AuthDomain string `json:"authDomain,omitempty"`
 
-	// CodeBucket: Google Cloud Storage bucket that can be used for storing
-	// files associated with this application. This bucket is associated
-	// with the application and can be used by the gcloud deployment
-	// commands.@OutputOnly
+	// CodeBucket: Output only. Google Cloud Storage bucket that can be used
+	// for storing files associated with this application. This bucket is
+	// associated with the application and can be used by the gcloud
+	// deployment commands.@OutputOnly
 	CodeBucket string `json:"codeBucket,omitempty"`
 
 	// DatabaseType: The type of the Cloud Firestore or Cloud Datastore
@@ -409,16 +460,16 @@ type Application struct {
 	//   "CLOUD_DATASTORE_COMPATIBILITY" - Cloud Firestore in Datastore Mode
 	DatabaseType string `json:"databaseType,omitempty"`
 
-	// DefaultBucket: Google Cloud Storage bucket that can be used by this
-	// application to store content.@OutputOnly
+	// DefaultBucket: Output only. Google Cloud Storage bucket that can be
+	// used by this application to store content.@OutputOnly
 	DefaultBucket string `json:"defaultBucket,omitempty"`
 
 	// DefaultCookieExpiration: Cookie expiration policy for this
 	// application.
 	DefaultCookieExpiration string `json:"defaultCookieExpiration,omitempty"`
 
-	// DefaultHostname: Hostname used to reach this application, as resolved
-	// by App Engine.@OutputOnly
+	// DefaultHostname: Output only. Hostname used to reach this
+	// application, as resolved by App Engine.@OutputOnly
 	DefaultHostname string `json:"defaultHostname,omitempty"`
 
 	// DispatchRules: HTTP path dispatch rules for requests to the
@@ -430,8 +481,8 @@ type Application struct {
 	// application.
 	FeatureSettings *FeatureSettings `json:"featureSettings,omitempty"`
 
-	// GcrDomain: The Google Container Registry domain used for storing
-	// managed build docker images for this application.
+	// GcrDomain: Output only. The Google Container Registry domain used for
+	// storing managed build docker images for this application.
 	GcrDomain string `json:"gcrDomain,omitempty"`
 
 	Iap *IdentityAwareProxy `json:"iap,omitempty"`
@@ -448,9 +499,14 @@ type Application struct {
 	// (https://cloud.google.com/appengine/docs/locations).
 	LocationId string `json:"locationId,omitempty"`
 
-	// Name: Full path to the Application resource in the API. Example:
-	// apps/myapp.@OutputOnly
+	// Name: Output only. Full path to the Application resource in the API.
+	// Example: apps/myapp.@OutputOnly
 	Name string `json:"name,omitempty"`
+
+	// ServiceAccount: The service account associated with the application.
+	// This is the app-level default identity. If no identity provided
+	// during create version, Admin API will fallback to this one.
+	ServiceAccount string `json:"serviceAccount,omitempty"`
 
 	// ServingStatus: Serving status of this application.
 	//
@@ -467,10 +523,10 @@ type Application struct {
 
 	// ForceSendFields is a list of field names (e.g. "AuthDomain") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AuthDomain") to include in
@@ -551,10 +607,10 @@ type AuthorizedCertificate struct {
 
 	// ForceSendFields is a list of field names (e.g. "CertificateRawData")
 	// to unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CertificateRawData") to
@@ -574,9 +630,8 @@ func (s *AuthorizedCertificate) MarshalJSON() ([]byte, error) {
 }
 
 // AuthorizedDomain: A domain that a user has been authorized to
-// administer. To authorize use of a domain, verify ownership via
-// Webmaster Central
-// (https://www.google.com/webmasters/verification/home).
+// administer. To authorize use of a domain, verify ownership via Search
+// Console (https://search.google.com/search-console/welcome).
 type AuthorizedDomain struct {
 	// Id: Fully qualified domain name of the domain authorized for use.
 	// Example: example.com.
@@ -588,10 +643,10 @@ type AuthorizedDomain struct {
 
 	// ForceSendFields is a list of field names (e.g. "Id") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Id") to include in API
@@ -668,10 +723,10 @@ type AutomaticScaling struct {
 
 	// ForceSendFields is a list of field names (e.g. "CoolDownPeriod") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CoolDownPeriod") to
@@ -704,10 +759,10 @@ type BasicScaling struct {
 
 	// ForceSendFields is a list of field names (e.g. "IdleTimeout") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "IdleTimeout") to include
@@ -733,10 +788,10 @@ type BatchUpdateIngressRulesRequest struct {
 
 	// ForceSendFields is a list of field names (e.g. "IngressRules") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "IngressRules") to include
@@ -767,10 +822,10 @@ type BatchUpdateIngressRulesResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "IngressRules") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "IngressRules") to include
@@ -806,10 +861,10 @@ type CertificateRawData struct {
 
 	// ForceSendFields is a list of field names (e.g. "PrivateKey") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "PrivateKey") to include in
@@ -846,10 +901,10 @@ type CloudBuildOptions struct {
 
 	// ForceSendFields is a list of field names (e.g. "AppYamlPath") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AppYamlPath") to include
@@ -879,10 +934,10 @@ type ContainerInfo struct {
 
 	// ForceSendFields is a list of field names (e.g. "Image") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Image") to include in API
@@ -912,11 +967,11 @@ type CpuUtilization struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "AggregationWindowLength") to unconditionally include in API
-	// requests. By default, fields with empty values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AggregationWindowLength")
@@ -959,10 +1014,10 @@ type CreateVersionMetadataV1 struct {
 
 	// ForceSendFields is a list of field names (e.g. "CloudBuildId") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CloudBuildId") to include
@@ -990,10 +1045,10 @@ type CreateVersionMetadataV1Alpha struct {
 
 	// ForceSendFields is a list of field names (e.g. "CloudBuildId") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CloudBuildId") to include
@@ -1021,10 +1076,10 @@ type CreateVersionMetadataV1Beta struct {
 
 	// ForceSendFields is a list of field names (e.g. "CloudBuildId") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CloudBuildId") to include
@@ -1054,10 +1109,10 @@ type DebugInstanceRequest struct {
 
 	// ForceSendFields is a list of field names (e.g. "SshKey") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "SshKey") to include in API
@@ -1099,10 +1154,10 @@ type Deployment struct {
 
 	// ForceSendFields is a list of field names (e.g. "CloudBuildOptions")
 	// to unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CloudBuildOptions") to
@@ -1138,11 +1193,11 @@ type DiskUtilization struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "TargetReadBytesPerSecond") to unconditionally include in API
-	// requests. By default, fields with empty values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "TargetReadBytesPerSecond")
@@ -1187,10 +1242,10 @@ type DomainMapping struct {
 
 	// ForceSendFields is a list of field names (e.g. "Id") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Id") to include in API
@@ -1212,15 +1267,14 @@ func (s *DomainMapping) MarshalJSON() ([]byte, error) {
 // duplicated empty messages in your APIs. A typical example is to use
 // it as the request or the response type of an API method. For
 // instance: service Foo { rpc Bar(google.protobuf.Empty) returns
-// (google.protobuf.Empty); } The JSON representation for Empty is empty
-// JSON object {}.
+// (google.protobuf.Empty); }
 type Empty struct {
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
 }
 
-// EndpointsApiService: Cloud Endpoints
+// EndpointsApiService: Google Cloud Endpoints
 // (https://cloud.google.com/endpoints) configuration. The Endpoints API
 // Service provides tooling for serving Open API and gRPC endpoints via
 // an NGINX proxy. Only valid for App Engine Flexible environment
@@ -1262,10 +1316,10 @@ type EndpointsApiService struct {
 
 	// ForceSendFields is a list of field names (e.g. "ConfigId") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ConfigId") to include in
@@ -1291,10 +1345,10 @@ type Entrypoint struct {
 
 	// ForceSendFields is a list of field names (e.g. "Shell") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Shell") to include in API
@@ -1337,10 +1391,10 @@ type ErrorHandler struct {
 
 	// ForceSendFields is a list of field names (e.g. "ErrorCode") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ErrorCode") to include in
@@ -1376,10 +1430,10 @@ type FeatureSettings struct {
 
 	// ForceSendFields is a list of field names (e.g. "SplitHealthChecks")
 	// to unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "SplitHealthChecks") to
@@ -1416,10 +1470,10 @@ type FileInfo struct {
 
 	// ForceSendFields is a list of field names (e.g. "MimeType") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "MimeType") to include in
@@ -1449,7 +1503,7 @@ type FirewallRule struct {
 	Action string `json:"action,omitempty"`
 
 	// Description: An optional string description of this rule. This field
-	// has a maximum length of 100 characters.
+	// has a maximum length of 400 characters.
 	Description string `json:"description,omitempty"`
 
 	// Priority: A positive integer between 1, Int32.MaxValue-1 that defines
@@ -1476,10 +1530,10 @@ type FirewallRule struct {
 
 	// ForceSendFields is a list of field names (e.g. "Action") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Action") to include in API
@@ -1493,6 +1547,81 @@ type FirewallRule struct {
 
 func (s *FirewallRule) MarshalJSON() ([]byte, error) {
 	type NoMethod FirewallRule
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// FlexibleRuntimeSettings: Runtime settings for the App Engine flexible
+// environment.
+type FlexibleRuntimeSettings struct {
+	// OperatingSystem: The operating system of the application runtime.
+	OperatingSystem string `json:"operatingSystem,omitempty"`
+
+	// RuntimeVersion: The runtime version of an App Engine flexible
+	// application.
+	RuntimeVersion string `json:"runtimeVersion,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "OperatingSystem") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "OperatingSystem") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *FlexibleRuntimeSettings) MarshalJSON() ([]byte, error) {
+	type NoMethod FlexibleRuntimeSettings
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// GoogleAppengineV1betaLocationMetadata: Metadata for the given
+// google.cloud.location.Location.
+type GoogleAppengineV1betaLocationMetadata struct {
+	// FlexibleEnvironmentAvailable: App Engine flexible environment is
+	// available in the given location.@OutputOnly
+	FlexibleEnvironmentAvailable bool `json:"flexibleEnvironmentAvailable,omitempty"`
+
+	// SearchApiAvailable: Output only. Search API
+	// (https://cloud.google.com/appengine/docs/standard/python/search) is
+	// available in the given location.
+	SearchApiAvailable bool `json:"searchApiAvailable,omitempty"`
+
+	// StandardEnvironmentAvailable: App Engine standard environment is
+	// available in the given location.@OutputOnly
+	StandardEnvironmentAvailable bool `json:"standardEnvironmentAvailable,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g.
+	// "FlexibleEnvironmentAvailable") to unconditionally include in API
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g.
+	// "FlexibleEnvironmentAvailable") to include in API requests with the
+	// JSON null value. By default, fields with empty values are omitted
+	// from API requests. However, any field with an empty value appearing
+	// in NullFields will be sent to the server as null. It is an error if a
+	// field in this list has a non-empty value. This may be used to include
+	// null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *GoogleAppengineV1betaLocationMetadata) MarshalJSON() ([]byte, error) {
+	type NoMethod GoogleAppengineV1betaLocationMetadata
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -1529,10 +1658,10 @@ type HealthCheck struct {
 
 	// ForceSendFields is a list of field names (e.g. "CheckInterval") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CheckInterval") to include
@@ -1566,16 +1695,16 @@ type IdentityAwareProxy struct {
 	// returned in the oauth2_client_secret_sha256 field.@InputOnly
 	Oauth2ClientSecret string `json:"oauth2ClientSecret,omitempty"`
 
-	// Oauth2ClientSecretSha256: Hex-encoded SHA-256 hash of the client
-	// secret.@OutputOnly
+	// Oauth2ClientSecretSha256: Output only. Hex-encoded SHA-256 hash of
+	// the client secret.@OutputOnly
 	Oauth2ClientSecretSha256 string `json:"oauth2ClientSecretSha256,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Enabled") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Enabled") to include in
@@ -1694,10 +1823,10 @@ type Instance struct {
 
 	// ForceSendFields is a list of field names (e.g. "AppEngineRelease") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AppEngineRelease") to
@@ -1741,10 +1870,10 @@ type Library struct {
 
 	// ForceSendFields is a list of field names (e.g. "Name") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Name") to include in API
@@ -1779,10 +1908,10 @@ type ListAuthorizedCertificatesResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "Certificates") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Certificates") to include
@@ -1816,10 +1945,10 @@ type ListAuthorizedDomainsResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "Domains") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Domains") to include in
@@ -1853,10 +1982,10 @@ type ListDomainMappingsResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "DomainMappings") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "DomainMappings") to
@@ -1891,10 +2020,10 @@ type ListIngressRulesResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "IngressRules") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "IngressRules") to include
@@ -1927,10 +2056,10 @@ type ListInstancesResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "Instances") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Instances") to include in
@@ -1964,10 +2093,10 @@ type ListLocationsResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "Locations") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Locations") to include in
@@ -2001,10 +2130,10 @@ type ListOperationsResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "NextPageToken") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "NextPageToken") to include
@@ -2037,10 +2166,10 @@ type ListServicesResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "NextPageToken") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "NextPageToken") to include
@@ -2073,10 +2202,10 @@ type ListVersionsResponse struct {
 
 	// ForceSendFields is a list of field names (e.g. "NextPageToken") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "NextPageToken") to include
@@ -2124,10 +2253,10 @@ type LivenessCheck struct {
 
 	// ForceSendFields is a list of field names (e.g. "CheckInterval") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CheckInterval") to include
@@ -2145,7 +2274,7 @@ func (s *LivenessCheck) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// Location: A resource that represents Google Cloud Platform location.
+// Location: A resource that represents a Google Cloud location.
 type Location struct {
 	// DisplayName: The friendly name for this location, typically a nearby
 	// city name. For example, "Tokyo".
@@ -2174,10 +2303,10 @@ type Location struct {
 
 	// ForceSendFields is a list of field names (e.g. "DisplayName") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "DisplayName") to include
@@ -2213,11 +2342,11 @@ type LocationMetadata struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "FlexibleEnvironmentAvailable") to unconditionally include in API
-	// requests. By default, fields with empty values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g.
@@ -2276,10 +2405,10 @@ type ManagedCertificate struct {
 
 	// ForceSendFields is a list of field names (e.g. "LastRenewalTime") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "LastRenewalTime") to
@@ -2310,10 +2439,10 @@ type ManualScaling struct {
 
 	// ForceSendFields is a list of field names (e.g. "Instances") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Instances") to include in
@@ -2338,6 +2467,17 @@ type Network struct {
 	// virtual machine to the application container. Only applicable in the
 	// App Engine flexible environment.
 	ForwardedPorts []string `json:"forwardedPorts,omitempty"`
+
+	// InstanceIpMode: The IP mode for instances. Only applicable in the App
+	// Engine flexible environment.
+	//
+	// Possible values:
+	//   "INSTANCE_IP_MODE_UNSPECIFIED" - Unspecified is treated as
+	// EXTERNAL.
+	//   "EXTERNAL" - Instances are created with both internal and external
+	// IP addresses.
+	//   "INTERNAL" - Instances are created with internal IP addresses only.
+	InstanceIpMode string `json:"instanceIpMode,omitempty"`
 
 	// InstanceTag: Tag to apply to the instance during creation. Only
 	// applicable in the App Engine flexible environment.
@@ -2371,10 +2511,10 @@ type Network struct {
 
 	// ForceSendFields is a list of field names (e.g. "ForwardedPorts") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ForwardedPorts") to
@@ -2410,8 +2550,8 @@ type NetworkSettings struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "IngressTrafficAllowed") to unconditionally include in API requests.
-	// By default, fields with empty values are omitted from API requests.
-	// However, any non-pointer, non-interface field appearing in
+	// By default, fields with empty or default values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
 	// ForceSendFields will be sent to the server regardless of whether the
 	// field is empty or not. This may be used to include empty fields in
 	// Patch requests.
@@ -2450,11 +2590,11 @@ type NetworkUtilization struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "TargetReceivedBytesPerSecond") to unconditionally include in API
-	// requests. By default, fields with empty values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g.
@@ -2513,10 +2653,10 @@ type Operation struct {
 
 	// ForceSendFields is a list of field names (e.g. "Done") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Done") to include in API
@@ -2566,8 +2706,8 @@ type OperationMetadataV1 struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "CreateVersionMetadata") to unconditionally include in API requests.
-	// By default, fields with empty values are omitted from API requests.
-	// However, any non-pointer, non-interface field appearing in
+	// By default, fields with empty or default values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
 	// ForceSendFields will be sent to the server regardless of whether the
 	// field is empty or not. This may be used to include empty fields in
 	// Patch requests.
@@ -2621,8 +2761,8 @@ type OperationMetadataV1Alpha struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "CreateVersionMetadata") to unconditionally include in API requests.
-	// By default, fields with empty values are omitted from API requests.
-	// However, any non-pointer, non-interface field appearing in
+	// By default, fields with empty or default values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
 	// ForceSendFields will be sent to the server regardless of whether the
 	// field is empty or not. This may be used to include empty fields in
 	// Patch requests.
@@ -2676,8 +2816,8 @@ type OperationMetadataV1Beta struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "CreateVersionMetadata") to unconditionally include in API requests.
-	// By default, fields with empty values are omitted from API requests.
-	// However, any non-pointer, non-interface field appearing in
+	// By default, fields with empty or default values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
 	// ForceSendFields will be sent to the server regardless of whether the
 	// field is empty or not. This may be used to include empty fields in
 	// Patch requests.
@@ -2695,6 +2835,200 @@ type OperationMetadataV1Beta struct {
 
 func (s *OperationMetadataV1Beta) MarshalJSON() ([]byte, error) {
 	type NoMethod OperationMetadataV1Beta
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// ProjectEvent: The request sent to CLHs during project events.
+type ProjectEvent struct {
+	// EventId: The unique ID for this project event. CLHs can use this
+	// value to dedup repeated calls. required
+	EventId string `json:"eventId,omitempty"`
+
+	// Possible values:
+	//   "UNKNOWN"
+	//   "BEFORE_RESOURCE_HANDLING"
+	//   "AFTER_RESOURCE_HANDLING"
+	Phase string `json:"phase,omitempty"`
+
+	// ProjectMetadata: The projects metadata for this project. required
+	ProjectMetadata *ProjectsMetadata `json:"projectMetadata,omitempty"`
+
+	// State: The state of the project that led to this event.
+	State *ProjectState `json:"state,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "EventId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "EventId") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ProjectEvent) MarshalJSON() ([]byte, error) {
+	type NoMethod ProjectEvent
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// ProjectState: ProjectState contains the externally-visible project
+// state that is used to communicate the state and reasoning for that
+// state to the CLH. This data is not persisted by CCFE, but is instead
+// derived from CCFE's internal representation of the project state.
+type ProjectState struct {
+	CurrentReasons *Reasons `json:"currentReasons,omitempty"`
+
+	// PreviousReasons: The previous and current reasons for a project state
+	// will be sent for a project event. CLHs that need to know the signal
+	// that caused the project event to trigger (edges) as opposed to just
+	// knowing the state can act upon differences in the previous and
+	// current reasons.Reasons will be provided for every system: service
+	// management, data governance, abuse, and billing.If this is a
+	// CCFE-triggered event used for reconciliation then the current reasons
+	// will be set to their *_CONTROL_PLANE_SYNC state. The previous reasons
+	// will contain the last known set of non-unknown non-control_plane_sync
+	// reasons for the state.Reasons fields are deprecated. New tenants
+	// should only use the state field. If you must know the reason(s)
+	// behind a specific state, please consult with CCFE team first
+	// (cloud-ccfe-discuss@google.com).
+	PreviousReasons *Reasons `json:"previousReasons,omitempty"`
+
+	// State: The current state of the project. This state is the
+	// culmination of all of the opinions from external systems that CCFE
+	// knows about of the project.
+	//
+	// Possible values:
+	//   "UNKNOWN_STATE" - A project should never be in an unknown state.
+	// Receipt of a project with this state is an error.
+	//   "ON" - CCFE considers the project to be serving or transitioning
+	// into serving.
+	//   "OFF" - CCFE considers the project to be in an OFF state. This
+	// could occur due to various factors. The state could be triggered by
+	// Google-internal audits (ex. abuse suspension, billing closed) or
+	// cleanups trigged by compliance systems (ex. data governance hide).
+	// User-initiated events such as service management deactivation trigger
+	// a project to an OFF state.CLHs might choose to do nothing in this
+	// case or to turn off costly resources. CLHs need to consider the
+	// customer experience if an ON/OFF/ON sequence of state transitions
+	// occurs vs. the cost of deleting resources, keeping metadata about
+	// resources, or even keeping resources live for a period of time.CCFE
+	// will not send any new customer requests to the CLH when the project
+	// is in an OFF state. However, CCFE will allow all previous customer
+	// requests relayed to CLH to complete.
+	//   "DELETED" - This state indicates that the project has been (or is
+	// being) completely removed. This is often due to a data governance
+	// purge request and therefore resources should be deleted when this
+	// state is reached.
+	State string `json:"state,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CurrentReasons") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "CurrentReasons") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ProjectState) MarshalJSON() ([]byte, error) {
+	type NoMethod ProjectState
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// ProjectsMetadata: ProjectsMetadata is the metadata CCFE stores about
+// the all the relevant projects (tenant, consumer, producer).
+type ProjectsMetadata struct {
+	// ConsumerProjectId: The consumer project id.
+	ConsumerProjectId string `json:"consumerProjectId,omitempty"`
+
+	// ConsumerProjectNumber: The consumer project number.
+	ConsumerProjectNumber int64 `json:"consumerProjectNumber,omitempty,string"`
+
+	// ConsumerProjectState: The CCFE state of the consumer project. It is
+	// the same state that is communicated to the CLH during project events.
+	// Notice that this field is not set in the DB, it is only set in this
+	// proto when communicated to CLH in the side channel.
+	//
+	// Possible values:
+	//   "UNKNOWN_STATE" - A project should never be in an unknown state.
+	// Receipt of a project with this state is an error.
+	//   "ON" - CCFE considers the project to be serving or transitioning
+	// into serving.
+	//   "OFF" - CCFE considers the project to be in an OFF state. This
+	// could occur due to various factors. The state could be triggered by
+	// Google-internal audits (ex. abuse suspension, billing closed) or
+	// cleanups trigged by compliance systems (ex. data governance hide).
+	// User-initiated events such as service management deactivation trigger
+	// a project to an OFF state.CLHs might choose to do nothing in this
+	// case or to turn off costly resources. CLHs need to consider the
+	// customer experience if an ON/OFF/ON sequence of state transitions
+	// occurs vs. the cost of deleting resources, keeping metadata about
+	// resources, or even keeping resources live for a period of time.CCFE
+	// will not send any new customer requests to the CLH when the project
+	// is in an OFF state. However, CCFE will allow all previous customer
+	// requests relayed to CLH to complete.
+	//   "DELETED" - This state indicates that the project has been (or is
+	// being) completely removed. This is often due to a data governance
+	// purge request and therefore resources should be deleted when this
+	// state is reached.
+	ConsumerProjectState string `json:"consumerProjectState,omitempty"`
+
+	// P4ServiceAccount: The service account authorized to operate on the
+	// consumer project. Note: CCFE only propagates P4SA with default tag to
+	// CLH.
+	P4ServiceAccount string `json:"p4ServiceAccount,omitempty"`
+
+	// ProducerProjectId: The producer project id.
+	ProducerProjectId string `json:"producerProjectId,omitempty"`
+
+	// ProducerProjectNumber: The producer project number.
+	ProducerProjectNumber int64 `json:"producerProjectNumber,omitempty,string"`
+
+	// TenantProjectId: The tenant project id.
+	TenantProjectId string `json:"tenantProjectId,omitempty"`
+
+	// TenantProjectNumber: The tenant project number.
+	TenantProjectNumber int64 `json:"tenantProjectNumber,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "ConsumerProjectId")
+	// to unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "ConsumerProjectId") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ProjectsMetadata) MarshalJSON() ([]byte, error) {
+	type NoMethod ProjectsMetadata
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -2730,10 +3064,10 @@ type ReadinessCheck struct {
 
 	// ForceSendFields is a list of field names (e.g. "AppStartTimeout") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "AppStartTimeout") to
@@ -2748,6 +3082,115 @@ type ReadinessCheck struct {
 
 func (s *ReadinessCheck) MarshalJSON() ([]byte, error) {
 	type NoMethod ReadinessCheck
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// Reasons: Projects transition between and within states based on
+// reasons sent from various systems. CCFE will provide the CLH with
+// reasons for the current state per system.The current systems that
+// CCFE supports are: Service Management (Inception) Data Governance
+// (Wipeout) Abuse (Ares) Billing (Internal Cloud Billing API)
+type Reasons struct {
+	// Possible values:
+	//   "ABUSE_UNKNOWN_REASON" - An unknown reason indicates that the abuse
+	// system has not sent a signal for this project.
+	//   "ABUSE_CONTROL_PLANE_SYNC" - Due to various reasons CCFE might
+	// proactively restate a project state to a CLH to ensure that the CLH
+	// and CCFE are both aware of the project state. This reason can be tied
+	// to any of the states.
+	//   "SUSPEND" - If a project is deemed abusive we receive a suspend
+	// signal. Suspend is a reason to put the project into an INTERNAL_OFF
+	// state.
+	//   "REINSTATE" - Projects that were once considered abusive can later
+	// be deemed non-abusive. When this happens we must reinstate the
+	// project. Reinstate is a reason to put the project into an ON state.
+	Abuse string `json:"abuse,omitempty"`
+
+	// Possible values:
+	//   "BILLING_UNKNOWN_REASON" - An unknown reason indicates that the
+	// billing system has not sent a signal for this project.
+	//   "BILLING_CONTROL_PLANE_SYNC" - Due to various reasons CCFE might
+	// proactively restate a project state to a CLH to ensure that the CLH
+	// and CCFE are both aware of the project state. This reason can be tied
+	// to any of the states.
+	//   "PROBATION" - Minor infractions cause a probation signal to be
+	// sent. Probation is a reason to put the project into a ON state even
+	// though it is a negative signal. CCFE will block mutations for this
+	// project while it is on billing probation, but the CLH is expected to
+	// serve non-mutation requests.
+	//   "CLOSE" - When a billing account is closed, it is a stronger signal
+	// about non-payment. Close is a reason to put the project into an
+	// INTERNAL_OFF state.
+	//   "OPEN" - Consumers can re-open billing accounts and update accounts
+	// to pull them out of probation. When this happens, we get a signal
+	// that the account is open. Open is a reason to put the project into an
+	// ON state.
+	Billing string `json:"billing,omitempty"`
+
+	// Possible values:
+	//   "DATA_GOVERNANCE_UNKNOWN_REASON" - An unknown reason indicates that
+	// data governance has not sent a signal for this project.
+	//   "DATA_GOVERNANCE_CONTROL_PLANE_SYNC" - Due to various reasons CCFE
+	// might proactively restate a project state to a CLH to ensure that the
+	// CLH and CCFE are both aware of the project state. This reason can be
+	// tied to any of the states.
+	//   "HIDE" - When a project is deleted we retain some data for a period
+	// of time to allow the consumer to change their mind. Data governance
+	// sends a signal to hide the data when this occurs. Hide is a reason to
+	// put the project in an INTERNAL_OFF state.
+	//   "UNHIDE" - The decision to un-delete a project can be made. When
+	// this happens data governance tells us to unhide any hidden data.
+	// Unhide is a reason to put the project in an ON state.
+	//   "PURGE" - After a period of time data must be completely removed
+	// from our systems. When data governance sends a purge signal we need
+	// to remove data. Purge is a reason to put the project in a DELETED
+	// state. Purge is the only event that triggers a delete mutation. All
+	// other events have update semantics.
+	DataGovernance string `json:"dataGovernance,omitempty"`
+
+	// Possible values:
+	//   "SERVICE_MANAGEMENT_UNKNOWN_REASON" - An unknown reason indicates
+	// that we have not received a signal from service management about this
+	// project. Since projects are created by request of service management,
+	// this reason should never be set.
+	//   "SERVICE_MANAGEMENT_CONTROL_PLANE_SYNC" - Due to various reasons
+	// CCFE might proactively restate a project state to a CLH to ensure
+	// that the CLH and CCFE are both aware of the project state. This
+	// reason can be tied to any of the states.
+	//   "ACTIVATION" - When a customer activates an API CCFE notifies the
+	// CLH and sets the project to the ON state.
+	//   "PREPARE_DEACTIVATION" - When a customer deactivates and API
+	// service management starts a two-step process to perform the
+	// deactivation. The first step is to prepare. Prepare is a reason to
+	// put the project in a EXTERNAL_OFF state.
+	//   "ABORT_DEACTIVATION" - If the deactivation is cancelled, service
+	// managed needs to abort the deactivation. Abort is a reason to put the
+	// project in an ON state.
+	//   "COMMIT_DEACTIVATION" - If the deactivation is followed through
+	// with, service management needs to finish deactivation. Commit is a
+	// reason to put the project in a DELETED state.
+	ServiceManagement string `json:"serviceManagement,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Abuse") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Abuse") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *Reasons) MarshalJSON() ([]byte, error) {
+	type NoMethod Reasons
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -2768,11 +3211,11 @@ type RequestUtilization struct {
 
 	// ForceSendFields is a list of field names (e.g.
 	// "TargetConcurrentRequests") to unconditionally include in API
-	// requests. By default, fields with empty values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// requests. By default, fields with empty or default values are omitted
+	// from API requests. However, any non-pointer, non-interface field
+	// appearing in ForceSendFields will be sent to the server regardless of
+	// whether the field is empty or not. This may be used to include empty
+	// fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "TargetConcurrentRequests")
@@ -2813,10 +3256,10 @@ type ResourceRecord struct {
 
 	// ForceSendFields is a list of field names (e.g. "Name") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Name") to include in API
@@ -2855,10 +3298,10 @@ type Resources struct {
 
 	// ForceSendFields is a list of field names (e.g. "Cpu") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Cpu") to include in API
@@ -2902,10 +3345,10 @@ type ScriptHandler struct {
 
 	// ForceSendFields is a list of field names (e.g. "ScriptPath") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ScriptPath") to include in
@@ -2935,6 +3378,19 @@ type Service struct {
 	// default.@OutputOnly
 	Id string `json:"id,omitempty"`
 
+	// Labels: A set of labels to apply to this service. Labels are
+	// key/value pairs that describe the service and all resources that
+	// belong to it (e.g., versions). The labels can be used to search and
+	// group resources, and are propagated to the usage and billing reports,
+	// enabling fine-grain analysis of costs. An example of using labels is
+	// to tag resources belonging to different environments (e.g.,
+	// "env=prod", "env=qa"). Label keys and values can be no longer than 63
+	// characters and can only contain lowercase letters, numeric
+	// characters, underscores, dashes, and international characters. Label
+	// keys must start with a lowercase letter or an international
+	// character. Each service can have at most 32 labels.
+	Labels map[string]string `json:"labels,omitempty"`
+
 	// Name: Full path to the Service resource in the API. Example:
 	// apps/myapp/services/default.@OutputOnly
 	Name string `json:"name,omitempty"`
@@ -2953,10 +3409,10 @@ type Service struct {
 
 	// ForceSendFields is a list of field names (e.g. "Id") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Id") to include in API
@@ -3013,10 +3469,10 @@ type SslSettings struct {
 
 	// ForceSendFields is a list of field names (e.g. "CertificateId") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "CertificateId") to include
@@ -3055,10 +3511,10 @@ type StandardSchedulerSettings struct {
 
 	// ForceSendFields is a list of field names (e.g. "MaxInstances") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "MaxInstances") to include
@@ -3131,10 +3587,10 @@ type StaticFilesHandler struct {
 
 	// ForceSendFields is a list of field names (e.g. "ApplicationReadable")
 	// to unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ApplicationReadable") to
@@ -3176,10 +3632,10 @@ type Status struct {
 
 	// ForceSendFields is a list of field names (e.g. "Code") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Code") to include in API
@@ -3229,10 +3685,10 @@ type TrafficSplit struct {
 
 	// ForceSendFields is a list of field names (e.g. "Allocations") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Allocations") to include
@@ -3270,10 +3726,10 @@ type UrlDispatchRule struct {
 
 	// ForceSendFields is a list of field names (e.g. "Domain") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Domain") to include in API
@@ -3376,10 +3832,10 @@ type UrlMap struct {
 
 	// ForceSendFields is a list of field names (e.g. "ApiEndpoint") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ApiEndpoint") to include
@@ -3401,9 +3857,13 @@ func (s *UrlMap) MarshalJSON() ([]byte, error) {
 // configuration files that are deployed into a service.
 type Version struct {
 	// ApiConfig: Serving configuration for Google Cloud Endpoints
-	// (https://cloud.google.com/appengine/docs/python/endpoints/).Only
-	// returned in GET requests if view=FULL is set.
+	// (https://cloud.google.com/endpoints).Only returned in GET requests if
+	// view=FULL is set.
 	ApiConfig *ApiConfigHandler `json:"apiConfig,omitempty"`
+
+	// AppEngineApis: Allows App Engine second generation runtimes to access
+	// the legacy bundled services.
+	AppEngineApis bool `json:"appEngineApis,omitempty"`
 
 	// AutomaticScaling: Automatic scaling is based on request rate,
 	// response latencies, and other application metrics. Instances are
@@ -3468,6 +3928,9 @@ type Version struct {
 	// ErrorHandlers: Custom static error pages. Limited to 10KB per
 	// page.Only returned in GET requests if view=FULL is set.
 	ErrorHandlers []*ErrorHandler `json:"errorHandlers,omitempty"`
+
+	// FlexibleRuntimeSettings: Settings for App Engine flexible runtimes.
+	FlexibleRuntimeSettings *FlexibleRuntimeSettings `json:"flexibleRuntimeSettings,omitempty"`
 
 	// Handlers: An ordered list of URL-matching patterns that should be
 	// applied to incoming requests. The first matching URL handles the
@@ -3613,10 +4076,10 @@ type Version struct {
 
 	// ForceSendFields is a list of field names (e.g. "ApiConfig") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "ApiConfig") to include in
@@ -3648,10 +4111,10 @@ type Volume struct {
 
 	// ForceSendFields is a list of field names (e.g. "Name") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "Name") to include in API
@@ -3685,22 +4148,33 @@ func (s *Volume) UnmarshalJSON(data []byte) error {
 
 // VpcAccessConnector: VPC access connector specification.
 type VpcAccessConnector struct {
+	// EgressSetting: The egress setting for the connector, controlling what
+	// traffic is diverted through it.
+	//
+	// Possible values:
+	//   "EGRESS_SETTING_UNSPECIFIED"
+	//   "ALL_TRAFFIC" - Force the use of VPC Access for all egress traffic
+	// from the function.
+	//   "PRIVATE_IP_RANGES" - Use the VPC Access Connector for private IP
+	// space from RFC1918.
+	EgressSetting string `json:"egressSetting,omitempty"`
+
 	// Name: Full Serverless VPC Access Connector name e.g.
 	// /projects/my-project/locations/us-central1/connectors/c1.
 	Name string `json:"name,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Name") to
+	// ForceSendFields is a list of field names (e.g. "EgressSetting") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "Name") to include in API
-	// requests with the JSON null value. By default, fields with empty
-	// values are omitted from API requests. However, any field with an
-	// empty value appearing in NullFields will be sent to the server as
+	// NullFields is a list of field names (e.g. "EgressSetting") to include
+	// in API requests with the JSON null value. By default, fields with
+	// empty values are omitted from API requests. However, any field with
+	// an empty value appearing in NullFields will be sent to the server as
 	// null. It is an error if a field in this list has a non-empty value.
 	// This may be used to include null fields in Patch requests.
 	NullFields []string `json:"-"`
@@ -3727,10 +4201,10 @@ type ZipInfo struct {
 
 	// ForceSendFields is a list of field names (e.g. "FilesCount") to
 	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
 	// NullFields is a list of field names (e.g. "FilesCount") to include in
@@ -3771,6 +4245,14 @@ func (r *AppsService) Create(application *Application) *AppsCreateCall {
 	return c
 }
 
+// Parent sets the optional parameter "parent": The project and location
+// in which the application should be created, specified in the format
+// projects/*/locations/*
+func (c *AppsCreateCall) Parent(parent string) *AppsCreateCall {
+	c.urlParams_.Set("parent", parent)
+	return c
+}
+
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3798,7 +4280,7 @@ func (c *AppsCreateCall) Header() http.Header {
 
 func (c *AppsCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -3835,17 +4317,17 @@ func (c *AppsCreateCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -3864,7 +4346,13 @@ func (c *AppsCreateCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 	//   "httpMethod": "POST",
 	//   "id": "appengine.apps.create",
 	//   "parameterOrder": [],
-	//   "parameters": {},
+	//   "parameters": {
+	//     "parent": {
+	//       "description": "The project and location in which the application should be created, specified in the format projects/*/locations/*",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "v1/apps",
 	//   "request": {
 	//     "$ref": "Application"
@@ -3891,6 +4379,9 @@ type AppsGetCall struct {
 }
 
 // Get: Gets information about an application.
+//
+//   - appsId: Part of `name`. Name of the Application resource to get.
+//     Example: apps/myapp.
 func (r *AppsService) Get(appsId string) *AppsGetCall {
 	c := &AppsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -3934,7 +4425,7 @@ func (c *AppsGetCall) Header() http.Header {
 
 func (c *AppsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -3972,17 +4463,17 @@ func (c *AppsGetCall) Do(opts ...googleapi.CallOption) (*Application, error) {
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Application{
 		ServerResponse: googleapi.ServerResponse{
@@ -4038,7 +4529,11 @@ type AppsPatchCall struct {
 // Patch: Updates the specified Application resource. You can update the
 // following fields: auth_domain - Google authentication domain for
 // controlling user access to the application. default_cookie_expiration
-// - Cookie expiration policy for the application.
+// - Cookie expiration policy for the application. iap - Identity-Aware
+// Proxy properties for the application.
+//
+//   - appsId: Part of `name`. Name of the Application resource to update.
+//     Example: apps/myapp.
 func (r *AppsService) Patch(appsId string, application *Application) *AppsPatchCall {
 	c := &AppsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4046,8 +4541,8 @@ func (r *AppsService) Patch(appsId string, application *Application) *AppsPatchC
 	return c
 }
 
-// UpdateMask sets the optional parameter "updateMask": Standard field
-// mask for the set of fields to be updated.
+// UpdateMask sets the optional parameter "updateMask": Required.
+// Standard field mask for the set of fields to be updated.
 func (c *AppsPatchCall) UpdateMask(updateMask string) *AppsPatchCall {
 	c.urlParams_.Set("updateMask", updateMask)
 	return c
@@ -4080,7 +4575,7 @@ func (c *AppsPatchCall) Header() http.Header {
 
 func (c *AppsPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4120,17 +4615,17 @@ func (c *AppsPatchCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -4144,7 +4639,7 @@ func (c *AppsPatchCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates the specified Application resource. You can update the following fields: auth_domain - Google authentication domain for controlling user access to the application. default_cookie_expiration - Cookie expiration policy for the application.",
+	//   "description": "Updates the specified Application resource. You can update the following fields: auth_domain - Google authentication domain for controlling user access to the application. default_cookie_expiration - Cookie expiration policy for the application. iap - Identity-Aware Proxy properties for the application.",
 	//   "flatPath": "v1/apps/{appsId}",
 	//   "httpMethod": "PATCH",
 	//   "id": "appengine.apps.patch",
@@ -4159,7 +4654,7 @@ func (c *AppsPatchCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 	//       "type": "string"
 	//     },
 	//     "updateMask": {
-	//       "description": "Standard field mask for the set of fields to be updated.",
+	//       "description": "Required. Standard field mask for the set of fields to be updated.",
 	//       "format": "google-fieldmask",
 	//       "location": "query",
 	//       "type": "string"
@@ -4200,6 +4695,9 @@ type AppsRepairCall struct {
 // https://cloud.google.com/iam/reference/rest/v1/projects.serviceAccounts/undelete?apix_params=%7B"name"%3A"projects%2F-%2FserviceAccounts%2Funique_id"%2C"resource"%3A%7B%7D%7D
 // . If the deletion was recent, the numeric ID can be found in the
 // Cloud Console Activity Log.
+//
+//   - appsId: Part of `name`. Name of the application to repair. Example:
+//     apps/myapp.
 func (r *AppsService) Repair(appsId string, repairapplicationrequest *RepairApplicationRequest) *AppsRepairCall {
 	c := &AppsRepairCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4234,7 +4732,7 @@ func (c *AppsRepairCall) Header() http.Header {
 
 func (c *AppsRepairCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4274,17 +4772,17 @@ func (c *AppsRepairCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -4339,6 +4837,9 @@ type AppsAuthorizedCertificatesCreateCall struct {
 }
 
 // Create: Uploads the specified SSL certificate.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsAuthorizedCertificatesService) Create(appsId string, authorizedcertificate *AuthorizedCertificate) *AppsAuthorizedCertificatesCreateCall {
 	c := &AppsAuthorizedCertificatesCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4373,7 +4874,7 @@ func (c *AppsAuthorizedCertificatesCreateCall) Header() http.Header {
 
 func (c *AppsAuthorizedCertificatesCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4413,17 +4914,17 @@ func (c *AppsAuthorizedCertificatesCreateCall) Do(opts ...googleapi.CallOption) 
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &AuthorizedCertificate{
 		ServerResponse: googleapi.ServerResponse{
@@ -4478,6 +4979,11 @@ type AppsAuthorizedCertificatesDeleteCall struct {
 }
 
 // Delete: Deletes the specified SSL certificate.
+//
+//   - appsId: Part of `name`. Name of the resource to delete. Example:
+//     apps/myapp/authorizedCertificates/12345.
+//   - authorizedCertificatesId: Part of `name`. See documentation of
+//     `appsId`.
 func (r *AppsAuthorizedCertificatesService) Delete(appsId string, authorizedCertificatesId string) *AppsAuthorizedCertificatesDeleteCall {
 	c := &AppsAuthorizedCertificatesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4512,7 +5018,7 @@ func (c *AppsAuthorizedCertificatesDeleteCall) Header() http.Header {
 
 func (c *AppsAuthorizedCertificatesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4548,17 +5054,17 @@ func (c *AppsAuthorizedCertificatesDeleteCall) Do(opts ...googleapi.CallOption) 
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Empty{
 		ServerResponse: googleapi.ServerResponse{
@@ -4618,6 +5124,11 @@ type AppsAuthorizedCertificatesGetCall struct {
 }
 
 // Get: Gets the specified SSL certificate.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/authorizedCertificates/12345.
+//   - authorizedCertificatesId: Part of `name`. See documentation of
+//     `appsId`.
 func (r *AppsAuthorizedCertificatesService) Get(appsId string, authorizedCertificatesId string) *AppsAuthorizedCertificatesGetCall {
 	c := &AppsAuthorizedCertificatesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4629,9 +5140,13 @@ func (r *AppsAuthorizedCertificatesService) Get(appsId string, authorizedCertifi
 // returned in the GET response.
 //
 // Possible values:
-//   "BASIC_CERTIFICATE" - Basic certificate information, including
+//
+//	"BASIC_CERTIFICATE" - Basic certificate information, including
+//
 // applicable domains and expiration date.
-//   "FULL_CERTIFICATE" - The information from BASIC_CERTIFICATE, plus
+//
+//	"FULL_CERTIFICATE" - The information from BASIC_CERTIFICATE, plus
+//
 // detailed information on the domain mappings that have this
 // certificate mapped.
 func (c *AppsAuthorizedCertificatesGetCall) View(view string) *AppsAuthorizedCertificatesGetCall {
@@ -4676,7 +5191,7 @@ func (c *AppsAuthorizedCertificatesGetCall) Header() http.Header {
 
 func (c *AppsAuthorizedCertificatesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4715,17 +5230,17 @@ func (c *AppsAuthorizedCertificatesGetCall) Do(opts ...googleapi.CallOption) (*A
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &AuthorizedCertificate{
 		ServerResponse: googleapi.ServerResponse{
@@ -4800,6 +5315,9 @@ type AppsAuthorizedCertificatesListCall struct {
 
 // List: Lists all SSL certificates the user is authorized to
 // administer.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsAuthorizedCertificatesService) List(appsId string) *AppsAuthorizedCertificatesListCall {
 	c := &AppsAuthorizedCertificatesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -4824,9 +5342,13 @@ func (c *AppsAuthorizedCertificatesListCall) PageToken(pageToken string) *AppsAu
 // returned in the LIST response.
 //
 // Possible values:
-//   "BASIC_CERTIFICATE" - Basic certificate information, including
+//
+//	"BASIC_CERTIFICATE" - Basic certificate information, including
+//
 // applicable domains and expiration date.
-//   "FULL_CERTIFICATE" - The information from BASIC_CERTIFICATE, plus
+//
+//	"FULL_CERTIFICATE" - The information from BASIC_CERTIFICATE, plus
+//
 // detailed information on the domain mappings that have this
 // certificate mapped.
 func (c *AppsAuthorizedCertificatesListCall) View(view string) *AppsAuthorizedCertificatesListCall {
@@ -4871,7 +5393,7 @@ func (c *AppsAuthorizedCertificatesListCall) Header() http.Header {
 
 func (c *AppsAuthorizedCertificatesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -4910,17 +5432,17 @@ func (c *AppsAuthorizedCertificatesListCall) Do(opts ...googleapi.CallOption) (*
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListAuthorizedCertificatesResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -5024,6 +5546,11 @@ type AppsAuthorizedCertificatesPatchCall struct {
 // with a new certificate. The new certificate must be applicable to the
 // same domains as the original certificate. The certificate
 // display_name may also be updated.
+//
+//   - appsId: Part of `name`. Name of the resource to update. Example:
+//     apps/myapp/authorizedCertificates/12345.
+//   - authorizedCertificatesId: Part of `name`. See documentation of
+//     `appsId`.
 func (r *AppsAuthorizedCertificatesService) Patch(appsId string, authorizedCertificatesId string, authorizedcertificate *AuthorizedCertificate) *AppsAuthorizedCertificatesPatchCall {
 	c := &AppsAuthorizedCertificatesPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5067,7 +5594,7 @@ func (c *AppsAuthorizedCertificatesPatchCall) Header() http.Header {
 
 func (c *AppsAuthorizedCertificatesPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5108,17 +5635,17 @@ func (c *AppsAuthorizedCertificatesPatchCall) Do(opts ...googleapi.CallOption) (
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &AuthorizedCertificate{
 		ServerResponse: googleapi.ServerResponse{
@@ -5186,6 +5713,9 @@ type AppsAuthorizedDomainsListCall struct {
 }
 
 // List: Lists all domains the user is authorized to administer.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsAuthorizedDomainsService) List(appsId string) *AppsAuthorizedDomainsListCall {
 	c := &AppsAuthorizedDomainsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5243,7 +5773,7 @@ func (c *AppsAuthorizedDomainsListCall) Header() http.Header {
 
 func (c *AppsAuthorizedDomainsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5281,17 +5811,17 @@ func (c *AppsAuthorizedDomainsListCall) Do(opts ...googleapi.CallOption) (*ListA
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListAuthorizedDomainsResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -5380,6 +5910,9 @@ type AppsDomainMappingsCreateCall struct {
 // administer a domain in order to map it to an application. For a list
 // of available authorized domains, see
 // AuthorizedDomains.ListAuthorizedDomains.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsDomainMappingsService) Create(appsId string, domainmapping *DomainMapping) *AppsDomainMappingsCreateCall {
 	c := &AppsDomainMappingsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5392,12 +5925,18 @@ func (r *AppsDomainMappingsService) Create(appsId string, domainmapping *DomainM
 // this domain. By default, overrides are rejected.
 //
 // Possible values:
-//   "UNSPECIFIED_DOMAIN_OVERRIDE_STRATEGY" - Strategy unspecified.
+//
+//	"UNSPECIFIED_DOMAIN_OVERRIDE_STRATEGY" - Strategy unspecified.
+//
 // Defaults to STRICT.
-//   "STRICT" - Overrides not allowed. If a mapping already exists for
+//
+//	"STRICT" - Overrides not allowed. If a mapping already exists for
+//
 // the specified domain, the request will return an ALREADY_EXISTS
 // (409).
-//   "OVERRIDE" - Overrides allowed. If a mapping already exists for the
+//
+//	"OVERRIDE" - Overrides allowed. If a mapping already exists for the
+//
 // specified domain, the request will overwrite it. Note that this might
 // stop another Google product from serving. For example, if the domain
 // is mapped to another App Engine application, that app will no longer
@@ -5434,7 +5973,7 @@ func (c *AppsDomainMappingsCreateCall) Header() http.Header {
 
 func (c *AppsDomainMappingsCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5474,17 +6013,17 @@ func (c *AppsDomainMappingsCreateCall) Do(opts ...googleapi.CallOption) (*Operat
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -5556,6 +6095,10 @@ type AppsDomainMappingsDeleteCall struct {
 // Delete: Deletes the specified domain mapping. A user must be
 // authorized to administer the associated domain in order to delete a
 // DomainMapping resource.
+//
+//   - appsId: Part of `name`. Name of the resource to delete. Example:
+//     apps/myapp/domainMappings/example.com.
+//   - domainMappingsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsDomainMappingsService) Delete(appsId string, domainMappingsId string) *AppsDomainMappingsDeleteCall {
 	c := &AppsDomainMappingsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5590,7 +6133,7 @@ func (c *AppsDomainMappingsDeleteCall) Header() http.Header {
 
 func (c *AppsDomainMappingsDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5626,17 +6169,17 @@ func (c *AppsDomainMappingsDeleteCall) Do(opts ...googleapi.CallOption) (*Operat
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -5696,6 +6239,10 @@ type AppsDomainMappingsGetCall struct {
 }
 
 // Get: Gets the specified domain mapping.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/domainMappings/example.com.
+//   - domainMappingsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsDomainMappingsService) Get(appsId string, domainMappingsId string) *AppsDomainMappingsGetCall {
 	c := &AppsDomainMappingsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5740,7 +6287,7 @@ func (c *AppsDomainMappingsGetCall) Header() http.Header {
 
 func (c *AppsDomainMappingsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5779,17 +6326,17 @@ func (c *AppsDomainMappingsGetCall) Do(opts ...googleapi.CallOption) (*DomainMap
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &DomainMapping{
 		ServerResponse: googleapi.ServerResponse{
@@ -5850,6 +6397,9 @@ type AppsDomainMappingsListCall struct {
 }
 
 // List: Lists the domain mappings on an application.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsDomainMappingsService) List(appsId string) *AppsDomainMappingsListCall {
 	c := &AppsDomainMappingsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -5907,7 +6457,7 @@ func (c *AppsDomainMappingsListCall) Header() http.Header {
 
 func (c *AppsDomainMappingsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -5945,17 +6495,17 @@ func (c *AppsDomainMappingsListCall) Do(opts ...googleapi.CallOption) (*ListDoma
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListDomainMappingsResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -6046,6 +6596,10 @@ type AppsDomainMappingsPatchCall struct {
 // AuthorizedCertificate resource. A user must be authorized to
 // administer the associated domain in order to update a DomainMapping
 // resource.
+//
+//   - appsId: Part of `name`. Name of the resource to update. Example:
+//     apps/myapp/domainMappings/example.com.
+//   - domainMappingsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsDomainMappingsService) Patch(appsId string, domainMappingsId string, domainmapping *DomainMapping) *AppsDomainMappingsPatchCall {
 	c := &AppsDomainMappingsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6054,8 +6608,8 @@ func (r *AppsDomainMappingsService) Patch(appsId string, domainMappingsId string
 	return c
 }
 
-// UpdateMask sets the optional parameter "updateMask": Standard field
-// mask for the set of fields to be updated.
+// UpdateMask sets the optional parameter "updateMask": Required.
+// Standard field mask for the set of fields to be updated.
 func (c *AppsDomainMappingsPatchCall) UpdateMask(updateMask string) *AppsDomainMappingsPatchCall {
 	c.urlParams_.Set("updateMask", updateMask)
 	return c
@@ -6088,7 +6642,7 @@ func (c *AppsDomainMappingsPatchCall) Header() http.Header {
 
 func (c *AppsDomainMappingsPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6129,17 +6683,17 @@ func (c *AppsDomainMappingsPatchCall) Do(opts ...googleapi.CallOption) (*Operati
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -6175,7 +6729,7 @@ func (c *AppsDomainMappingsPatchCall) Do(opts ...googleapi.CallOption) (*Operati
 	//       "type": "string"
 	//     },
 	//     "updateMask": {
-	//       "description": "Standard field mask for the set of fields to be updated.",
+	//       "description": "Required. Standard field mask for the set of fields to be updated.",
 	//       "format": "google-fieldmask",
 	//       "location": "query",
 	//       "type": "string"
@@ -6211,6 +6765,9 @@ type AppsFirewallIngressRulesBatchUpdateCall struct {
 // firewall with the new rules.If the final rule does not match traffic
 // with the '*' wildcard IP range, then an "allow all" rule is
 // explicitly added to the end of the list.
+//
+//   - appsId: Part of `name`. Name of the Firewall collection to set.
+//     Example: apps/myapp/firewall/ingressRules.
 func (r *AppsFirewallIngressRulesService) BatchUpdate(appsId string, batchupdateingressrulesrequest *BatchUpdateIngressRulesRequest) *AppsFirewallIngressRulesBatchUpdateCall {
 	c := &AppsFirewallIngressRulesBatchUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6245,7 +6802,7 @@ func (c *AppsFirewallIngressRulesBatchUpdateCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesBatchUpdateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6285,17 +6842,17 @@ func (c *AppsFirewallIngressRulesBatchUpdateCall) Do(opts ...googleapi.CallOptio
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &BatchUpdateIngressRulesResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -6350,6 +6907,10 @@ type AppsFirewallIngressRulesCreateCall struct {
 }
 
 // Create: Creates a firewall rule for the application.
+//
+//   - appsId: Part of `parent`. Name of the parent Firewall collection in
+//     which to create a new rule. Example:
+//     apps/myapp/firewall/ingressRules.
 func (r *AppsFirewallIngressRulesService) Create(appsId string, firewallrule *FirewallRule) *AppsFirewallIngressRulesCreateCall {
 	c := &AppsFirewallIngressRulesCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6384,7 +6945,7 @@ func (c *AppsFirewallIngressRulesCreateCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6424,17 +6985,17 @@ func (c *AppsFirewallIngressRulesCreateCall) Do(opts ...googleapi.CallOption) (*
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &FirewallRule{
 		ServerResponse: googleapi.ServerResponse{
@@ -6489,6 +7050,10 @@ type AppsFirewallIngressRulesDeleteCall struct {
 }
 
 // Delete: Deletes the specified firewall rule.
+//
+//   - appsId: Part of `name`. Name of the Firewall resource to delete.
+//     Example: apps/myapp/firewall/ingressRules/100.
+//   - ingressRulesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsFirewallIngressRulesService) Delete(appsId string, ingressRulesId string) *AppsFirewallIngressRulesDeleteCall {
 	c := &AppsFirewallIngressRulesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6523,7 +7088,7 @@ func (c *AppsFirewallIngressRulesDeleteCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6559,17 +7124,17 @@ func (c *AppsFirewallIngressRulesDeleteCall) Do(opts ...googleapi.CallOption) (*
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Empty{
 		ServerResponse: googleapi.ServerResponse{
@@ -6629,6 +7194,10 @@ type AppsFirewallIngressRulesGetCall struct {
 }
 
 // Get: Gets the specified firewall rule.
+//
+//   - appsId: Part of `name`. Name of the Firewall resource to retrieve.
+//     Example: apps/myapp/firewall/ingressRules/100.
+//   - ingressRulesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsFirewallIngressRulesService) Get(appsId string, ingressRulesId string) *AppsFirewallIngressRulesGetCall {
 	c := &AppsFirewallIngressRulesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6673,7 +7242,7 @@ func (c *AppsFirewallIngressRulesGetCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6712,17 +7281,17 @@ func (c *AppsFirewallIngressRulesGetCall) Do(opts ...googleapi.CallOption) (*Fir
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &FirewallRule{
 		ServerResponse: googleapi.ServerResponse{
@@ -6783,6 +7352,9 @@ type AppsFirewallIngressRulesListCall struct {
 }
 
 // List: Lists the firewall rules of an application.
+//
+//   - appsId: Part of `parent`. Name of the Firewall collection to
+//     retrieve. Example: apps/myapp/firewall/ingressRules.
 func (r *AppsFirewallIngressRulesService) List(appsId string) *AppsFirewallIngressRulesListCall {
 	c := &AppsFirewallIngressRulesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -6849,7 +7421,7 @@ func (c *AppsFirewallIngressRulesListCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -6887,17 +7459,17 @@ func (c *AppsFirewallIngressRulesListCall) Do(opts ...googleapi.CallOption) (*Li
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListIngressRulesResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -6989,6 +7561,10 @@ type AppsFirewallIngressRulesPatchCall struct {
 }
 
 // Patch: Updates the specified firewall rule.
+//
+//   - appsId: Part of `name`. Name of the Firewall resource to update.
+//     Example: apps/myapp/firewall/ingressRules/100.
+//   - ingressRulesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsFirewallIngressRulesService) Patch(appsId string, ingressRulesId string, firewallrule *FirewallRule) *AppsFirewallIngressRulesPatchCall {
 	c := &AppsFirewallIngressRulesPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7031,7 +7607,7 @@ func (c *AppsFirewallIngressRulesPatchCall) Header() http.Header {
 
 func (c *AppsFirewallIngressRulesPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7072,17 +7648,17 @@ func (c *AppsFirewallIngressRulesPatchCall) Do(opts ...googleapi.CallOption) (*F
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &FirewallRule{
 		ServerResponse: googleapi.ServerResponse{
@@ -7151,6 +7727,9 @@ type AppsLocationsGetCall struct {
 }
 
 // Get: Gets information about a location.
+//
+// - appsId: Part of `name`. Resource name for the location.
+// - locationsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsLocationsService) Get(appsId string, locationsId string) *AppsLocationsGetCall {
 	c := &AppsLocationsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7195,7 +7774,7 @@ func (c *AppsLocationsGetCall) Header() http.Header {
 
 func (c *AppsLocationsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7234,17 +7813,17 @@ func (c *AppsLocationsGetCall) Do(opts ...googleapi.CallOption) (*Location, erro
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Location{
 		ServerResponse: googleapi.ServerResponse{
@@ -7306,6 +7885,9 @@ type AppsLocationsListCall struct {
 
 // List: Lists information about the supported locations for this
 // service.
+//
+//   - appsId: Part of `name`. The resource that owns the locations
+//     collection, if applicable.
 func (r *AppsLocationsService) List(appsId string) *AppsLocationsListCall {
 	c := &AppsLocationsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7322,7 +7904,7 @@ func (c *AppsLocationsListCall) Filter(filter string) *AppsLocationsListCall {
 }
 
 // PageSize sets the optional parameter "pageSize": The maximum number
-// of results to return. If not set, the service will select a default.
+// of results to return. If not set, the service selects a default.
 func (c *AppsLocationsListCall) PageSize(pageSize int64) *AppsLocationsListCall {
 	c.urlParams_.Set("pageSize", fmt.Sprint(pageSize))
 	return c
@@ -7373,7 +7955,7 @@ func (c *AppsLocationsListCall) Header() http.Header {
 
 func (c *AppsLocationsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7411,17 +7993,17 @@ func (c *AppsLocationsListCall) Do(opts ...googleapi.CallOption) (*ListLocations
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListLocationsResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -7455,7 +8037,7 @@ func (c *AppsLocationsListCall) Do(opts ...googleapi.CallOption) (*ListLocations
 	//       "type": "string"
 	//     },
 	//     "pageSize": {
-	//       "description": "The maximum number of results to return. If not set, the service will select a default.",
+	//       "description": "The maximum number of results to return. If not set, the service selects a default.",
 	//       "format": "int32",
 	//       "location": "query",
 	//       "type": "integer"
@@ -7515,6 +8097,9 @@ type AppsOperationsGetCall struct {
 // Get: Gets the latest state of a long-running operation. Clients can
 // use this method to poll the operation result at intervals as
 // recommended by the API service.
+//
+// - appsId: Part of `name`. The name of the operation resource.
+// - operationsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsOperationsService) Get(appsId string, operationsId string) *AppsOperationsGetCall {
 	c := &AppsOperationsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7559,7 +8144,7 @@ func (c *AppsOperationsGetCall) Header() http.Header {
 
 func (c *AppsOperationsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7598,17 +8183,17 @@ func (c *AppsOperationsGetCall) Do(opts ...googleapi.CallOption) (*Operation, er
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -7670,14 +8255,10 @@ type AppsOperationsListCall struct {
 
 // List: Lists operations that match the specified filter in the
 // request. If the server doesn't support this method, it returns
-// UNIMPLEMENTED.NOTE: the name binding allows API services to override
-// the binding to use different resource name schemes, such as
-// users/*/operations. To override the binding, API services can add a
-// binding such as "/v1/{name=users/*}/operations" to their service
-// configuration. For backwards compatibility, the default name includes
-// the operations collection id, however overriding users must ensure
-// the name binding is the parent resource, without the operations
-// collection id.
+// UNIMPLEMENTED.
+//
+//   - appsId: Part of `name`. The name of the operation's parent
+//     resource.
 func (r *AppsOperationsService) List(appsId string) *AppsOperationsListCall {
 	c := &AppsOperationsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7742,7 +8323,7 @@ func (c *AppsOperationsListCall) Header() http.Header {
 
 func (c *AppsOperationsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7780,17 +8361,17 @@ func (c *AppsOperationsListCall) Do(opts ...googleapi.CallOption) (*ListOperatio
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListOperationsResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -7804,7 +8385,7 @@ func (c *AppsOperationsListCall) Do(opts ...googleapi.CallOption) (*ListOperatio
 	}
 	return ret, nil
 	// {
-	//   "description": "Lists operations that match the specified filter in the request. If the server doesn't support this method, it returns UNIMPLEMENTED.NOTE: the name binding allows API services to override the binding to use different resource name schemes, such as users/*/operations. To override the binding, API services can add a binding such as \"/v1/{name=users/*}/operations\" to their service configuration. For backwards compatibility, the default name includes the operations collection id, however overriding users must ensure the name binding is the parent resource, without the operations collection id.",
+	//   "description": "Lists operations that match the specified filter in the request. If the server doesn't support this method, it returns UNIMPLEMENTED.",
 	//   "flatPath": "v1/apps/{appsId}/operations",
 	//   "httpMethod": "GET",
 	//   "id": "appengine.apps.operations.list",
@@ -7881,6 +8462,10 @@ type AppsServicesDeleteCall struct {
 }
 
 // Delete: Deletes the specified service and all enclosed versions.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesService) Delete(appsId string, servicesId string) *AppsServicesDeleteCall {
 	c := &AppsServicesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -7915,7 +8500,7 @@ func (c *AppsServicesDeleteCall) Header() http.Header {
 
 func (c *AppsServicesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -7951,17 +8536,17 @@ func (c *AppsServicesDeleteCall) Do(opts ...googleapi.CallOption) (*Operation, e
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -8021,6 +8606,10 @@ type AppsServicesGetCall struct {
 }
 
 // Get: Gets the current configuration of the specified service.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesService) Get(appsId string, servicesId string) *AppsServicesGetCall {
 	c := &AppsServicesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8065,7 +8654,7 @@ func (c *AppsServicesGetCall) Header() http.Header {
 
 func (c *AppsServicesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8104,17 +8693,17 @@ func (c *AppsServicesGetCall) Do(opts ...googleapi.CallOption) (*Service, error)
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Service{
 		ServerResponse: googleapi.ServerResponse{
@@ -8175,6 +8764,9 @@ type AppsServicesListCall struct {
 }
 
 // List: Lists all the services in the application.
+//
+//   - appsId: Part of `parent`. Name of the parent Application resource.
+//     Example: apps/myapp.
 func (r *AppsServicesService) List(appsId string) *AppsServicesListCall {
 	c := &AppsServicesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8232,7 +8824,7 @@ func (c *AppsServicesListCall) Header() http.Header {
 
 func (c *AppsServicesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8270,17 +8862,17 @@ func (c *AppsServicesListCall) Do(opts ...googleapi.CallOption) (*ListServicesRe
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListServicesResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -8367,6 +8959,10 @@ type AppsServicesPatchCall struct {
 }
 
 // Patch: Updates the configuration of the specified service.
+//
+//   - appsId: Part of `name`. Name of the resource to update. Example:
+//     apps/myapp/services/default.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesService) Patch(appsId string, servicesId string, service *Service) *AppsServicesPatchCall {
 	c := &AppsServicesPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8394,8 +8990,8 @@ func (c *AppsServicesPatchCall) MigrateTraffic(migrateTraffic bool) *AppsService
 	return c
 }
 
-// UpdateMask sets the optional parameter "updateMask": Standard field
-// mask for the set of fields to be updated.
+// UpdateMask sets the optional parameter "updateMask": Required.
+// Standard field mask for the set of fields to be updated.
 func (c *AppsServicesPatchCall) UpdateMask(updateMask string) *AppsServicesPatchCall {
 	c.urlParams_.Set("updateMask", updateMask)
 	return c
@@ -8428,7 +9024,7 @@ func (c *AppsServicesPatchCall) Header() http.Header {
 
 func (c *AppsServicesPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8469,17 +9065,17 @@ func (c *AppsServicesPatchCall) Do(opts ...googleapi.CallOption) (*Operation, er
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -8520,7 +9116,7 @@ func (c *AppsServicesPatchCall) Do(opts ...googleapi.CallOption) (*Operation, er
 	//       "type": "string"
 	//     },
 	//     "updateMask": {
-	//       "description": "Standard field mask for the set of fields to be updated.",
+	//       "description": "Required. Standard field mask for the set of fields to be updated.",
 	//       "format": "google-fieldmask",
 	//       "location": "query",
 	//       "type": "string"
@@ -8553,6 +9149,10 @@ type AppsServicesVersionsCreateCall struct {
 }
 
 // Create: Deploys code and resource files to a new version.
+//
+//   - appsId: Part of `parent`. Name of the parent resource to create
+//     this version under. Example: apps/myapp/services/default.
+//   - servicesId: Part of `parent`. See documentation of `appsId`.
 func (r *AppsServicesVersionsService) Create(appsId string, servicesId string, version *Version) *AppsServicesVersionsCreateCall {
 	c := &AppsServicesVersionsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8588,7 +9188,7 @@ func (c *AppsServicesVersionsCreateCall) Header() http.Header {
 
 func (c *AppsServicesVersionsCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8629,17 +9229,17 @@ func (c *AppsServicesVersionsCreateCall) Do(opts ...googleapi.CallOption) (*Oper
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -8702,6 +9302,11 @@ type AppsServicesVersionsDeleteCall struct {
 }
 
 // Delete: Deletes an existing Version resource.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default/versions/v1.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsService) Delete(appsId string, servicesId string, versionsId string) *AppsServicesVersionsDeleteCall {
 	c := &AppsServicesVersionsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8737,7 +9342,7 @@ func (c *AppsServicesVersionsDeleteCall) Header() http.Header {
 
 func (c *AppsServicesVersionsDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8774,17 +9379,17 @@ func (c *AppsServicesVersionsDeleteCall) Do(opts ...googleapi.CallOption) (*Oper
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -8854,6 +9459,11 @@ type AppsServicesVersionsGetCall struct {
 // Get: Gets the specified Version resource. By default, only a
 // BASIC_VIEW will be returned. Specify the FULL_VIEW parameter to get
 // the full resource.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default/versions/v1.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsService) Get(appsId string, servicesId string, versionsId string) *AppsServicesVersionsGetCall {
 	c := &AppsServicesVersionsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -8866,9 +9476,13 @@ func (r *AppsServicesVersionsService) Get(appsId string, servicesId string, vers
 // returned in the Get response.
 //
 // Possible values:
-//   "BASIC" - Basic version information including scaling and inbound
+//
+//	"BASIC" - Basic version information including scaling and inbound
+//
 // services, but not detailed deployment information.
-//   "FULL" - The information from BASIC, plus detailed information
+//
+//	"FULL" - The information from BASIC, plus detailed information
+//
 // about the deployment. This format is required when creating
 // resources, but is not returned in Get or List by default.
 func (c *AppsServicesVersionsGetCall) View(view string) *AppsServicesVersionsGetCall {
@@ -8913,7 +9527,7 @@ func (c *AppsServicesVersionsGetCall) Header() http.Header {
 
 func (c *AppsServicesVersionsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -8953,17 +9567,17 @@ func (c *AppsServicesVersionsGetCall) Do(opts ...googleapi.CallOption) (*Version
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Version{
 		ServerResponse: googleapi.ServerResponse{
@@ -9045,6 +9659,10 @@ type AppsServicesVersionsListCall struct {
 }
 
 // List: Lists the versions of a service.
+//
+//   - appsId: Part of `parent`. Name of the parent Service resource.
+//     Example: apps/myapp/services/default.
+//   - servicesId: Part of `parent`. See documentation of `appsId`.
 func (r *AppsServicesVersionsService) List(appsId string, servicesId string) *AppsServicesVersionsListCall {
 	c := &AppsServicesVersionsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -9070,9 +9688,13 @@ func (c *AppsServicesVersionsListCall) PageToken(pageToken string) *AppsServices
 // returned in the List response.
 //
 // Possible values:
-//   "BASIC" - Basic version information including scaling and inbound
+//
+//	"BASIC" - Basic version information including scaling and inbound
+//
 // services, but not detailed deployment information.
-//   "FULL" - The information from BASIC, plus detailed information
+//
+//	"FULL" - The information from BASIC, plus detailed information
+//
 // about the deployment. This format is required when creating
 // resources, but is not returned in Get or List by default.
 func (c *AppsServicesVersionsListCall) View(view string) *AppsServicesVersionsListCall {
@@ -9117,7 +9739,7 @@ func (c *AppsServicesVersionsListCall) Header() http.Header {
 
 func (c *AppsServicesVersionsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -9156,17 +9778,17 @@ func (c *AppsServicesVersionsListCall) Do(opts ...googleapi.CallOption) (*ListVe
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListVersionsResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -9309,6 +9931,11 @@ type AppsServicesVersionsPatchCall struct {
 // (https://cloud.google.com/appengine/docs/admin-api/reference/rest/v1/apps.services.versions#Version.FIELDS.automatic_scaling)manual
 // scaling in the flexible environment: manual_scaling.instances
 // (https://cloud.google.com/appengine/docs/admin-api/reference/rest/v1/apps.services.versions#manualscaling)
+//
+//   - appsId: Part of `name`. Name of the resource to update. Example:
+//     apps/myapp/services/default/versions/1.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsService) Patch(appsId string, servicesId string, versionsId string, version *Version) *AppsServicesVersionsPatchCall {
 	c := &AppsServicesVersionsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -9352,7 +9979,7 @@ func (c *AppsServicesVersionsPatchCall) Header() http.Header {
 
 func (c *AppsServicesVersionsPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -9394,17 +10021,17 @@ func (c *AppsServicesVersionsPatchCall) Do(opts ...googleapi.CallOption) (*Opera
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -9488,6 +10115,12 @@ type AppsServicesVersionsInstancesDebugCall struct {
 // and then allow the system to take over and determine if another
 // instance should be started.Only applicable for instances in App
 // Engine flexible environment.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default/versions/v1/instances/instance-1.
+//   - instancesId: Part of `name`. See documentation of `appsId`.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsInstancesService) Debug(appsId string, servicesId string, versionsId string, instancesId string, debuginstancerequest *DebugInstanceRequest) *AppsServicesVersionsInstancesDebugCall {
 	c := &AppsServicesVersionsInstancesDebugCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -9525,7 +10158,7 @@ func (c *AppsServicesVersionsInstancesDebugCall) Header() http.Header {
 
 func (c *AppsServicesVersionsInstancesDebugCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -9568,17 +10201,17 @@ func (c *AppsServicesVersionsInstancesDebugCall) Do(opts ...googleapi.CallOption
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -9667,6 +10300,12 @@ type AppsServicesVersionsInstancesDeleteCall struct {
 // apps.services.versions.patch
 // (https://cloud.google.com/appengine/docs/admin-api/reference/rest/v1/apps.services.versions/patch)
 // method.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default/versions/v1/instances/instance-1.
+//   - instancesId: Part of `name`. See documentation of `appsId`.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsInstancesService) Delete(appsId string, servicesId string, versionsId string, instancesId string) *AppsServicesVersionsInstancesDeleteCall {
 	c := &AppsServicesVersionsInstancesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -9703,7 +10342,7 @@ func (c *AppsServicesVersionsInstancesDeleteCall) Header() http.Header {
 
 func (c *AppsServicesVersionsInstancesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -9741,17 +10380,17 @@ func (c *AppsServicesVersionsInstancesDeleteCall) Do(opts ...googleapi.CallOptio
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Operation{
 		ServerResponse: googleapi.ServerResponse{
@@ -9827,6 +10466,12 @@ type AppsServicesVersionsInstancesGetCall struct {
 }
 
 // Get: Gets instance information.
+//
+//   - appsId: Part of `name`. Name of the resource requested. Example:
+//     apps/myapp/services/default/versions/v1/instances/instance-1.
+//   - instancesId: Part of `name`. See documentation of `appsId`.
+//   - servicesId: Part of `name`. See documentation of `appsId`.
+//   - versionsId: Part of `name`. See documentation of `appsId`.
 func (r *AppsServicesVersionsInstancesService) Get(appsId string, servicesId string, versionsId string, instancesId string) *AppsServicesVersionsInstancesGetCall {
 	c := &AppsServicesVersionsInstancesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -9873,7 +10518,7 @@ func (c *AppsServicesVersionsInstancesGetCall) Header() http.Header {
 
 func (c *AppsServicesVersionsInstancesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -9914,17 +10559,17 @@ func (c *AppsServicesVersionsInstancesGetCall) Do(opts ...googleapi.CallOption) 
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &Instance{
 		ServerResponse: googleapi.ServerResponse{
@@ -10003,6 +10648,11 @@ type AppsServicesVersionsInstancesListCall struct {
 // List: Lists the instances of a version.Tip: To aggregate details
 // about instances over time, see the Stackdriver Monitoring API
 // (https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/list).
+//
+//   - appsId: Part of `parent`. Name of the parent Version resource.
+//     Example: apps/myapp/services/default/versions/v1.
+//   - servicesId: Part of `parent`. See documentation of `appsId`.
+//   - versionsId: Part of `parent`. See documentation of `appsId`.
 func (r *AppsServicesVersionsInstancesService) List(appsId string, servicesId string, versionsId string) *AppsServicesVersionsInstancesListCall {
 	c := &AppsServicesVersionsInstancesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.appsId = appsId
@@ -10062,7 +10712,7 @@ func (c *AppsServicesVersionsInstancesListCall) Header() http.Header {
 
 func (c *AppsServicesVersionsInstancesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
-	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/20210322")
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
 	for k, v := range c.header_ {
 		reqHeaders[k] = v
 	}
@@ -10102,17 +10752,17 @@ func (c *AppsServicesVersionsInstancesListCall) Do(opts ...googleapi.CallOption)
 		if res.Body != nil {
 			res.Body.Close()
 		}
-		return nil, &googleapi.Error{
+		return nil, gensupport.WrapError(&googleapi.Error{
 			Code:   res.StatusCode,
 			Header: res.Header,
-		}
+		})
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return nil, gensupport.WrapError(err)
 	}
 	ret := &ListInstancesResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -10183,6 +10833,907 @@ func (c *AppsServicesVersionsInstancesListCall) Do(opts ...googleapi.CallOption)
 // A non-nil error returned from f will halt the iteration.
 // The provided context supersedes any context provided to the Context method.
 func (c *AppsServicesVersionsInstancesListCall) Pages(ctx context.Context, f func(*ListInstancesResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
+// method id "appengine.projects.locations.applications.create":
+
+type ProjectsLocationsApplicationsCreateCall struct {
+	s           *APIService
+	projectsId  string
+	locationsId string
+	application *Application
+	urlParams_  gensupport.URLParams
+	ctx_        context.Context
+	header_     http.Header
+}
+
+// Create: Creates an App Engine application for a Google Cloud Platform
+// project. Required fields: id - The ID of the target Cloud Platform
+// project. location - The region
+// (https://cloud.google.com/appengine/docs/locations) where you want
+// the App Engine application located.For more information about App
+// Engine applications, see Managing Projects, Applications, and Billing
+// (https://cloud.google.com/appengine/docs/standard/python/console/).
+//
+//   - locationsId: Part of `parent`. See documentation of `projectsId`.
+//   - projectsId: Part of `parent`. The project and location in which the
+//     application should be created, specified in the format
+//     projects/*/locations/*.
+func (r *ProjectsLocationsApplicationsService) Create(projectsId string, locationsId string, application *Application) *ProjectsLocationsApplicationsCreateCall {
+	c := &ProjectsLocationsApplicationsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectsId = projectsId
+	c.locationsId = locationsId
+	c.application = application
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsLocationsApplicationsCreateCall) Fields(s ...googleapi.Field) *ProjectsLocationsApplicationsCreateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsLocationsApplicationsCreateCall) Context(ctx context.Context) *ProjectsLocationsApplicationsCreateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsLocationsApplicationsCreateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsLocationsApplicationsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.application)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectsId}/locations/{locationsId}/applications")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("POST", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectsId":  c.projectsId,
+		"locationsId": c.locationsId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "appengine.projects.locations.applications.create" call.
+// Exactly one of *Operation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Operation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProjectsLocationsApplicationsCreateCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &Operation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Creates an App Engine application for a Google Cloud Platform project. Required fields: id - The ID of the target Cloud Platform project. location - The region (https://cloud.google.com/appengine/docs/locations) where you want the App Engine application located.For more information about App Engine applications, see Managing Projects, Applications, and Billing (https://cloud.google.com/appengine/docs/standard/python/console/).",
+	//   "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/applications",
+	//   "httpMethod": "POST",
+	//   "id": "appengine.projects.locations.applications.create",
+	//   "parameterOrder": [
+	//     "projectsId",
+	//     "locationsId"
+	//   ],
+	//   "parameters": {
+	//     "locationsId": {
+	//       "description": "Part of `parent`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "projectsId": {
+	//       "description": "Part of `parent`. The project and location in which the application should be created, specified in the format projects/*/locations/*",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/projects/{projectsId}/locations/{locationsId}/applications",
+	//   "request": {
+	//     "$ref": "Application"
+	//   },
+	//   "response": {
+	//     "$ref": "Operation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform"
+	//   ]
+	// }
+
+}
+
+// method id "appengine.projects.locations.applications.get":
+
+type ProjectsLocationsApplicationsGetCall struct {
+	s              *APIService
+	projectsId     string
+	locationsId    string
+	applicationsId string
+	urlParams_     gensupport.URLParams
+	ifNoneMatch_   string
+	ctx_           context.Context
+	header_        http.Header
+}
+
+// Get: Gets information about an application.
+//
+//   - applicationsId: Part of `name`. See documentation of `projectsId`.
+//   - locationsId: Part of `name`. See documentation of `projectsId`.
+//   - projectsId: Part of `name`. Name of the Application resource to
+//     get. Example: apps/myapp.
+func (r *ProjectsLocationsApplicationsService) Get(projectsId string, locationsId string, applicationsId string) *ProjectsLocationsApplicationsGetCall {
+	c := &ProjectsLocationsApplicationsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectsId = projectsId
+	c.locationsId = locationsId
+	c.applicationsId = applicationsId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsLocationsApplicationsGetCall) Fields(s ...googleapi.Field) *ProjectsLocationsApplicationsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProjectsLocationsApplicationsGetCall) IfNoneMatch(entityTag string) *ProjectsLocationsApplicationsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsLocationsApplicationsGetCall) Context(ctx context.Context) *ProjectsLocationsApplicationsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsLocationsApplicationsGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsLocationsApplicationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("GET", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectsId":     c.projectsId,
+		"locationsId":    c.locationsId,
+		"applicationsId": c.applicationsId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "appengine.projects.locations.applications.get" call.
+// Exactly one of *Application or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Application.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProjectsLocationsApplicationsGetCall) Do(opts ...googleapi.CallOption) (*Application, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &Application{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets information about an application.",
+	//   "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}",
+	//   "httpMethod": "GET",
+	//   "id": "appengine.projects.locations.applications.get",
+	//   "parameterOrder": [
+	//     "projectsId",
+	//     "locationsId",
+	//     "applicationsId"
+	//   ],
+	//   "parameters": {
+	//     "applicationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "locationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "projectsId": {
+	//       "description": "Part of `name`. Name of the Application resource to get. Example: apps/myapp.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}",
+	//   "response": {
+	//     "$ref": "Application"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/appengine.admin",
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/cloud-platform.read-only"
+	//   ]
+	// }
+
+}
+
+// method id "appengine.projects.locations.applications.repair":
+
+type ProjectsLocationsApplicationsRepairCall struct {
+	s                        *APIService
+	projectsId               string
+	locationsId              string
+	applicationsId           string
+	repairapplicationrequest *RepairApplicationRequest
+	urlParams_               gensupport.URLParams
+	ctx_                     context.Context
+	header_                  http.Header
+}
+
+// Repair: Recreates the required App Engine features for the specified
+// App Engine application, for example a Cloud Storage bucket or App
+// Engine service account. Use this method if you receive an error
+// message about a missing feature, for example, Error retrieving the
+// App Engine service account. If you have deleted your App Engine
+// service account, this will not be able to recreate it. Instead, you
+// should attempt to use the IAM undelete API if possible at
+// https://cloud.google.com/iam/reference/rest/v1/projects.serviceAccounts/undelete?apix_params=%7B"name"%3A"projects%2F-%2FserviceAccounts%2Funique_id"%2C"resource"%3A%7B%7D%7D
+// . If the deletion was recent, the numeric ID can be found in the
+// Cloud Console Activity Log.
+//
+//   - applicationsId: Part of `name`. See documentation of `projectsId`.
+//   - locationsId: Part of `name`. See documentation of `projectsId`.
+//   - projectsId: Part of `name`. Name of the application to repair.
+//     Example: apps/myapp.
+func (r *ProjectsLocationsApplicationsService) Repair(projectsId string, locationsId string, applicationsId string, repairapplicationrequest *RepairApplicationRequest) *ProjectsLocationsApplicationsRepairCall {
+	c := &ProjectsLocationsApplicationsRepairCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectsId = projectsId
+	c.locationsId = locationsId
+	c.applicationsId = applicationsId
+	c.repairapplicationrequest = repairapplicationrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsLocationsApplicationsRepairCall) Fields(s ...googleapi.Field) *ProjectsLocationsApplicationsRepairCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsLocationsApplicationsRepairCall) Context(ctx context.Context) *ProjectsLocationsApplicationsRepairCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsLocationsApplicationsRepairCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsLocationsApplicationsRepairCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.repairapplicationrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}:repair")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("POST", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectsId":     c.projectsId,
+		"locationsId":    c.locationsId,
+		"applicationsId": c.applicationsId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "appengine.projects.locations.applications.repair" call.
+// Exactly one of *Operation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Operation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProjectsLocationsApplicationsRepairCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &Operation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Recreates the required App Engine features for the specified App Engine application, for example a Cloud Storage bucket or App Engine service account. Use this method if you receive an error message about a missing feature, for example, Error retrieving the App Engine service account. If you have deleted your App Engine service account, this will not be able to recreate it. Instead, you should attempt to use the IAM undelete API if possible at https://cloud.google.com/iam/reference/rest/v1/projects.serviceAccounts/undelete?apix_params=%7B\"name\"%3A\"projects%2F-%2FserviceAccounts%2Funique_id\"%2C\"resource\"%3A%7B%7D%7D . If the deletion was recent, the numeric ID can be found in the Cloud Console Activity Log.",
+	//   "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}:repair",
+	//   "httpMethod": "POST",
+	//   "id": "appengine.projects.locations.applications.repair",
+	//   "parameterOrder": [
+	//     "projectsId",
+	//     "locationsId",
+	//     "applicationsId"
+	//   ],
+	//   "parameters": {
+	//     "applicationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "locationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "projectsId": {
+	//       "description": "Part of `name`. Name of the application to repair. Example: apps/myapp",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}:repair",
+	//   "request": {
+	//     "$ref": "RepairApplicationRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "Operation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform"
+	//   ]
+	// }
+
+}
+
+// method id "appengine.projects.locations.applications.services.get":
+
+type ProjectsLocationsApplicationsServicesGetCall struct {
+	s              *APIService
+	projectsId     string
+	locationsId    string
+	applicationsId string
+	servicesId     string
+	urlParams_     gensupport.URLParams
+	ifNoneMatch_   string
+	ctx_           context.Context
+	header_        http.Header
+}
+
+// Get: Gets the current configuration of the specified service.
+//
+//   - applicationsId: Part of `name`. See documentation of `projectsId`.
+//   - locationsId: Part of `name`. See documentation of `projectsId`.
+//   - projectsId: Part of `name`. Name of the resource requested.
+//     Example: apps/myapp/services/default.
+//   - servicesId: Part of `name`. See documentation of `projectsId`.
+func (r *ProjectsLocationsApplicationsServicesService) Get(projectsId string, locationsId string, applicationsId string, servicesId string) *ProjectsLocationsApplicationsServicesGetCall {
+	c := &ProjectsLocationsApplicationsServicesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectsId = projectsId
+	c.locationsId = locationsId
+	c.applicationsId = applicationsId
+	c.servicesId = servicesId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsLocationsApplicationsServicesGetCall) Fields(s ...googleapi.Field) *ProjectsLocationsApplicationsServicesGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProjectsLocationsApplicationsServicesGetCall) IfNoneMatch(entityTag string) *ProjectsLocationsApplicationsServicesGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsLocationsApplicationsServicesGetCall) Context(ctx context.Context) *ProjectsLocationsApplicationsServicesGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsLocationsApplicationsServicesGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsLocationsApplicationsServicesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services/{servicesId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("GET", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectsId":     c.projectsId,
+		"locationsId":    c.locationsId,
+		"applicationsId": c.applicationsId,
+		"servicesId":     c.servicesId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "appengine.projects.locations.applications.services.get" call.
+// Exactly one of *Service or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Service.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *ProjectsLocationsApplicationsServicesGetCall) Do(opts ...googleapi.CallOption) (*Service, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &Service{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets the current configuration of the specified service.",
+	//   "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services/{servicesId}",
+	//   "httpMethod": "GET",
+	//   "id": "appengine.projects.locations.applications.services.get",
+	//   "parameterOrder": [
+	//     "projectsId",
+	//     "locationsId",
+	//     "applicationsId",
+	//     "servicesId"
+	//   ],
+	//   "parameters": {
+	//     "applicationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "locationsId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "projectsId": {
+	//       "description": "Part of `name`. Name of the resource requested. Example: apps/myapp/services/default.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "servicesId": {
+	//       "description": "Part of `name`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services/{servicesId}",
+	//   "response": {
+	//     "$ref": "Service"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/appengine.admin",
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/cloud-platform.read-only"
+	//   ]
+	// }
+
+}
+
+// method id "appengine.projects.locations.applications.services.list":
+
+type ProjectsLocationsApplicationsServicesListCall struct {
+	s              *APIService
+	projectsId     string
+	locationsId    string
+	applicationsId string
+	urlParams_     gensupport.URLParams
+	ifNoneMatch_   string
+	ctx_           context.Context
+	header_        http.Header
+}
+
+// List: Lists all the services in the application.
+//
+//   - applicationsId: Part of `parent`. See documentation of
+//     `projectsId`.
+//   - locationsId: Part of `parent`. See documentation of `projectsId`.
+//   - projectsId: Part of `parent`. Name of the parent Application
+//     resource. Example: apps/myapp.
+func (r *ProjectsLocationsApplicationsServicesService) List(projectsId string, locationsId string, applicationsId string) *ProjectsLocationsApplicationsServicesListCall {
+	c := &ProjectsLocationsApplicationsServicesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectsId = projectsId
+	c.locationsId = locationsId
+	c.applicationsId = applicationsId
+	return c
+}
+
+// PageSize sets the optional parameter "pageSize": Maximum results to
+// return per page.
+func (c *ProjectsLocationsApplicationsServicesListCall) PageSize(pageSize int64) *ProjectsLocationsApplicationsServicesListCall {
+	c.urlParams_.Set("pageSize", fmt.Sprint(pageSize))
+	return c
+}
+
+// PageToken sets the optional parameter "pageToken": Continuation token
+// for fetching the next page of results.
+func (c *ProjectsLocationsApplicationsServicesListCall) PageToken(pageToken string) *ProjectsLocationsApplicationsServicesListCall {
+	c.urlParams_.Set("pageToken", pageToken)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsLocationsApplicationsServicesListCall) Fields(s ...googleapi.Field) *ProjectsLocationsApplicationsServicesListCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProjectsLocationsApplicationsServicesListCall) IfNoneMatch(entityTag string) *ProjectsLocationsApplicationsServicesListCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsLocationsApplicationsServicesListCall) Context(ctx context.Context) *ProjectsLocationsApplicationsServicesListCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsLocationsApplicationsServicesListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsLocationsApplicationsServicesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("GET", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectsId":     c.projectsId,
+		"locationsId":    c.locationsId,
+		"applicationsId": c.applicationsId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "appengine.projects.locations.applications.services.list" call.
+// Exactly one of *ListServicesResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *ListServicesResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ProjectsLocationsApplicationsServicesListCall) Do(opts ...googleapi.CallOption) (*ListServicesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &ListServicesResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Lists all the services in the application.",
+	//   "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services",
+	//   "httpMethod": "GET",
+	//   "id": "appengine.projects.locations.applications.services.list",
+	//   "parameterOrder": [
+	//     "projectsId",
+	//     "locationsId",
+	//     "applicationsId"
+	//   ],
+	//   "parameters": {
+	//     "applicationsId": {
+	//       "description": "Part of `parent`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "locationsId": {
+	//       "description": "Part of `parent`. See documentation of `projectsId`.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "pageSize": {
+	//       "description": "Maximum results to return per page.",
+	//       "format": "int32",
+	//       "location": "query",
+	//       "type": "integer"
+	//     },
+	//     "pageToken": {
+	//       "description": "Continuation token for fetching the next page of results.",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "projectsId": {
+	//       "description": "Part of `parent`. Name of the parent Application resource. Example: apps/myapp.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/projects/{projectsId}/locations/{locationsId}/applications/{applicationsId}/services",
+	//   "response": {
+	//     "$ref": "ListServicesResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/appengine.admin",
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/cloud-platform.read-only"
+	//   ]
+	// }
+
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsLocationsApplicationsServicesListCall) Pages(ctx context.Context, f func(*ListServicesResponse) error) error {
 	c.ctx_ = ctx
 	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
 	for {
