@@ -28,4 +28,7 @@ func (s *AppengineInterfacesTest) TestTruncateLog(c *C) {
 	// 31 is the length of the prefix that we append
 	c.Assert(len(log), Equals, maxLogLength+len(truncatedLogPrefix))
 	c.Assert(log, Equals, truncatedLogPrefix+notTooLong)
+
+	log = truncateLog("a\xc5z")
+	c.Assert(log, Equals, "a\uFFFDz")
 }

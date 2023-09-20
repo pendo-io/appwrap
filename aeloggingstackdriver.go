@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"cloud.google.com/go/logging"
 	"google.golang.org/api/option"
@@ -317,19 +316,14 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 // set to 240k, slightly under real max of 256k
 const maxLogLength = 240 << 10
 const truncatedLogPrefix = "TRUNCATED: (full log in stderr) "
-const invalidUTF8Message = "message contains invalid UTF-8 characters. full message logged to stderr"
 
 func truncateLog(format string, args ...interface{}) string {
 	payload := fmt.Sprintf(format, args...)
 	if len(payload) > maxLogLength {
-		_, _ = fmt.Fprint(os.Stderr, payload)
+		_, _ = fmt.Fprintln(os.Stderr, payload)
 		payload = truncatedLogPrefix + payload[:maxLogLength]
 	}
-	if !utf8.ValidString(payload) {
-		_, _ = fmt.Fprint(os.Stderr, payload)
-		payload = invalidUTF8Message
-	}
-	return payload
+	return strings.ToValidUTF8(payload, "\uFFFD")
 }
 
 func Criticalf(ctx context.Context, format string, args ...interface{}) {
