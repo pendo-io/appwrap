@@ -118,11 +118,14 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 }
 
 // for use in flex services with long-running tasks that don't handle http requests
-func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) (context.Context, func()) {
+func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName string) context.Context {
 	if IsDevAppServer {
-		return c, func() {}
+		return c
 	}
+	return wrapBackgroundContextWithStackdriverLogger(c, logName, GetOrCreateLoggingClient())
+}
 
+func wrapBackgroundContextWithStackdriverLogger(c context.Context, logName string, lc *logging.Client) context.Context {
 	aeInfo := NewAppengineInfoFromContext(c)
 
 	project := aeInfo.NativeProjectID()
@@ -130,7 +133,6 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 		panic("aelog: no GCP project set in environment")
 	}
 	parent := "projects/" + project
-	lc := GetOrCreateLoggingClient()
 	if logName == "" {
 		logName = ChildLogName
 	}
@@ -138,12 +140,25 @@ func WrapBackgroundContextWithStackdriverLogger(c context.Context, logName strin
 	if err != nil {
 		panic(err)
 	}
-	logger := getLogger(aeInfo, lc, logName)
-	logCtxVal := getLogCtxVal(aeInfo, req, logger, parent+"/traces/"+fmt.Sprintf("%d", rand.Int63()))
 
-	ctx := context.WithValue(c, loggingCtxKey, logCtxVal)
+	return context.WithValue(c, loggingCtxKey, getLogCtxVal(aeInfo, req, getLogger(aeInfo, lc, logName), parent+"/traces/"+fmt.Sprintf("%d", rand.Int63())))
+}
+
+func WrapBackgroundContextWithStackdriverLoggerWithCloseFunc(c context.Context, logName string) (context.Context, func()) {
+	if IsDevAppServer {
+		return c, func() {}
+	}
+
+	aeInfo := NewAppengineInfoFromContext(c)
+	client, err := logging.NewClient(c, fmt.Sprintf("projects/%s", aeInfo.NativeProjectID()))
+	if err != nil {
+		panic(fmt.Sprintf("failed to create logging client %s", err.Error()))
+	}
+
+	ctx := wrapBackgroundContextWithStackdriverLogger(c, logName, client)
+
 	return ctx, func() {
-		_ = logger.Flush()
+		_ = client.Close()
 	}
 }
 
