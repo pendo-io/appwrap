@@ -886,9 +886,6 @@ func (mq *memoryQuery) checkIndexes(trace bool) error {
 		if len(neededFields) > len(index.fields) {
 			debug("       too short")
 			continue
-		} else if len(neededFields) < len(index.fields) {
-			debug("       too long") // no subindexes!
-			continue
 		} else if mq.ancestor != nil && !index.ancestor {
 			debug("       no ancestor")
 			continue

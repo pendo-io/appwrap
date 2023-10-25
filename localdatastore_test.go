@@ -340,10 +340,10 @@ func (dsit *AppengineInterfacesTest) TestCheckIndexNeedIndexFor(c *C) {
 		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B =", 0).Filter("D >", 0)
 	}, iAbC, doesNotSatisfy)
 
-	// Sub-indexes do not work as prefix
+	// Sub-indexes dwork as prefix
 	indexSatisfies(func(m Datastore) DatastoreQuery {
 		return m.NewQuery("testKindWithIndex").Filter("A =", 0).Filter("B >", 0)
-	}, iAbC, doesNotSatisfy)
+	}, iAbC, satisfies)
 
 	// ...or when skipping
 	indexSatisfies(func(m Datastore) DatastoreQuery {
