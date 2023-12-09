@@ -1,5 +1,7 @@
 package appwrap
 
+import "go.opentelemetry.io/otel/attribute"
+
 const (
 	traceDatastoreAllocateIds      = "pendo.io/datastore/allocate-id-set"
 	traceDatastoreDeleteMulti      = "pendo.io/datastore/delete-multi"
@@ -44,11 +46,25 @@ const (
 	traceMemcacheIncrExisting = "pendo.io/memcache/increment-existing"
 	traceMemcacheSet          = "pendo.io/memcache/set"
 
-	traceLabelFirstKey  = "first-key"
-	traceLabelKey       = "key"
-	traceLabelFullKey   = "full-key"
-	traceLabelKind      = "kind"
-	traceLabelNamespace = "namespace"
-	traceLabelNumKeys   = "num-keys"
-	traceLabelShard     = "shard"
+	traceLabelFirstKey  = attribute.Key("first-key")
+	traceLabelKey       = attribute.Key("key")
+	traceLabelFullKey   = attribute.Key("full-key")
+	traceLabelKind      = attribute.Key("kind")
+	traceLabelNamespace = attribute.Key("namespace")
+	traceLabelNumKeys   = attribute.Key("num-keys")
+	traceLabelShard     = attribute.Key("shard")
 )
+
+func labelFirstKey(val string) attribute.KeyValue { return traceLabelFirstKey.String(val) }
+
+func labelKey(val string) attribute.KeyValue { return traceLabelKey.String(val) }
+
+func labelFullKey(val string) attribute.KeyValue { return traceLabelFullKey.String(val) }
+
+func labelKind(val string) attribute.KeyValue { return traceLabelKind.String(val) }
+
+func labelNamespace(val string) attribute.KeyValue { return traceLabelNamespace.String(val) }
+
+func labelNumKeys(val int64) attribute.KeyValue { return traceLabelNumKeys.Int64(val) }
+
+func labelShard(val int64) attribute.KeyValue { return traceLabelShard.Int64(val) }

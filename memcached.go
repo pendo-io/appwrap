@@ -18,7 +18,8 @@ import (
 	cloudmemcache "cloud.google.com/go/memcache/apiv1"
 	"github.com/cespare/xxhash/v2"
 	"github.com/pendo-io/gomemcache/memcache"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	memcachepb "google.golang.org/genproto/googleapis/cloud/memcache/v1"
 )
 
@@ -68,6 +69,7 @@ type memcached struct {
 	ctx    context.Context
 	client memcachedClient
 	ns     string
+	tracer trace.Tracer
 }
 
 type memcacheService struct {
@@ -106,6 +108,7 @@ func (m *memcacheService) NewAppengineMemcache(c context.Context, appInfo Appeng
 	return memcached{
 		ctx:    c,
 		client: m.client,
+		tracer: otel.GetTracerProvider().Tracer("memcached"),
 	}, nil
 }
 
@@ -164,15 +167,15 @@ func (m memcached) encodedNamespacedKey(key string) string {
 }
 
 func (m memcached) Add(item *CacheItem) error {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheAdd)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheAdd)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, item.Key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(item.Key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	mItem := item.toMemcacheItem()
 	mItem.Key = m.encodedNamespacedKey(item.Key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
+	span.SetAttributes(labelFullKey(mItem.Key))
 
 	return m.client.Add(mItem)
 }
@@ -196,28 +199,28 @@ func (m memcached) AddMulti(items []*CacheItem) error {
 }
 
 func (m memcached) CompareAndSwap(item *CacheItem) error {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheCAS)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheCAS)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, item.Key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(item.Key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	mItem := item.toMemcacheItem()
 	mItem.Key = m.encodedNamespacedKey(item.Key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
+	span.SetAttributes(labelFullKey(mItem.Key))
 
 	return m.client.CompareAndSwap(mItem)
 }
 
 func (m memcached) Delete(key string) error {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheDelete)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheDelete)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	key = m.encodedNamespacedKey(key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
+	span.SetAttributes(labelFullKey(key))
 
 	return m.client.Delete(key)
 }
@@ -249,14 +252,14 @@ func (m memcached) FlushShard(shard int) error {
 }
 
 func (m memcached) Get(key string) (*CacheItem, error) {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheGet)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheGet)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	nsKey := m.encodedNamespacedKey(key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, nsKey))
+	span.SetAttributes(labelFullKey(nsKey))
 
 	res, err := m.client.Get(nsKey)
 	if err != nil {
@@ -275,13 +278,13 @@ func (m memcached) GetMulti(keys []string) (map[string]*CacheItem, error) {
 		nsKeyToRegularKey[nsKey] = key
 	}
 
-	_, span := trace.StartSpan(m.ctx, traceMemcacheGetMulti)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheGetMulti)
 	defer span.End()
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0]))
-		span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
-		span.AddAttributes(trace.StringAttribute(traceLabelFullKey, nsKeys[0]))
+		span.SetAttributes(labelFirstKey(keys[0]))
+		span.SetAttributes(labelNamespace(m.ns))
+		span.SetAttributes(labelFullKey(nsKeys[0]))
 	}
 
 	mRes, err := m.client.GetMulti(nsKeys)
@@ -296,14 +299,14 @@ func (m memcached) GetMulti(keys []string) (map[string]*CacheItem, error) {
 }
 
 func (m memcached) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheIncr)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheIncr)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	key = m.encodedNamespacedKey(key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
+	span.SetAttributes(labelFullKey(key))
 
 	var amt uint64
 	var err error
@@ -319,14 +322,14 @@ func (m memcached) Increment(key string, amount int64, initialValue uint64) (uin
 }
 
 func (m memcached) IncrementExisting(key string, amount int64) (uint64, error) {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheIncrExisting)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheIncrExisting)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	key = m.encodedNamespacedKey(key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, key))
+	span.SetAttributes(labelFullKey(key))
 
 	return m.client.Increment(key, uint64(amount))
 }
@@ -336,19 +339,20 @@ func (m memcached) Namespace(ns string) Memcache {
 		ctx:    m.ctx,
 		client: m.client,
 		ns:     ns,
+		tracer: m.tracer,
 	}
 }
 
 func (m memcached) Set(item *CacheItem) error {
-	_, span := trace.StartSpan(m.ctx, traceMemcacheSet)
+	_, span := m.tracer.Start(m.ctx, traceMemcacheSet)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, item.Key))
-	span.AddAttributes(trace.StringAttribute(traceLabelNamespace, m.ns))
+	span.SetAttributes(labelKey(item.Key))
+	span.SetAttributes(labelNamespace(m.ns))
 
 	mItem := item.toMemcacheItem()
 	mItem.Key = m.encodedNamespacedKey(item.Key)
-	span.AddAttributes(trace.StringAttribute(traceLabelFullKey, mItem.Key))
+	span.SetAttributes(labelFullKey(mItem.Key))
 
 	return m.client.Set(mItem)
 }
