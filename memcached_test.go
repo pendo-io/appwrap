@@ -9,6 +9,7 @@ import (
 
 	"github.com/pendo-io/gomemcache/memcache"
 	"github.com/stretchr/testify/mock"
+	"go.opentelemetry.io/otel"
 	. "gopkg.in/check.v1"
 )
 
@@ -77,6 +78,7 @@ func (s *MemcachedTest) newFixture() memcachedTestFixture {
 		ctx:    context.Background(),
 		client: mm,
 		ns:     "test-ns",
+		tracer: otel.Tracer("memcachedTest"),
 	}
 
 	return memcachedTestFixture{

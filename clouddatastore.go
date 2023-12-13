@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
@@ -100,6 +101,7 @@ type CloudDatastore struct {
 	client    *datastore.Client
 	namespace string
 	timeout   time.Duration
+	tracer    trace.Tracer
 }
 
 var NewDatastore = NewCloudDatastore
@@ -112,7 +114,7 @@ var (
 )
 
 func newCloudDatastore(c context.Context, client *datastore.Client, namespace string, timeout time.Duration) Datastore {
-	return CloudDatastore{client: client, ctx: c, namespace: namespace, timeout: timeout}
+	return CloudDatastore{client: client, ctx: c, namespace: namespace, timeout: timeout, tracer: otel.GetTracerProvider().Tracer("CloudDatastore")}
 }
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
@@ -184,7 +186,7 @@ func (cds CloudDatastore) Namespace(ns string) Datastore {
 }
 
 func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*DatastoreKey, error) {
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreAllocateIds)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreAllocateIds)
 	defer span.End()
 
 	var res []*DatastoreKey
@@ -197,13 +199,13 @@ func (cds CloudDatastore) AllocateIDSet(incompleteKeys []*DatastoreKey) ([]*Data
 }
 
 func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreDeleteMulti)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreDeleteMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
@@ -213,9 +215,9 @@ func (cds CloudDatastore) DeleteMulti(keys []*DatastoreKey) error {
 }
 
 func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreGet)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreGet)
 	defer span.End()
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+	span.SetAttributes(labelKey(key.String()))
 
 	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
 		return cds.client.Get(tctx, key, dst)
@@ -224,13 +226,13 @@ func (cds CloudDatastore) Get(key *DatastoreKey, dst interface{}) error {
 }
 
 func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreGetMulti)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreGetMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
@@ -240,7 +242,7 @@ func (cds CloudDatastore) GetMulti(keys []*DatastoreKey, dst interface{}) error 
 }
 
 func (cds CloudDatastore) Kinds() (kinds []string, err error) {
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreKinds)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreKinds)
 	defer span.End()
 
 	q := cds.NewQuery("__kind__").KeysOnly()
@@ -273,10 +275,10 @@ func (cds CloudDatastore) NewKey(kind string, sId string, iId int64, parent *Dat
 }
 
 func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey, error) {
-	c, span := trace.StartSpan(cds.ctx, traceDatastorePut)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastorePut)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+	span.SetAttributes(labelKey(key.String()))
 
 	var res *DatastoreKey
 	err := cds.withDefaultTimeout(c, func(tctx context.Context) error {
@@ -289,13 +291,13 @@ func (cds CloudDatastore) Put(key *DatastoreKey, src interface{}) (*DatastoreKey
 }
 
 func (cds CloudDatastore) PutMulti(keys []*DatastoreKey, src interface{}) ([]*DatastoreKey, error) {
-	c, span := trace.StartSpan(cds.ctx, traceDatastorePutMulti)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastorePutMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	var res []*DatastoreKey
@@ -313,7 +315,7 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 		transOpts = append(transOpts, opt)
 	}
 
-	c, span := trace.StartSpan(cds.ctx, traceDatastoreRunInTransaction)
+	c, span := cds.tracer.Start(cds.ctx, traceDatastoreRunInTransaction)
 	defer span.End()
 
 	var commit *datastore.Commit
@@ -325,6 +327,7 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 				ctx:         tctx,
 				namespace:   cds.namespace,
 				transaction: transaction,
+				tracer:      otel.GetTracerProvider().Tracer("CloudTransaction"),
 			}
 			return f(ct)
 		}, transOpts...)
@@ -339,12 +342,12 @@ func DatastoreMaxAttempts(attempts int) DatastoreTransactionOption {
 }
 
 func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
-	_, span := trace.StartSpan(cds.ctx, traceDatastoreNewQuery)
+	_, span := cds.tracer.Start(cds.ctx, traceDatastoreNewQuery)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKind, kind))
+	span.SetAttributes(labelKind(kind))
 
-	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, timeout: cds.timeout, q: datastore.NewQuery(kind)}
+	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, timeout: cds.timeout, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer("CloudDatastoreQuery")}
 	if cds.namespace != "" {
 		q.q = q.q.Namespace(cds.namespace)
 	}
@@ -357,16 +360,17 @@ type CloudTransaction struct {
 	client      *datastore.Client
 	namespace   string
 	transaction *datastore.Transaction
+	tracer      trace.Tracer
 }
 
 func (ct CloudTransaction) DeleteMulti(keys []*DatastoreKey) error {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionDeleteMulti)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionDeleteMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	err := ct.transaction.DeleteMulti(keys)
@@ -374,23 +378,23 @@ func (ct CloudTransaction) DeleteMulti(keys []*DatastoreKey) error {
 }
 
 func (ct CloudTransaction) Get(key *DatastoreKey, dst interface{}) error {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionGet)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionGet)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+	span.SetAttributes(labelKey(key.String()))
 
 	err := ct.transaction.Get(key, dst)
 	return convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) GetMulti(keys []*DatastoreKey, dst interface{}) error {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionGetMulti)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionGetMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	err := ct.transaction.GetMulti(keys, dst)
@@ -405,12 +409,12 @@ func (ct CloudTransaction) NewKey(kind string, sId string, iId int64, parent *Da
 }
 
 func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionNewQuery)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionNewQuery)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKind, kind))
+	span.SetAttributes(labelKind(kind))
 
-	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, timeout: 0 /* no timeout since ct.ctx already has deadline */, q: datastore.NewQuery(kind)}
+	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, timeout: 0 /* no timeout since ct.ctx already has deadline */, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer("CloudDatastoreQuery")}
 	q.q = q.q.Transaction(ct.transaction)
 	if ct.namespace != "" {
 		q.q = q.q.Namespace(ct.namespace)
@@ -420,23 +424,23 @@ func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
 }
 
 func (ct CloudTransaction) Put(key *DatastoreKey, src interface{}) (*PendingKey, error) {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionPut)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionPut)
 	defer span.End()
 
-	span.AddAttributes(trace.StringAttribute(traceLabelKey, key.String()))
+	span.SetAttributes(labelKey(key.String()))
 
 	res, err := ct.transaction.Put(key, src)
 	return res, convertIfMultiError(err)
 }
 
 func (ct CloudTransaction) PutMulti(keys []*DatastoreKey, src interface{}) ([]*PendingKey, error) {
-	_, span := trace.StartSpan(ct.ctx, traceDatastoreTransactionPutMulti)
+	_, span := ct.tracer.Start(ct.ctx, traceDatastoreTransactionPutMulti)
 	defer span.End()
 
-	span.AddAttributes(trace.Int64Attribute(traceLabelNumKeys, int64(len(keys))))
+	span.SetAttributes(labelNumKeys(int64(len(keys))))
 
 	if len(keys) > 0 {
-		span.AddAttributes(trace.StringAttribute(traceLabelFirstKey, keys[0].String()))
+		span.SetAttributes(labelFirstKey(keys[0].String()))
 	}
 
 	res, err := ct.transaction.PutMulti(keys, src)
@@ -457,6 +461,7 @@ type CloudDatastoreQuery struct {
 	client  *datastore.Client
 	q       *datastore.Query
 	timeout time.Duration
+	tracer  trace.Tracer
 }
 
 func (cdq CloudDatastoreQuery) Ancestor(ancestor *DatastoreKey) DatastoreQuery {
@@ -526,7 +531,7 @@ func (cdq CloudDatastoreQuery) Run() DatastoreIterator {
 }
 
 func (cdq CloudDatastoreQuery) GetAll(dst interface{}) ([]*DatastoreKey, error) {
-	_, span := trace.StartSpan(cdq.ctx, traceDatastoreQueryGetAll)
+	_, span := cdq.tracer.Start(cdq.ctx, traceDatastoreQueryGetAll)
 	defer span.End()
 
 	var keys []*DatastoreKey
