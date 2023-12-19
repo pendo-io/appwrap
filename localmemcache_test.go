@@ -67,16 +67,21 @@ func (dsit *AppengineInterfacesTest) TestMemCacheIncrement(c *C) {
 	_, err := cache.IncrementExisting("k", 15)
 	c.Assert(err, Equals, ErrCacheMiss)
 
-	v, err := cache.Increment("k", 15, 10)
+	v, err := cache.Increment("k", 15, 10, time.Minute)
 	c.Assert(err, IsNil)
 	c.Assert(v, Equals, uint64(25))
 
 	v, err = cache.IncrementExisting("k", -10)
 	c.Assert(v, Equals, uint64(15))
 
-	v, err = cache.Increment("k", 1, 0)
-	c.Assert(v, Equals, uint64(16))
+	// specifying a TTL after the key is set for the first time should have no effect on the TTL
+	v, err = cache.Increment("k", 15, 15, time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(v, Equals, uint64(30))
 
+	item, err := cache.Get("k")
+	c.Assert(err, IsNil)
+	c.Assert(item.Expiration, Equals, time.Minute)
 }
 
 func (dsit *AppengineInterfacesTest) TestMemCacheCAS(c *C) {

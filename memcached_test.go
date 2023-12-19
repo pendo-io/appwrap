@@ -89,6 +89,15 @@ func (s *MemcachedTest) newFixture() memcachedTestFixture {
 	}
 }
 
+func (s *MemcachedTest) TestDurationToSeconds(c *C) {
+	c.Assert(durationToSeconds(5*time.Second), Equals, int32(5))
+	c.Assert(durationToSeconds(5*time.Minute), Equals, int32(5*60))
+	c.Assert(durationToSeconds(5*time.Hour), Equals, int32(5*60*60))
+	c.Assert(durationToSeconds(5*time.Millisecond), Equals, int32(1))
+	c.Assert(durationToSeconds(5*time.Nanosecond), Equals, int32(1))
+	c.Assert(durationToSeconds(0), Equals, int32(0))
+}
+
 func (s *MemcachedTest) TestCacheItemToMemcacheItem(c *C) {
 	item := &CacheItem{
 		Key:        "key",
@@ -370,7 +379,7 @@ func (s *MemcachedTest) TestIncrement_AlreadyInCache(c *C) {
 
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(12), nil).Once()
 
-	amt, err := f.client.Increment("key", 5, 10)
+	amt, err := f.client.Increment("key", 5, 10, 0)
 	c.Assert(err, IsNil)
 	c.Assert(amt, Equals, uint64(12))
 	f.assertExpectations(c)
@@ -381,12 +390,13 @@ func (s *MemcachedTest) TestIncrement_NotInCache(c *C) {
 
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(0), ErrCacheMiss).Once()
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:   f.fullKey("key"),
-		Value: []byte("10"),
+		Key:        f.fullKey("key"),
+		Value:      []byte("10"),
+		Expiration: int32(5 * time.Minute / time.Second),
 	}).Return(nil).Once()
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(15), nil).Once()
 
-	amt, err := f.client.Increment("key", 5, 10)
+	amt, err := f.client.Increment("key", 5, 10, 5*time.Minute)
 	c.Assert(err, IsNil)
 	c.Assert(amt, Equals, uint64(15))
 	f.assertExpectations(c)
