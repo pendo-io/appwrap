@@ -298,7 +298,7 @@ func (m memcached) GetMulti(keys []string) (map[string]*CacheItem, error) {
 	return res, err
 }
 
-func (m memcached) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
+func (m memcached) Increment(key string, amount int64, initialValue uint64, expires time.Duration) (uint64, error) {
 	_, span := m.tracer.Start(m.ctx, traceMemcacheIncr)
 	defer span.End()
 
@@ -308,12 +308,21 @@ func (m memcached) Increment(key string, amount int64, initialValue uint64) (uin
 	key = m.encodedNamespacedKey(key)
 	span.SetAttributes(labelFullKey(key))
 
+	expiration := int32(0)
+	if expires > 0 {
+		expiration = int32(expires / time.Second)
+		if expiration == 0 {
+			expiration = 1
+		}
+	}
+
 	var amt uint64
 	var err error
 	if amt, err = m.client.Increment(key, uint64(amount)); err == ErrCacheMiss {
 		_ = m.client.Add(&memcache.Item{
-			Key:   key,
-			Value: []byte(fmt.Sprintf("%d", initialValue)),
+			Key:        key,
+			Value:      []byte(fmt.Sprintf("%d", initialValue)),
+			Expiration: expiration,
 		})
 		amt, err = m.client.Increment(key, uint64(amount))
 	}

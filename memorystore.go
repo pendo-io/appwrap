@@ -772,7 +772,7 @@ func (ms Memorystore) convertToByteSlice(v interface{}) []byte {
 	}
 }
 
-func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (incr uint64, err error) {
+func (ms Memorystore) Increment(key string, amount int64, initialValue uint64, expires time.Duration) (incr uint64, err error) {
 	fullKey, shard := ms.namespacedKeyAndShard(key)
 	c, span := ms.tracer.Start(ms.c, traceMemorystoreIncr)
 	defer span.End()
@@ -781,7 +781,7 @@ func (ms Memorystore) Increment(key string, amount int64, initialValue uint64) (
 	span.SetAttributes(labelShard(int64(shard)))
 
 	pipe := ms.clients[shard].TxPipeline()
-	pipe.SetNX(c, fullKey, initialValue, time.Duration(0))
+	pipe.SetNX(c, fullKey, initialValue, expires)
 	pipe.IncrBy(c, fullKey, amount)
 
 	var res []redis.Cmder

@@ -370,7 +370,7 @@ func (s *MemcachedTest) TestIncrement_AlreadyInCache(c *C) {
 
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(12), nil).Once()
 
-	amt, err := f.client.Increment("key", 5, 10)
+	amt, err := f.client.Increment("key", 5, 10, 0)
 	c.Assert(err, IsNil)
 	c.Assert(amt, Equals, uint64(12))
 	f.assertExpectations(c)
@@ -381,12 +381,13 @@ func (s *MemcachedTest) TestIncrement_NotInCache(c *C) {
 
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(0), ErrCacheMiss).Once()
 	f.memcachedMock.On("Add", &memcache.Item{
-		Key:   f.fullKey("key"),
-		Value: []byte("10"),
+		Key:        f.fullKey("key"),
+		Value:      []byte("10"),
+		Expiration: int32(5 * time.Minute / time.Second),
 	}).Return(nil).Once()
 	f.memcachedMock.On("Increment", f.fullKey("key"), uint64(5)).Return(uint64(15), nil).Once()
 
-	amt, err := f.client.Increment("key", 5, 10)
+	amt, err := f.client.Increment("key", 5, 10, 5*time.Minute)
 	c.Assert(err, IsNil)
 	c.Assert(amt, Equals, uint64(15))
 	f.assertExpectations(c)
