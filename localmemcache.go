@@ -126,11 +126,15 @@ func (mc *LocalMemcache) Get(key string) (*CacheItem, error) {
 		mc.delete(key)
 		return nil, ErrCacheMiss
 	} else {
-		return &CacheItem{
+		cacheItem := CacheItem{
 			Key:     key,
 			Value:   item.value,
 			casTime: item.addedAt,
-		}, nil
+		}
+		if !item.expires.IsZero() {
+			cacheItem.Expiration = item.expires.Sub(item.addedAt)
+		}
+		return &cacheItem, nil
 	}
 }
 
@@ -147,21 +151,25 @@ func (mc *LocalMemcache) GetMulti(keys []string) (map[string]*CacheItem, error) 
 	return results, nil
 }
 
-func (mc *LocalMemcache) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
-	return mc.increment(key, amount, &initialValue)
+func (mc *LocalMemcache) Increment(key string, amount int64, initialValue uint64, initialExpires time.Duration) (uint64, error) {
+	return mc.increment(key, amount, &initialValue, initialExpires)
 }
 
 func (mc *LocalMemcache) IncrementExisting(key string, amount int64) (uint64, error) {
-	return mc.increment(key, amount, nil)
+	return mc.increment(key, amount, nil, time.Duration(0))
 }
 
-func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64) (uint64, error) {
+func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64, initialExpires time.Duration) (uint64, error) {
 	if item, exists := mc.get(key); !exists && initialValue == nil {
 		return 0, ErrCacheMiss
 	} else {
 		var oldValue uint64
 		if !exists {
-			item = cachedItem{addedAt: time.Now()}
+			addedAt := time.Now()
+			item = cachedItem{addedAt: addedAt}
+			if initialExpires > 0 {
+				item.expires = addedAt.Add(initialExpires)
+			}
 			if initialValue != nil {
 				oldValue = *initialValue
 			}

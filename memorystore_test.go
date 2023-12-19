@@ -940,14 +940,14 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 	initialValue := uint64(1)
 	amount := int64(5)
 	clientMocks[0].On("TxPipeline").Return(pipeMock).Once()
-	pipeMock.On("SetNX", mock.Anything, fullKey, initialValue, time.Duration(0)).Once()
+	pipeMock.On("SetNX", mock.Anything, fullKey, initialValue, 5*time.Minute).Once()
 	pipeMock.On("IncrBy", mock.Anything, fullKey, amount).Once()
 	pipeMock.On("Exec", mock.Anything).Return([]redis.Cmder{
 		uncalledResultMock,
 		calledResultMock,
 	}, nil).Once()
 	calledResultMock.On("Val").Return(int64(40))
-	incr, err := ms.Increment(key, amount, initialValue)
+	incr, err := ms.Increment(key, amount, initialValue, 5*time.Minute)
 	c.Assert(err, IsNil)
 	c.Assert(incr, Equals, uint64(40))
 	checkMocks()
@@ -958,7 +958,7 @@ func (s *MemorystoreTest) TestIncrement(c *C) {
 	pipeMock.On("SetNX", mock.Anything, fullKey, initialValue, time.Duration(0)).Once()
 	pipeMock.On("IncrBy", mock.Anything, fullKey, amount).Once()
 	pipeMock.On("Exec", mock.Anything).Return(([]redis.Cmder)(nil), fatalErr).Once()
-	incr, err = ms.Increment(key, amount, initialValue)
+	incr, err = ms.Increment(key, amount, initialValue, 0)
 	c.Assert(err, Equals, fatalErr)
 	c.Assert(incr, Equals, uint64(0))
 	checkMocks()
