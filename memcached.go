@@ -28,20 +28,24 @@ var CacheErrNotStored = memcache.ErrNotStored
 var CacheErrCASConflict = memcache.ErrCASConflict
 var CacheErrServerError = memcache.ErrServerError
 
-func (c CacheItem) toMemcacheItem() *memcache.Item {
-	expiration := int32(0)
-	if c.Expiration > 0 {
-		expiration = int32(c.Expiration / time.Second)
-		if expiration == 0 {
-			expiration = 1
+// durationToSeconds converts a time.Duration to seconds as an int32, rounding up to 1 if the duration is less than 1 second
+func durationToSeconds(d time.Duration) int32 {
+	if d > 0 {
+		seconds := int32(d / time.Second)
+		if seconds == 0 {
+			seconds = 1
 		}
+		return seconds
 	}
+	return 0
+}
 
+func (c CacheItem) toMemcacheItem() *memcache.Item {
 	return &memcache.Item{
 		Key:        c.Key,
 		Value:      c.Value,
 		Flags:      c.Flags,
-		Expiration: expiration,
+		Expiration: durationToSeconds(c.Expiration),
 	}
 }
 
@@ -298,7 +302,7 @@ func (m memcached) GetMulti(keys []string) (map[string]*CacheItem, error) {
 	return res, err
 }
 
-func (m memcached) Increment(key string, amount int64, initialValue uint64) (uint64, error) {
+func (m memcached) Increment(key string, amount int64, initialValue uint64, initialExpires time.Duration) (uint64, error) {
 	_, span := m.tracer.Start(m.ctx, traceMemcacheIncr)
 	defer span.End()
 
@@ -312,8 +316,9 @@ func (m memcached) Increment(key string, amount int64, initialValue uint64) (uin
 	var err error
 	if amt, err = m.client.Increment(key, uint64(amount)); err == ErrCacheMiss {
 		_ = m.client.Add(&memcache.Item{
-			Key:   key,
-			Value: []byte(fmt.Sprintf("%d", initialValue)),
+			Key:        key,
+			Value:      []byte(fmt.Sprintf("%d", initialValue)),
+			Expiration: durationToSeconds(initialExpires),
 		})
 		amt, err = m.client.Increment(key, uint64(amount))
 	}
