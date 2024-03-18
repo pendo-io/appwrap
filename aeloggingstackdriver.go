@@ -83,6 +83,14 @@ func getLogger(aeInfo AppengineInfo, lc *logging.Client, logName string) *loggin
 	}), logging.DelayThreshold(loggingFlushTimeTrigger), logging.EntryByteThreshold(loggingFlushSizeTrigger), logging.EntryCountThreshold(loggingFlushCountTrigger))
 }
 
+func GetBackgroundLogger() goisms.SimpleLogging {
+	bglogOnce.Do(func() {
+		ctx := appwrap.WrapBackgroundContextWithStackdriverLogger(context.Background(), "") // never shut down log context (TODO: may lose logs on shutdown; fix with global shutdown hook)
+		bglog = logging.GetLogging(ctx)
+	})
+	return bglog
+}
+
 func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logger, trace string) *loggingCtxValue {
 	var remoteIp string
 	if addr := hreq.Header.Get(IPListHeader); addr != "" {
