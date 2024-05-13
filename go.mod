@@ -1,6 +1,6 @@
 module github.com/pendo-io/appwrap
 
-go 1.19
+go 1.21
 
 require (
 	cloud.google.com/go/cloudtasks v1.10.0
