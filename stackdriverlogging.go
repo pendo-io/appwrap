@@ -9,6 +9,7 @@ import (
 
 	"cloud.google.com/go/logging"
 	"github.com/go-martini/martini"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -152,6 +153,7 @@ func (sl *StackdriverLogging) processLog(severity logging.Severity, data interfa
 		Payload:   data,
 		Severity:  severity,
 		Timestamp: time.Now(),
+		SpanID:    trace.SpanFromContext(sl.ctx).SpanContext().SpanID().String(),
 		Trace:     sl.traceContext,
 	}
 
@@ -182,6 +184,7 @@ func (sl StackdriverLogging) Close(w http.ResponseWriter) {
 			Labels:    sl.commonLabels,
 			Severity:  sl.maxSeverity,
 			Timestamp: time.Now(),
+			SpanID:    trace.SpanFromContext(sl.ctx).SpanContext().SpanID().String(),
 			Trace:     sl.traceContext,
 		}
 
@@ -194,6 +197,7 @@ func (sl StackdriverLogging) Close(w http.ResponseWriter) {
 			Labels:    sl.commonLabels,
 			Severity:  sl.maxSeverity,
 			Timestamp: time.Now(),
+			SpanID:    trace.SpanFromContext(sl.ctx).SpanContext().SpanID().String(),
 			Trace:     sl.traceContext,
 		}
 	}

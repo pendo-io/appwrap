@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/logging"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/option"
 	mrpb "google.golang.org/genproto/googleapis/api/monitoredres"
 	logtypepb "google.golang.org/genproto/googleapis/logging/type"
@@ -297,6 +298,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 			Labels:    logCtxVal.getLabels(),
 			Severity:  logging.Severity(logCtxVal.sev),
 			Timestamp: time.Now(),
+			SpanID:    trace.SpanFromContext(ctx).SpanContext().SpanID().String(),
 			Trace:     logCtxVal.trace,
 		}
 		parentLogger.Log(e)
@@ -320,8 +322,10 @@ func logFromContext(ctx context.Context, sev logtypepb.LogSeverity, format strin
 		Payload:   truncateLog(format, args...),
 		Severity:  logging.Severity(sev),
 		Timestamp: time.Now(),
+		SpanID:    trace.SpanFromContext(ctx).SpanContext().SpanID().String(),
 		Trace:     logCtxVal.trace,
 	}
+
 	logCtxVal.logger.Log(e)
 	if sev > logCtxVal.sev {
 		logCtxVal.sev = sev
