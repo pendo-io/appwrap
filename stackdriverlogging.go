@@ -39,10 +39,14 @@ type StackdriverLogging struct {
 // NewStackdriverLogging will return a new logger set up to work with an App Engine flexible environment
 func (sl *StackdriverLoggingService) newStackdriverLogging(commonLabels map[string]string, logName LogName, req *http.Request, traceId string) DataLogging {
 	traceContext := traceId
+	var ctx context.Context
 	if req != nil {
 		if traceHeader := req.Header.Get(headerCloudTraceContext); traceHeader != "" {
 			traceContext = traceHeader
 		}
+		ctx = req.Context()
+	} else {
+		ctx = context.Background()
 	}
 
 	labelsOptions := logging.CommonLabels(map[string]string{
@@ -50,6 +54,7 @@ func (sl *StackdriverLoggingService) newStackdriverLogging(commonLabels map[stri
 	})
 
 	return &StackdriverLogging{
+		ctx:          ctx,
 		commonLabels: commonLabels,
 		logName:      logName,
 		maxSeverity:  logging.Default,
