@@ -476,6 +476,8 @@ func (cdq CloudDatastoreQuery) Distinct() DatastoreQuery {
 	return q
 }
 
+// Deprecated: Use the FilterField method instead, which supports the same
+// set of operations (and more).
 func (cdq CloudDatastoreQuery) Filter(how string, what interface{}) DatastoreQuery {
 	q := cdq
 
@@ -487,6 +489,23 @@ func (cdq CloudDatastoreQuery) Filter(how string, what interface{}) DatastoreQue
 		}
 	}
 	q.q = cdq.q.Filter(how, what)
+	return q
+}
+
+// FilterField supports the same operators as Filter but also accepts 'in' and 'not-in' operators
+// field is datastore column
+// how is one of these operators ">", "<", ">=", "<=", "=", "!=", "in", and "not-in".
+// what is the value you want to filter on
+func (cdq CloudDatastoreQuery) FilterField(field, how string, what interface{}) DatastoreQuery {
+	q := cdq
+	if reflect.ValueOf(what).Kind() == reflect.String {
+		switch what.(type) {
+		case string:
+		default:
+			what = reflect.ValueOf(what).String()
+		}
+	}
+	q.q = cdq.q.FilterField(field, how, what)
 	return q
 }
 
