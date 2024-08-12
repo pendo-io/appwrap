@@ -240,7 +240,7 @@ func RunFuncWithDedicatedLogger(c context.Context, simulatedUrl, traceId string,
 			},
 			Labels:    logCtxVal.getLabels(),
 			Severity:  sev,
-			Timestamp: time.Now(),
+			Timestamp: start,
 			Trace:     logCtxVal.trace,
 		})
 	}()
@@ -272,6 +272,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 	parentLogger := getLogger(aeInfo, lc, requestLogPath)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		logCtxVal := getLogCtxVal(aeInfo, r, logger, "")
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
 		if traceHeader != "" {
@@ -280,7 +281,6 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 			logCtxVal.trace = parent + "/traces/" + fmt.Sprintf("%d", rand.Int63())
 		}
 		ctx := context.WithValue(r.Context(), loggingCtxKey, logCtxVal)
-		start := time.Now()
 		sw := &statusWriter{
 			ResponseWriter: w,
 			status:         http.StatusOK, // default response if we don't explicitly set one
@@ -296,7 +296,7 @@ func WrapHandlerWithStackdriverLogger(h http.Handler, logName string, opts ...op
 			},
 			Labels:    logCtxVal.getLabels(),
 			Severity:  logging.Severity(logCtxVal.sev),
-			Timestamp: time.Now(),
+			Timestamp: start,
 			Trace:     logCtxVal.trace,
 		}
 		parentLogger.Log(e)
