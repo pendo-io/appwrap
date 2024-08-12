@@ -181,7 +181,7 @@ func (sl StackdriverLogging) Close(w http.ResponseWriter) {
 			},
 			Labels:    sl.commonLabels,
 			Severity:  sl.maxSeverity,
-			Timestamp: time.Now(),
+			Timestamp: sl.start,
 			Trace:     sl.traceContext,
 		}
 
@@ -193,7 +193,7 @@ func (sl StackdriverLogging) Close(w http.ResponseWriter) {
 			},
 			Labels:    sl.commonLabels,
 			Severity:  sl.maxSeverity,
-			Timestamp: time.Now(),
+			Timestamp: sl.start,
 			Trace:     sl.traceContext,
 		}
 	}

@@ -38,14 +38,15 @@ func (s *StackdriverLoggingTests) SetUpTest(c *C) {
 
 func matchesExpectedParentLogEntry(c *C, log *StackdriverLogging, entry logging.Entry, severity logging.Severity, startTime time.Time) bool {
 	return matchesExpectedLogEntry(c, entry, severity, startTime) &&
-
 		entry.Payload == nil &&
 		entry.HTTPRequest.Latency <= time.Now().Sub(log.start) &&
+		entry.Timestamp.Equal(startTime) &&
 		reflect.DeepEqual(entry.HTTPRequest.Request, log.request)
 }
 
 func matchesExpectedChildLogEntry(c *C, entry logging.Entry, severity logging.Severity, startTime time.Time, payload interface{}) bool {
 	return matchesExpectedLogEntry(c, entry, severity, startTime) &&
+		entry.Timestamp.After(startTime) &&
 		reflect.DeepEqual(entry.Payload, payload)
 }
 
@@ -53,7 +54,6 @@ func matchesExpectedLogEntry(c *C, entry logging.Entry, severity logging.Severit
 	return len(entry.Labels) == 1 &&
 		entry.Labels["subscriptionId"] == "12345" &&
 		entry.Severity == severity &&
-		entry.Timestamp.After(startTime) &&
 		entry.Timestamp.Before(time.Now()) &&
 		entry.Trace == "id-to-connect-logs"
 }
@@ -261,9 +261,8 @@ func (s *StackdriverLoggingTests) TestParentLogLevelDefault(c *C) {
 	log := s.arrangeValidClient(r).(*StackdriverLogging)
 	log.AddLabel("subscriptionId", "12345")
 	r.Response = &http.Response{}
-	startTime := time.Now()
 	log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-		return matchesExpectedParentLogEntry(c, log, entry, logging.Default, startTime)
+		return matchesExpectedParentLogEntry(c, log, entry, logging.Default, log.start)
 	})).Once()
 	log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 	log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -306,7 +305,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelNonDefault(c *C) {
 		})).Once()
 		testCase.logFunc(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -344,7 +343,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelNonDefault(c *C) {
 		})).Once()
 		testCase.logFunc("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severity, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -395,7 +394,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelHighOverrideLow(c *C) {
 		})).Once()
 		testCase.logFuncHigh(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -442,7 +441,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelHighOverrideLow(c *C) {
 		})).Once()
 		testCase.logFuncHigh("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -494,7 +493,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelLowNotOverrideHigh(c *C) {
 		})).Once()
 		testCase.logFuncLow(payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
@@ -540,7 +539,7 @@ func (s *StackdriverLoggingTests) TestParentLogLevelLowNotOverrideHigh(c *C) {
 		})).Once()
 		testCase.logFuncLow("%v", payload)
 		testCase.log.parentLogger.(*LoggerMock).On("Log", mock.MatchedBy(func(entry logging.Entry) bool {
-			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, startTime)
+			return matchesExpectedParentLogEntry(c, testCase.log, entry, testCase.severityHigh, testCase.log.start)
 		})).Once()
 		testCase.log.parentLogger.(*LoggerMock).On("Flush").Return(nil).Once()
 		testCase.log.childLogger.(*LoggerMock).On("Flush").Return(nil).Once()
