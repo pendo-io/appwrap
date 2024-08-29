@@ -88,4 +88,4 @@ require (
 
 replace gopkg.in/check.v1 => github.com/pendo-io/check v0.0.0-20180220194651-af5907e7f8ac
 
-replace cloud.google.com/go/datastore v1.17.1 => github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20240814144136-edcc651e9f78
+replace cloud.google.com/go/datastore v1.17.1 => github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20240829131339-abf77c09d0ae
