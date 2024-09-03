@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sync"
 
 	"cloud.google.com/go/errorreporting"
@@ -13,7 +14,7 @@ type ErrorReporter interface {
 	Close() error
 	FlushReports()
 	Report(errReport ErrorReport)
-	WrapLogger(logging Logging, errorAffectsLabel string) Logging
+	WrapLogger(logging Logging, errorAffectsLabel string, ignoredCriticalfPatterns []*regexp.Regexp) Logging
 }
 
 type googleErrorReporter struct {
@@ -71,12 +72,13 @@ func (g *googleErrorReporter) Close() error {
 }
 
 type errorForwardingLogger struct {
-	wrappedLogger     Logging
-	errorReporter     ErrorReporter
-	errorAffectsLabel string
-	labelsLock        *sync.RWMutex
-	labels            map[string]string
-	req               *http.Request
+	wrappedLogger            Logging
+	errorReporter            ErrorReporter
+	errorAffectsLabel        string
+	ignoredCriticalfPatterns []*regexp.Regexp
+	labelsLock               *sync.RWMutex
+	labels                   map[string]string
+	req                      *http.Request
 }
 
 func (e errorForwardingLogger) Debugf(format string, args ...interface{}) {
@@ -135,6 +137,14 @@ func (f forwardedError) Error() string {
 
 func (e *errorForwardingLogger) forwardError(err error) {
 	var affects string
+	if len(e.ignoredCriticalfPatterns) > 0 {
+		errString := err.Error()
+		for _, pattern := range e.ignoredCriticalfPatterns {
+			if pattern.MatchString(errString) {
+				return
+			}
+		}
+	}
 	if len(e.errorAffectsLabel) > 0 {
 		e.labelsLock.RLock()
 		affects = e.labels[e.errorAffectsLabel]
@@ -150,15 +160,16 @@ func (e *errorForwardingLogger) forwardError(err error) {
 /**
  * Unlike NewGoogleErrorReporter this function may be used liberally, and across threads/requests
  */
-func (g *googleErrorReporter) WrapLogger(logging Logging, errorAffectsLabel string) Logging {
+func (g *googleErrorReporter) WrapLogger(logging Logging, errorAffectsLabel string, ignoredCriticalfPatterns []*regexp.Regexp) Logging {
 	if _, alreadyWrapped := logging.(*errorForwardingLogger); alreadyWrapped {
 		panic("bug! this logger is already wrapped!")
 	}
 	return &errorForwardingLogger{
-		wrappedLogger:     logging,
-		errorReporter:     g,
-		errorAffectsLabel: errorAffectsLabel,
-		labelsLock:        &sync.RWMutex{},
-		labels:            make(map[string]string),
+		wrappedLogger:            logging,
+		errorReporter:            g,
+		errorAffectsLabel:        errorAffectsLabel,
+		ignoredCriticalfPatterns: ignoredCriticalfPatterns,
+		labelsLock:               &sync.RWMutex{},
+		labels:                   make(map[string]string),
 	}
 }
