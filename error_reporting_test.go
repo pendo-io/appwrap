@@ -3,6 +3,7 @@ package appwrap
 import (
 	"errors"
 	"net/http"
+	"regexp"
 	"sync"
 
 	"cloud.google.com/go/errorreporting"
@@ -72,7 +73,7 @@ func (e *ErrorReportingTest) TestWrapLogger_CantWrapAgain(c *C) {
 	reporter := &googleErrorReporter{}
 
 	assert.Panics(c, func() {
-		_ = reporter.WrapLogger(log, "")
+		_ = reporter.WrapLogger(log, "", nil)
 	})
 }
 
@@ -83,7 +84,7 @@ func (e *ErrorReportingTest) TestDebugf_OnlyForwards(c *C) {
 
 	wrapMe.On("Debugf", "winner, winner, chicken din%s", "ner")
 
-	wrappedLog := reporter.WrapLogger(wrapMe, "")
+	wrappedLog := reporter.WrapLogger(wrapMe, "", nil)
 
 	wrappedLog.Debugf("winner, winner, chicken din%s", "ner")
 
@@ -98,7 +99,7 @@ func (e *ErrorReportingTest) TestInfof_OnlyForwards(c *C) {
 
 	wrapMe.On("Infof", "winner, winner, chicken din%s", "ner")
 
-	wrappedLog := reporter.WrapLogger(wrapMe, "")
+	wrappedLog := reporter.WrapLogger(wrapMe, "", nil)
 
 	wrappedLog.Infof("winner, winner, chicken din%s", "ner")
 
@@ -113,7 +114,7 @@ func (e *ErrorReportingTest) TestWarningf_OnlyForwards(c *C) {
 
 	wrapMe.On("Warningf", "winner, winner, chicken din%s", "ner")
 
-	wrappedLog := reporter.WrapLogger(wrapMe, "")
+	wrappedLog := reporter.WrapLogger(wrapMe, "", nil)
 
 	wrappedLog.Warningf("winner, winner, chicken din%s", "ner")
 
@@ -157,6 +158,36 @@ func (e *ErrorReportingTest) TestCriticalf_ForwardsAndReports(c *C) {
 		ErrorAffectsKey: "",
 	})
 	forwardLog.Criticalf("silly %s. you broke it", "goose")
+
+	wrapMe.AssertExpectations(c)
+	mockReporter.AssertExpectations(c)
+}
+
+func (e *ErrorReportingTest) TestCriticalf_Ignores(c *C) {
+	wrapMe := &LoggingMock{Log: &NullLogger{}}
+	mockReporter := &ErrorReporterMock{}
+	forwardLog := &errorForwardingLogger{
+		wrappedLogger:     wrapMe,
+		errorReporter:     mockReporter,
+		errorAffectsLabel: "",
+		ignoredCriticalfPatterns: []*regexp.Regexp{
+			regexp.MustCompile(".*context canceled.*"),
+		},
+		labelsLock: &sync.RWMutex{},
+		labels:     make(map[string]string),
+	}
+	contextErr := "this says context canceled"
+	notIgnoredErr := "show me this error"
+
+	wrapMe.On("Criticalf", notIgnoredErr)
+	wrapMe.On("Criticalf", contextErr)
+	mockReporter.On("Report", ErrorReport{
+		Err:             forwardedError{msg: notIgnoredErr},
+		Req:             nil,
+		ErrorAffectsKey: "",
+	})
+	forwardLog.Criticalf(notIgnoredErr)
+	forwardLog.Criticalf(contextErr)
 
 	wrapMe.AssertExpectations(c)
 	mockReporter.AssertExpectations(c)

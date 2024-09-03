@@ -1,6 +1,10 @@
 package appwrap
 
-import "github.com/stretchr/testify/mock"
+import (
+	"regexp"
+
+	"github.com/stretchr/testify/mock"
+)
 
 type ErrorReporterMock struct {
 	mock.Mock
@@ -19,7 +23,7 @@ func (m *ErrorReporterMock) Close() error {
 	return args.Error(0)
 }
 
-func (m *ErrorReporterMock) WrapLogger(logging Logging, errorAffectsLabel string) Logging {
-	args := m.Called(logging, errorAffectsLabel)
+func (m *ErrorReporterMock) WrapLogger(logging Logging, errorAffectsLabel string, ignoredCriticalfPatterns []*regexp.Regexp) Logging {
+	args := m.Called(logging, errorAffectsLabel, ignoredCriticalfPatterns)
 	return args.Get(0).(Logging)
 }
