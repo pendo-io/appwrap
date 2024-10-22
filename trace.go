@@ -3,6 +3,12 @@ package appwrap
 import "go.opentelemetry.io/otel/attribute"
 
 const (
+	otelScopeBase = "github.com/pendo-io/appwrap"
+
+	OtelScopeDatastore   = otelScopeBase + "/datastore"
+	OtelScopeMemcache    = otelScopeBase + "/memcache"
+	OtelScopeMemorystore = otelScopeBase + "/memorystore"
+
 	traceDatastoreAllocateIds      = "pendo.io/datastore/allocate-id-set"
 	traceDatastoreDeleteMulti      = "pendo.io/datastore/delete-multi"
 	traceDatastoreGet              = "pendo.io/datastore/get"

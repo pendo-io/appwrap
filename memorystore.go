@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"io"
 	"log"
 	"os"
-	"os/signal"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -16,15 +18,12 @@ import (
 	"time"
 
 	cloudms "cloud.google.com/go/redis/apiv1"
-	xxhash "github.com/cespare/xxhash/v2"
-	redis "github.com/go-redis/redis/v8"
-	gax "github.com/googleapis/gax-go/v2"
-	"go.opencensus.io/tag"
+	"github.com/cespare/xxhash/v2"
+	"github.com/go-redis/redis/v8"
+	"github.com/googleapis/gax-go/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
-
-	"github.com/pendo-io/appwrap/internal/metrics"
 )
 
 type redisAPIConnectorFn func(ctx context.Context) (redisAPIService, error)
@@ -174,8 +173,6 @@ type memorystoreService struct {
 	addrs              []string
 	addrLastErr        error
 	addrDontRetryUntil time.Time
-
-	statReporterOnce sync.Once
 }
 
 var GlobalService memorystoreService
@@ -317,6 +314,9 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 				}
 
 				client := redis.NewClient(ops)
+				if err := addMetrics(client, shard); err != nil && log != nil {
+					log.Warningf("failed to set up metrics for redis client %s, shard %d: %s", ipaddr, shard, err)
+				}
 				clients[i] = &redisClientImplementation{client, client}
 			}
 
@@ -326,63 +326,103 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 		ourClients = ms.clients
 	}
 
-	statInterval := metrics.GetMetricsRecordingInterval()
-	if statInterval > 0 {
-		ms.statReporterOnce.Do(func() {
-			fmt.Fprintf(os.Stderr, "[memorystoreService] stat reporter starting (reporting every %s)\n", statInterval)
-			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, os.Interrupt)
-			go func() {
-				ticker := time.NewTicker(statInterval)
-				defer func() {
-					ticker.Stop()
-				}()
-				for {
-					select {
-					case <-ticker.C:
-						ms.logPoolStats()
-					case <-sigCh:
-						fmt.Fprintln(os.Stderr, "[memorystoreService] interrupt received, stopping stat reporter")
-						return
-					}
-				}
-			}()
-		})
-	}
-	return Memorystore{c, *ourClients, otel.GetTracerProvider().Tracer("Memorystore"), "", defaultKeyHashFn}, nil
+	return Memorystore{c, *ourClients, otel.GetTracerProvider().Tracer(OtelScopeMemorystore), "", defaultKeyHashFn}, nil
 }
 
-func (ms *memorystoreService) logPoolStats() {
-	ms.mtx.Lock()
-	defer ms.mtx.Unlock()
-	if ms.clients == nil {
-		return
+const (
+	memorystoreShardKey       = attribute.Key("io.pendo.db.client.connection.pool.shard")
+	memorystorePoolResultsKey = attribute.Key("io.pendo.db.client.connection.pool.result")
+)
+
+func addMetrics(rdb *redis.Client, shard int) error {
+	msMeter := otel.Meter(OtelScopeMemorystore)
+	config := rdb.Options()
+
+	baseAttrs := []attribute.KeyValue{
+		semconv.DBSystemRedis,
+		semconv.DBClientConnectionsPoolName(config.Addr),
+		memorystoreShardKey.Int(shard),
 	}
 
-	for i, client := range *ms.clients {
-		pstats := client.PoolStats()
-
-		// These metrics are all for the same connection shard
-		mctx, err := tag.New(context.Background(), tag.Insert(metrics.KeyConnectionShard, strconv.Itoa(i)))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create context with tag: "+err.Error())
-			continue
-		}
-
-		// Pool usage stats
-		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Hits)),
-			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultHit)
-		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Misses)),
-			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultMiss)
-		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolUsage.M(int64(pstats.Timeouts)),
-			metrics.KeyPoolUsageResult, metrics.ConnectionPoolUsageResultTimeout)
-
-		// Connection state stats
-		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolConnections.M(int64(pstats.TotalConns-pstats.IdleConns)),
-			metrics.KeyPoolConnState, metrics.ConnectionPoolConnectionStateActive)
-		metrics.RecordWithTagName(mctx, metrics.MMemoryStoreConnectionPoolConnections.M(int64(pstats.IdleConns)),
-			metrics.KeyPoolConnState, metrics.ConnectionPoolConnectionStateIdle)
+	idleMin, err := msMeter.Int64ObservableUpDownCounter(
+		semconv.DBClientConnectionIdleMinName,
+		metric.WithDescription(semconv.DBClientConnectionIdleMinDescription),
+		metric.WithUnit(semconv.DBClientConnectionIdleMinUnit),
+	)
+	if err != nil {
+		return err
 	}
+
+	connsMax, err := msMeter.Int64ObservableUpDownCounter(
+		semconv.DBClientConnectionMaxName,
+		metric.WithDescription(semconv.DBClientConnectionMaxDescription),
+		metric.WithUnit(semconv.DBClientConnectionMaxUnit),
+	)
+	if err != nil {
+		return err
+	}
+
+	idleAttrs := append(baseAttrs, semconv.DBClientConnectionsStateIdle)
+	usedAttrs := append(baseAttrs, semconv.DBClientConnectionsStateUsed)
+	usage, err := msMeter.Int64ObservableUpDownCounter(
+		semconv.DBClientConnectionCountName,
+		metric.WithDescription(semconv.DBClientConnectionCountDescription),
+		metric.WithUnit(semconv.DBClientConnectionCountUnit),
+	)
+	if err != nil {
+		return err
+	}
+
+	// io.pendo.db.client.connection.pool.timeouts is defined upstream as "db.client.connection.timeouts"
+	// but according to the semantic conventions, it should use an up/down counter. This doesn't make sense as
+	// the number of timeouts are monotonically increasing here, so we'll use our own name.
+	// If we upgrade to Redis v9 and the default metrics are sufficient, then we can transition to the standard
+	// metric and stop tracking this one.
+	timeouts, err := msMeter.Int64ObservableCounter(
+		"io.pendo.db.client.connection.pool.timeouts",
+		metric.WithDescription(semconv.DBClientConnectionTimeoutsDescription),
+		metric.WithUnit(semconv.DBClientConnectionTimeoutsUnit),
+	)
+	if err != nil {
+		return err
+	}
+
+	// io.pendo.db.client.connection.pool.reuse is non-standard, and obviated by the standard metric
+	// db.client.connection.create_time, which is supported in go-redis v9.
+	hitAttrs := append(baseAttrs, memorystorePoolResultsKey.String("reused"))
+	missAttrs := append(baseAttrs, memorystorePoolResultsKey.String("created"))
+	poolReuse, err := msMeter.Int64ObservableCounter("io.pendo.db.client.connection.pool.reuse",
+		metric.WithDescription("The number of hits and misses when attempting to obtain a connection from the pool."),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = msMeter.RegisterCallback(
+		func(_ context.Context, o metric.Observer) error {
+			stats := rdb.PoolStats()
+
+			o.ObserveInt64(idleMin, int64(config.MinIdleConns), metric.WithAttributes(baseAttrs...))
+			o.ObserveInt64(connsMax, int64(config.PoolSize), metric.WithAttributes(baseAttrs...))
+
+			o.ObserveInt64(usage, int64(stats.TotalConns-stats.IdleConns), metric.WithAttributes(usedAttrs...))
+			o.ObserveInt64(usage, int64(stats.IdleConns), metric.WithAttributes(idleAttrs...))
+
+			o.ObserveInt64(timeouts, int64(stats.Timeouts), metric.WithAttributes(baseAttrs...))
+
+			o.ObserveInt64(poolReuse, int64(stats.Hits), metric.WithAttributes(hitAttrs...))
+			o.ObserveInt64(poolReuse, int64(stats.Misses), metric.WithAttributes(missAttrs...))
+
+			return nil
+		},
+		idleMin,
+		connsMax,
+		usage,
+		timeouts,
+		poolReuse,
+	)
+
+	return err
 }
 
 func (ms Memorystore) shardedNamespacedKeysForItems(items []*CacheItem) (namespacedKeys [][]string, originalPositions map[string]int, singleShard int) {
