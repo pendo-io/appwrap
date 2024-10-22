@@ -76,6 +76,13 @@ func InKubernetes() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
+func K8sDomain() string {
+	if InKubernetes() {
+		return os.Getenv("K8S_DOMAIN")
+	}
+	return ""
+}
+
 var (
 	LocalDebug     = os.Getenv("LOCAL_DEBUG") == "true"
 	IsDevAppServer = false
