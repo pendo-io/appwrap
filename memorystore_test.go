@@ -10,12 +10,10 @@ import (
 
 	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/go-redis/redis/v8"
-	gax "github.com/googleapis/gax-go/v2"
+	"github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"
-
-	"github.com/pendo-io/appwrap/internal/metrics"
 )
 
 type redisAPIServiceMock struct {
@@ -172,11 +170,6 @@ func (s *MemorystoreTest) newMemstore() (Memorystore, []*redisClientMock) {
 func (s *MemorystoreTest) newMemstoreWithNamespace() (Memorystore, []*redisClientMock) {
 	ms, mocks := s.newMemstore()
 	return ms.Namespace("test-ns").(Memorystore), mocks
-}
-
-func (s *MemorystoreTest) SetUpTest(c *C) {
-	os.Setenv(metrics.EnvMetricsRecordingIntervalSeconds, "")
-	metrics.ParseRecordingIntervalFromEnvironment()
 }
 
 func (s *MemorystoreTest) TestNewAppengineMemcacheThreadSafety(c *C) {
@@ -400,30 +393,6 @@ func (s *MemorystoreTest) TestNamespacedKeyAndShard(c *C) {
 	// this value tests that our sharding algorithm connects for negative number results from the mod operator.
 	_, shard = ms.namespacedKeyAndShard(":asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdfasdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf:asdfasdfasdfasdf")
 	c.Assert(shard, Equals, 1)
-}
-
-func (s *MemorystoreTest) TestPoolStats(c *C) {
-	clientMock := &redisClientMock{}
-	clientMock.On("PoolStats").Return(&redis.PoolStats{
-		Hits:       10,
-		Misses:     1,
-		Timeouts:   2,
-		TotalConns: 4,
-		IdleConns:  1,
-		StaleConns: 5,
-	}).Once()
-
-	ms := memorystoreService{clients: &[]redisClientInterface{clientMock}}
-	appMock := &AppengineInfoMock{}
-	appMock.On("NativeProjectID").Return("pendo-devserver").Maybe()
-	c.Assert(os.Setenv(metrics.EnvMetricsRecordingIntervalSeconds, "1"), IsNil)
-	metrics.ParseRecordingIntervalFromEnvironment()
-
-	_, err := ms.NewMemorystore(context.Background(), appMock, "cacheloc", "cachename", 1)
-	c.Assert(err, IsNil)
-
-	time.Sleep(1100 * time.Millisecond)
-	clientMock.AssertExpectations(c)
 }
 
 func (s *MemorystoreTest) TestAdd(c *C) {

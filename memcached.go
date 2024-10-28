@@ -112,7 +112,7 @@ func (m *memcacheService) NewAppengineMemcache(c context.Context, appInfo Appeng
 	return memcached{
 		ctx:    c,
 		client: m.client,
-		tracer: otel.GetTracerProvider().Tracer("memcached"),
+		tracer: otel.GetTracerProvider().Tracer(OtelScopeMemcache),
 	}, nil
 }
 

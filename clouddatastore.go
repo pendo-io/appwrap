@@ -114,7 +114,7 @@ var (
 )
 
 func newCloudDatastore(c context.Context, client *datastore.Client, namespace string, timeout time.Duration) Datastore {
-	return CloudDatastore{client: client, ctx: c, namespace: namespace, timeout: timeout, tracer: otel.GetTracerProvider().Tracer("CloudDatastore")}
+	return CloudDatastore{client: client, ctx: c, namespace: namespace, timeout: timeout, tracer: otel.GetTracerProvider().Tracer(OtelScopeDatastore)}
 }
 
 func NewCloudDatastore(c context.Context) (Datastore, error) {
@@ -327,7 +327,7 @@ func (cds CloudDatastore) RunInTransaction(f func(coreds DatastoreTransaction) e
 				ctx:         tctx,
 				namespace:   cds.namespace,
 				transaction: transaction,
-				tracer:      otel.GetTracerProvider().Tracer("CloudTransaction"),
+				tracer:      otel.GetTracerProvider().Tracer(OtelScopeDatastore),
 			}
 			return f(ct)
 		}, transOpts...)
@@ -347,7 +347,7 @@ func (cds CloudDatastore) NewQuery(kind string) DatastoreQuery {
 
 	span.SetAttributes(labelKind(kind))
 
-	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, timeout: cds.timeout, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer("CloudDatastoreQuery")}
+	q := CloudDatastoreQuery{ctx: cds.ctx, client: cds.client, timeout: cds.timeout, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer(OtelScopeDatastore)}
 	if cds.namespace != "" {
 		q.q = q.q.Namespace(cds.namespace)
 	}
@@ -414,7 +414,7 @@ func (ct CloudTransaction) NewQuery(kind string) DatastoreQuery {
 
 	span.SetAttributes(labelKind(kind))
 
-	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, timeout: 0 /* no timeout since ct.ctx already has deadline */, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer("CloudDatastoreQuery")}
+	q := CloudDatastoreQuery{ctx: ct.ctx, client: ct.client, timeout: 0 /* no timeout since ct.ctx already has deadline */, q: datastore.NewQuery(kind), tracer: otel.GetTracerProvider().Tracer(OtelScopeDatastore)}
 	q.q = q.q.Transaction(ct.transaction)
 	if ct.namespace != "" {
 		q.q = q.q.Namespace(ct.namespace)
