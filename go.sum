@@ -273,8 +273,8 @@ github.com/pendo-io/check v0.0.0-20180220194651-af5907e7f8ac h1:NCbRNWwWsYq68QM0
 github.com/pendo-io/check v0.0.0-20180220194651-af5907e7f8ac/go.mod h1:1ESstOCfcbXdcG57cZ9qcQqdkaaCsLk0mYSjbJGgt9I=
 github.com/pendo-io/gomemcache v0.0.0-20220318155316-448bc05805ee h1:JAqg7r29rSO9ZfHXexCSIkREFsn+CXHuApD01GHDfUk=
 github.com/pendo-io/gomemcache v0.0.0-20220318155316-448bc05805ee/go.mod h1:DbZkDcGApIN6VBREF1gPYwLVf8N+oC16ztgeiGkIY94=
-github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20240829131339-abf77c09d0ae h1:NP2PgpEfgpKCS4D8plipTXAer1rXsXfgKm2qY/FP1ww=
-github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20240829131339-abf77c09d0ae/go.mod h1:mtzZ2HcVtz90OVrEXXGDc2pO4NM1kiBQy8YV4qGe0ZM=
+github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20241028202714-b7bdea708ddd h1:6m0U5RNNVd4B8phMRLQPYhu2Yu9gi5QfKYoIRCzzsQY=
+github.com/pendo-io/google-cloud-go/datastore v1.0.1-0.20241028202714-b7bdea708ddd/go.mod h1:mtzZ2HcVtz90OVrEXXGDc2pO4NM1kiBQy8YV4qGe0ZM=
 github.com/peterbourgon/diskv v2.0.1+incompatible/go.mod h1:uqqh8zWWbv1HBMNONnaR/tNboyR3/BZd58JJSHlUSCU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
