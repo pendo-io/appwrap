@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -16,9 +15,9 @@ import (
 	"time"
 
 	cloudms "cloud.google.com/go/redis/apiv1"
-	xxhash "github.com/cespare/xxhash/v2"
-	redis "github.com/go-redis/redis/v8"
-	gax "github.com/googleapis/gax-go/v2"
+	"github.com/cespare/xxhash/v2"
+	"github.com/go-redis/redis/v8"
+	"github.com/googleapis/gax-go/v2"
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -908,14 +907,15 @@ var (
 )
 
 func init() {
+	initLog := NewJsonLogger(os.Stdout, true)
 	readTimeoutMsStr := os.Getenv(envMemorystoreReadTimeoutMs)
 	if readTimeoutMsStr != "" {
 		timeoutMs, err := strconv.ParseInt(readTimeoutMsStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemorystoreReadTimeoutMs, readTimeoutMsStr, err)
 		} else if timeoutMs < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemorystorePoolSize)
 		} else {
 			memorystoreReadTimeout = time.Duration(timeoutMs) * time.Millisecond
@@ -926,10 +926,10 @@ func init() {
 	if memorystorePoolSizeStr != "" {
 		poolSize, err := strconv.ParseInt(memorystorePoolSizeStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemorystorePoolSize, memorystorePoolSizeStr, err)
 		} else if poolSize < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemorystorePoolSize)
 		} else {
 			memorystorePoolSize = int(poolSize)
@@ -940,10 +940,10 @@ func init() {
 	if poolTimeoutStr != "" {
 		timeoutMs, err := strconv.ParseInt(poolTimeoutStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemorystorePoolTimeoutMs, poolTimeoutStr, err)
 		} else if timeoutMs < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemorystorePoolTimeoutMs)
 		} else {
 			memorystorePoolTimeout = time.Duration(timeoutMs) * time.Millisecond
@@ -961,12 +961,12 @@ func init() {
 	if idleTimeoutStr != "" {
 		timeoutMs, err := strconv.ParseInt(idleTimeoutStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemorystoreIdleTimeoutMs, idleTimeoutStr, err)
 		} else if timeoutMs == -1 {
 			memorystoreIdleTimeout = -1
 		} else if timeoutMs < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be either a non-zero non-negative integer, or -1 to disable idle timeout\n",
+			initLog.Errorf("'%s' must be either a non-zero non-negative integer, or -1 to disable idle timeout\n",
 				envMemorystoreIdleTimeoutMs)
 		} else {
 			memorystoreIdleTimeout = time.Duration(timeoutMs) * time.Millisecond
@@ -974,7 +974,7 @@ func init() {
 	}
 
 	if LocalDebug {
-		log.Println("Connecting redis to localhost")
+		initLog.Infof("Connecting redis to localhost")
 
 		clients := make([]redisClientInterface, 1)
 
