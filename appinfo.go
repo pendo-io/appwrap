@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/compute/metadata"
+	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/appengine"
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
@@ -16,6 +17,8 @@ import (
 type AppengineInfo interface {
 	DataProjectID() string
 	NativeProjectID() string
+	DataProjectNum() string
+	NativeProjectNum() string
 	InstanceID() string
 	ModuleHasTraffic(moduleName, moduleVersion string) (bool, error)
 	// ModuleHostname returns the HTTP hostname to route to the given version, module, and app (project).
@@ -69,6 +72,20 @@ func getZone() string {
 	}
 
 	return zone
+}
+
+func getProjectNumber(projectID string) string {
+	cloudresourcemanagerService, err := cloudresourcemanager.NewService(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	project, err := cloudresourcemanagerService.Projects.Get(projectID).Do()
+	if err != nil {
+		panic(err)
+	}
+
+	return fmt.Sprintf("%v", project.ProjectNumber)
 }
 
 func InKubernetes() bool {

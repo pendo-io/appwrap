@@ -65,10 +65,18 @@ func (ai AppengineInfoK8s) Zone() string {
 	return getZone()
 }
 
-//There is no one way to achieve traffic management in k8s. This implementation assumes using Istio.
+func (ai AppengineInfoK8s) DataProjectNum() string {
+	return getProjectNumber(ai.DataProjectID())
+}
+
+func (ai AppengineInfoK8s) NativeProjectNum() string {
+	return getProjectNumber(ai.NativeProjectID())
+}
+
+// There is no one way to achieve traffic management in k8s. This implementation assumes using Istio.
 //
-//This implementation will attempt to find a corresponding virtual service resource labeled app=<module_name>.
-//We will attempt to find a destination rule will a subset named moduleVersion, and derive traffic weight from this
+// This implementation will attempt to find a corresponding virtual service resource labeled app=<module_name>.
+// We will attempt to find a destination rule will a subset named moduleVersion, and derive traffic weight from this
 func (ai AppengineInfoK8s) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
 	namespace := ai.NativeProjectID()
 	labelSet := labels.Set{
