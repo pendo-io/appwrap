@@ -1,8 +1,10 @@
 package appwrap
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 )
 
@@ -286,4 +288,82 @@ func (pl PrefixLogger) AddLabels(labels map[string]string) error {
 
 func (pl PrefixLogger) TraceID() string {
 	return pl.Logging.TraceID()
+}
+
+func NewStdLogger(writer io.Writer) Logging {
+	if LocalDebug {
+		return NewWriterLogger(writer)
+	}
+	return NewJsonLogger(writer, true)
+}
+
+func NewJsonLogger(writer io.Writer, addStandardLogLabels bool) Logging {
+	logger := &JsonLogger{
+		slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+			AddSource:   false,
+			ReplaceAttr: replaceStdOutKeys,
+		})),
+	}
+	if addStandardLogLabels {
+		aeInfo := NewAppengineInfoFromContext(context.Background())
+		if err := logger.AddLabels(map[string]string{
+			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+			"pendo_io_service":                       aeInfo.ModuleName(),
+			"pendo_io_version":                       aeInfo.VersionID(),
+		}); err != nil {
+			logger.Errorf("Error adding standard log labels: %v", err)
+		}
+		return logger
+	}
+	return logger
+}
+
+type JsonLogger struct {
+	log *slog.Logger
+}
+
+func (jl *JsonLogger) Debugf(format string, args ...interface{}) {
+	jl.log.Debug(fmt.Sprintf(format, args...))
+}
+
+func (jl *JsonLogger) Infof(format string, args ...interface{}) {
+	jl.log.Info(fmt.Sprintf(format, args...))
+}
+
+func (jl *JsonLogger) Warningf(format string, args ...interface{}) {
+	jl.log.Warn(fmt.Sprintf(format, args...))
+}
+
+func (jl *JsonLogger) Errorf(format string, args ...interface{}) {
+	jl.log.Error(fmt.Sprintf(format, args...))
+}
+
+func (jl *JsonLogger) Criticalf(format string, args ...interface{}) {
+	// There is no critical in slog
+	jl.log.Error(fmt.Sprintf(format, args...))
+}
+
+func (jl *JsonLogger) Request(request, url, format string, args ...interface{}) {
+	if len(format) > 0 {
+		format = " " + format
+	}
+
+	jl.log.Info("REQUEST: %s %s"+format, append([]interface{}{request, url}, args...)...)
+}
+
+func (jl *JsonLogger) AddLabels(labels map[string]string) error {
+	jl.log = jl.log.With("logging.googleapis.com/labels", labels)
+	return nil
+}
+
+func (jl *JsonLogger) TraceID() string { return "" }
+
+func replaceStdOutKeys(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == slog.MessageKey {
+		a.Key = "message"
+	}
+	if a.Key == slog.LevelKey {
+		a.Key = "severity"
+	}
+	return a
 }

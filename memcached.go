@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -533,14 +532,15 @@ var (
 )
 
 func init() {
+	initLog := NewStdLogger(os.Stdout)
 	timeoutMsStr := os.Getenv(envMemcachedOperationTimeoutMs)
 	if timeoutMsStr != "" {
 		timeoutMs, err := strconv.ParseInt(timeoutMsStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemcachedOperationTimeoutMs, timeoutMsStr, err)
 		} else if timeoutMs < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemcachedOperationTimeoutMs)
 		} else {
 			memcachedOperationTimeout = time.Duration(timeoutMs) * time.Millisecond
@@ -551,10 +551,10 @@ func init() {
 	if poolSizeStr != "" {
 		poolSize, err := strconv.ParseInt(poolSizeStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemcachedPoolSize, poolSizeStr, err)
 		} else if poolSize < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemcachedPoolSize)
 		} else {
 			memcachedPoolSize = int(poolSize)
@@ -565,10 +565,10 @@ func init() {
 	if poolTimeoutStr != "" {
 		timeoutMs, err := strconv.ParseInt(poolTimeoutStr, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse '%s' value: '%s': %s\n",
+			initLog.Errorf("Failed to parse '%s' value: '%s': %s\n",
 				envMemcachedPoolTimeoutMs, poolTimeoutStr, err)
 		} else if timeoutMs < 1 {
-			fmt.Fprintf(os.Stderr, "'%s' must be a non-zero non-negative integer\n",
+			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
 				envMemcachedPoolTimeoutMs)
 		} else {
 			memcachedPoolTimeout = time.Duration(timeoutMs) * time.Millisecond
@@ -576,10 +576,10 @@ func init() {
 	}
 
 	if LocalDebug {
-		log.Println("Connecting memcached to localhost")
+		initLog.Infof("Connecting memcached to localhost")
 		globalMemcacheService.client = memcache.New("127.0.0.1:11211")
 		if err := globalMemcacheService.client.Ping(); err != nil {
-			log.Println("Error connecting to local memcache: " + err.Error())
+			initLog.Errorf("Error connecting to local memcache: " + err.Error())
 		}
 	}
 }
