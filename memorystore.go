@@ -907,7 +907,7 @@ var (
 )
 
 func init() {
-	initLog := NewJsonLogger(os.Stdout, true)
+	initLog := NewStdLogger(os.Stdout)
 	readTimeoutMsStr := os.Getenv(envMemorystoreReadTimeoutMs)
 	if readTimeoutMsStr != "" {
 		timeoutMs, err := strconv.ParseInt(readTimeoutMsStr, 10, 64)

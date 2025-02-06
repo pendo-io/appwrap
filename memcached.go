@@ -532,7 +532,7 @@ var (
 )
 
 func init() {
-	initLog := NewJsonLogger(os.Stdout, true)
+	initLog := NewStdLogger(os.Stdout)
 	timeoutMsStr := os.Getenv(envMemcachedOperationTimeoutMs)
 	if timeoutMsStr != "" {
 		timeoutMs, err := strconv.ParseInt(timeoutMsStr, 10, 64)

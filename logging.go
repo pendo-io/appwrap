@@ -290,6 +290,13 @@ func (pl PrefixLogger) TraceID() string {
 	return pl.Logging.TraceID()
 }
 
+func NewStdLogger(writer io.Writer) Logging {
+	if LocalDebug {
+		return NewWriterLogger(writer)
+	}
+	return NewJsonLogger(writer, true)
+}
+
 func NewJsonLogger(writer io.Writer, addStandardLogLabels bool) Logging {
 	logger := &JsonLogger{
 		slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
