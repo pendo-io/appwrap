@@ -61,6 +61,14 @@ func (ai AppengineInfoFlex) Zone() string {
 	return getZone()
 }
 
+func (ai AppengineInfoFlex) DataProjectNum() string {
+	return getProjectNumber(ai.DataProjectID())
+}
+
+func (ai AppengineInfoFlex) NativeProjectNum() string {
+	return getProjectNumber(ai.NativeProjectID())
+}
+
 func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
 
 	ae, err := appengine.New(webClient(ai.c))
