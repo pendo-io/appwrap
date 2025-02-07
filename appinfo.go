@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/compute/metadata"
+	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/appengine"
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
@@ -16,6 +17,8 @@ import (
 type AppengineInfo interface {
 	DataProjectID() string
 	NativeProjectID() string
+	DataProjectNum() string
+	NativeProjectNum() string
 	InstanceID() string
 	ModuleHasTraffic(moduleName, moduleVersion string) (bool, error)
 	// ModuleHostname returns the HTTP hostname to route to the given version, module, and app (project).
@@ -31,11 +34,12 @@ type AppengineInfo interface {
 }
 
 var (
-	zone           string
-	zoneMtx        sync.Mutex
-	config         *rest.Config
-	k8sClientSet   *kubernetes.Clientset
-	istioClientSet *istio.Clientset
+	zone                        string
+	zoneMtx                     sync.Mutex
+	config                      *rest.Config
+	k8sClientSet                *kubernetes.Clientset
+	istioClientSet              *istio.Clientset
+	cloudResourceManagerService *cloudresourcemanager.Service
 )
 
 func init() {
@@ -53,6 +57,10 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("Cannot create Istio k8s client: %s", err.Error()))
 		}
+		cloudResourceManagerService, err = cloudresourcemanager.NewService(context.Background())
+		if err != nil {
+			panic(fmt.Sprintf("Cannot create cloudresourcemanager client: %s", err.Error()))
+		}
 	}
 }
 
@@ -69,6 +77,15 @@ func getZone() string {
 	}
 
 	return zone
+}
+
+func getProjectNumber(projectID string) string {
+	project, err := cloudResourceManagerService.Projects.Get(projectID).Do()
+	if err != nil {
+		panic(err)
+	}
+
+	return fmt.Sprintf("%v", project.ProjectNumber)
 }
 
 func InKubernetes() bool {

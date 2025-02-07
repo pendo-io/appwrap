@@ -59,6 +59,16 @@ func (mock *AppengineInfoMock) NativeProjectID() string {
 	return args.String(0)
 }
 
+func (mock *AppengineInfoMock) DataProjectNum() string {
+	args := mock.Called()
+	return args.String(0)
+}
+
+func (mock *AppengineInfoMock) NativeProjectNum() string {
+	args := mock.Called()
+	return args.String(0)
+}
+
 func (mock *AppengineInfoMock) Zone() string {
 	return mock.Called().String(0)
 }
