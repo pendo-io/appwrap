@@ -916,7 +916,7 @@ func init() {
 				envMemorystoreReadTimeoutMs, readTimeoutMsStr, err)
 		} else if timeoutMs < 1 {
 			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
-				envMemorystorePoolSize)
+				envMemorystoreReadTimeoutMs)
 		} else {
 			memorystoreReadTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
