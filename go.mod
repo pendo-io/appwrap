@@ -12,9 +12,9 @@ require (
 	cloud.google.com/go/redis v1.17.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/go-martini/martini v0.0.0-20140425183230-de6438617700
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/googleapis/gax-go/v2 v2.13.0
 	github.com/pendo-io/gomemcache v0.0.0-20220318155316-448bc05805ee
+	github.com/redis/go-redis/v9 v9.7.1
 	github.com/stretchr/testify v1.9.0
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/otel v1.29.0
@@ -61,6 +61,8 @@ require (
 	github.com/masukomi/check v0.0.0-20150227023654-e0a72205c0f3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
