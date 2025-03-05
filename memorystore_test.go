@@ -9,8 +9,8 @@ import (
 	"time"
 
 	cloudms "cloud.google.com/go/redis/apiv1"
-	"github.com/go-redis/redis/v8"
 	gax "github.com/googleapis/gax-go/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/mock"
 	redispb "google.golang.org/genproto/googleapis/cloud/redis/v1"
 	. "gopkg.in/check.v1"

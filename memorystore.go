@@ -16,8 +16,8 @@ import (
 
 	cloudms "cloud.google.com/go/redis/apiv1"
 	"github.com/cespare/xxhash/v2"
-	"github.com/go-redis/redis/v8"
 	"github.com/googleapis/gax-go/v2"
+	"github.com/redis/go-redis/v9"
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -293,10 +293,10 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 					MaxRetries: -1,
 
 					// These are set by environment variable; see the init() function.
-					IdleTimeout: memorystoreIdleTimeout,
-					PoolSize:    memorystorePoolSize,
-					PoolTimeout: memorystorePoolTimeout,
-					ReadTimeout: memorystoreReadTimeout,
+					ConnMaxIdleTime: memorystoreIdleTimeout,
+					PoolSize:        memorystorePoolSize,
+					PoolTimeout:     memorystorePoolTimeout,
+					ReadTimeout:     memorystoreReadTimeout,
 				}
 
 				if ops.PoolSize == 0 {
@@ -916,7 +916,7 @@ func init() {
 				envMemorystoreReadTimeoutMs, readTimeoutMsStr, err)
 		} else if timeoutMs < 1 {
 			initLog.Errorf("'%s' must be a non-zero non-negative integer\n",
-				envMemorystorePoolSize)
+				envMemorystoreReadTimeoutMs)
 		} else {
 			memorystoreReadTimeout = time.Duration(timeoutMs) * time.Millisecond
 		}
@@ -987,10 +987,10 @@ func init() {
 			// library deal with retrying themselves if they see fit.
 			MaxRetries: -1,
 
-			IdleTimeout: memorystoreIdleTimeout,
-			PoolSize:    memorystorePoolSize,
-			PoolTimeout: memorystorePoolTimeout,
-			ReadTimeout: memorystoreReadTimeout,
+			ConnMaxIdleTime: memorystoreIdleTimeout,
+			PoolSize:        memorystorePoolSize,
+			PoolTimeout:     memorystorePoolTimeout,
+			ReadTimeout:     memorystoreReadTimeout,
 		}
 
 		if ops.PoolSize == 0 {
