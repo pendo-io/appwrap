@@ -297,6 +297,11 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 					PoolSize:        memorystorePoolSize,
 					PoolTimeout:     memorystorePoolTimeout,
 					ReadTimeout:     memorystoreReadTimeout,
+
+					// Workaround for CVE-2025-29923. We don't care about identifying our clients, anyways.
+					// See https://github.com/redis/go-redis/security/advisories/GHSA-92cp-5422-2mw7
+					// Note: future versions >= 9.7.3 fix the spelling of this parameter.
+					DisableIndentity: true,
 				}
 
 				if ops.PoolSize == 0 {
