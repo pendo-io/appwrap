@@ -46,6 +46,10 @@ type DataLogging interface {
 	Close(http.ResponseWriter)
 }
 
+type LogLeveler interface {
+	GetMinLogLevel() LogLevel
+}
+
 // Sometimes, you just need to satify the interface and do nothing.
 type NullLogger struct{}
 
@@ -128,6 +132,10 @@ type LevelLogger struct {
 }
 
 func NewLevelLogger(minlevel LogLevel, wrappedLogger Logging) *LevelLogger {
+	if levelLogger, ok := wrappedLogger.(*LevelLogger); ok {
+		// unwrap LevelLogger so we can override the level with a lower one
+		wrappedLogger = levelLogger.wrappedLogger
+	}
 	return &LevelLogger{minlevel: minlevel, wrappedLogger: wrappedLogger}
 }
 
@@ -193,6 +201,10 @@ func (ll *LevelLogger) TraceID() string {
 
 func (ll *LevelLogger) SetMinLevel(level LogLevel) {
 	ll.minlevel = level // unsynchronized write, since we don't care if it takes a bit to be observed by other callers
+}
+
+func (ll *LevelLogger) GetMinLogLevel() LogLevel {
+	return ll.minlevel
 }
 
 type TeeLogging struct {
