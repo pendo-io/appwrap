@@ -2,6 +2,7 @@ package appwrap
 
 import (
 	"bytes"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -46,6 +47,16 @@ func (s *AppengineInterfacesTest) TestLevelLogger(c *C) {
 			"error: BUSTED\n"+
 			"critical: OUTTA HERE\n")
 
+}
+
+func (s *AppengineInterfacesTest) TestLevelLoggerDoubleWrap(c *C) {
+	nl := NullLogger{}
+	w := NewLevelLogger(LogLevelWarning, nl)
+	w2 := NewLevelLogger(LogLevelDebug, w)
+
+	c.Check(w2.wrappedLogger, Equals, nl)
+	c.Check(w2.minlevel, Equals, LogLevelDebug)
+	c.Check(w2.GetMinLogLevel(), Equals, LogLevelDebug)
 }
 
 func (s *AppengineInterfacesTest) TestPrefixLogger(c *C) {
