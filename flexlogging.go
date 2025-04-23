@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"sync"
@@ -87,10 +88,7 @@ func (sl stackdriverLogging) AddLabels(labels map[string]string) error {
 
 	labelsMtx.Lock()
 	defer labelsMtx.Unlock()
-	for k, v := range labels {
-		logCtxVal.labels[k] = v
-	}
-
+	maps.Copy(logCtxVal.labels, labels)
 	return nil
 }
 
@@ -105,12 +103,7 @@ func (sl stackdriverLogging) TraceID() string {
 func (logCtxVal *loggingCtxValue) getLabels() map[string]string {
 	labelsMtx.RLock()
 	defer labelsMtx.RUnlock()
-	labels := make(map[string]string, len(logCtxVal.labels))
-	for k, v := range logCtxVal.labels {
-		labels[k] = v
-	}
-
-	return labels
+	return maps.Clone(logCtxVal.labels)
 }
 
 func init() {
