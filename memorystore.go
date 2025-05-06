@@ -308,6 +308,8 @@ func (ms *memorystoreService) NewRateLimitedMemorystore(c context.Context, appIn
 					ops.PoolSize = 4 * runtime.GOMAXPROCS(0)
 				}
 
+				ops.MaxActiveConns = ops.PoolSize
+
 				if rateLimitersProvided {
 					ops.Limiter = createLimiter(i, log)
 				}
