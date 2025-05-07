@@ -1,7 +1,6 @@
 package appwrap
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -19,19 +18,16 @@ type LocalMemcache struct {
 }
 
 func NewLocalMemcache() Memcache {
-	l := &LocalMemcache{}
-	l.Flush()
-	return l
+	return &LocalMemcache{items: make(map[string]cachedItem)}
 }
 
 func (mc *LocalMemcache) Add(item *CacheItem) error {
-	if _, exists := mc.get(item.Key); exists {
-		return CacheErrNotStored
-	} else {
-		return mc.Set(item)
+	var expires time.Time
+	addedAt := time.Now()
+	if item.Expiration > 0 {
+		expires = addedAt.Add(item.Expiration)
 	}
-
-	return nil
+	return mc.set(item.Key, cachedItem{value: item.Value, expires: expires, addedAt: addedAt}, true)
 }
 
 func (mc *LocalMemcache) AddMulti(items []*CacheItem) error {
@@ -53,89 +49,100 @@ func (mc *LocalMemcache) AddMulti(items []*CacheItem) error {
 }
 
 func (mc *LocalMemcache) CompareAndSwap(item *CacheItem) error {
-	if entry, err := mc.Get(item.Key); err != nil && err == ErrCacheMiss {
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
+
+	if item == nil {
+		panic("item cannot be nil")
+	}
+
+	existingItem, found := mc.items[item.Key]
+
+	if !found {
 		return CacheErrNotStored
-	} else if err != nil {
-		return err
-	} else if !entry.casTime.(time.Time).Equal(item.casTime.(time.Time)) {
+	}
+
+	if !existingItem.addedAt.Equal(item.casTime.(time.Time)) {
 		return CacheErrCASConflict
 	}
 
-	return mc.SetMulti([]*CacheItem{item})
-}
-
-func (mc *LocalMemcache) delete(key string) {
-	mc.mtx.Lock()
-	defer mc.mtx.Unlock()
-	delete(mc.items, key)
-}
-
-func (mc *LocalMemcache) Delete(key string) error {
-	if _, exists := mc.get(key); !exists {
-		return ErrCacheMiss
-	}
-
-	mc.delete(key)
+	existingItem.value = item.Value
+	existingItem.addedAt = time.Now()
+	mc.items[item.Key] = existingItem
 	return nil
 }
 
+func (mc *LocalMemcache) Delete(key string) error {
+	return mc.delete(key)
+}
+
 func (mc *LocalMemcache) DeleteMulti(keys []string) error {
-	errors := false
+	hasErrors := false
 	multiError := make(MultiError, len(keys))
 	for i, key := range keys {
-		if _, exists := mc.get(key); !exists {
-			multiError[i] = ErrCacheMiss
-			errors = true
-		} else {
-			delete(mc.items, key)
+		if err := mc.Delete(key); err != nil {
+			multiError[i] = err
+			hasErrors = true
 		}
 	}
 
-	if errors {
+	if hasErrors {
 		return multiError
 	}
 
 	return nil
 }
 
-func (mc *LocalMemcache) Flush() error {
+func (mc *LocalMemcache) delete(key string) error {
 	mc.mtx.Lock()
 	defer mc.mtx.Unlock()
-	mc.items = make(map[string]cachedItem)
+	if _, found := mc.items[key]; !found {
+		return ErrCacheMiss
+	}
+	delete(mc.items, key)
 	return nil
 }
 
-func (mc *LocalMemcache) FlushShard(shard int) error {
+func (mc *LocalMemcache) Flush() error {
 	mc.mtx.Lock()
 	defer mc.mtx.Unlock()
-	mc.items = make(map[string]cachedItem)
+	clear(mc.items)
 	return nil
+}
+
+func (mc *LocalMemcache) FlushShard(_ int) error {
+	return mc.Flush()
 }
 
 func (mc *LocalMemcache) get(key string) (item cachedItem, found bool) {
 	mc.mtx.Lock()
 	defer mc.mtx.Unlock()
 	item, found = mc.items[key]
+	if found && !item.expires.IsZero() && item.expires.Before(time.Now()) {
+		delete(mc.items, key)
+		found = false
+		item = cachedItem{}
+	}
 	return
 }
 
 func (mc *LocalMemcache) Get(key string) (*CacheItem, error) {
-	if item, exists := mc.get(key); !exists {
+	item, exists := mc.get(key)
+	if !exists {
 		return nil, ErrCacheMiss
-	} else if !item.expires.IsZero() && item.expires.Before(time.Now()) {
-		mc.delete(key)
-		return nil, ErrCacheMiss
-	} else {
-		cacheItem := CacheItem{
-			Key:     key,
-			Value:   item.value,
-			casTime: item.addedAt,
-		}
-		if !item.expires.IsZero() {
-			cacheItem.Expiration = item.expires.Sub(item.addedAt)
-		}
-		return &cacheItem, nil
 	}
+
+	cacheItem := CacheItem{
+		Key:     key,
+		Value:   item.value,
+		casTime: item.addedAt,
+	}
+
+	if !item.expires.IsZero() {
+		cacheItem.Expiration = item.expires.Sub(item.addedAt)
+	}
+	return &cacheItem, nil
+
 }
 
 func (mc *LocalMemcache) GetMulti(keys []string) (map[string]*CacheItem, error) {
@@ -160,66 +167,69 @@ func (mc *LocalMemcache) IncrementExisting(key string, amount int64) (uint64, er
 }
 
 func (mc *LocalMemcache) increment(key string, amount int64, initialValue *uint64, initialExpires time.Duration) (uint64, error) {
-	if item, exists := mc.get(key); !exists && initialValue == nil {
-		return 0, ErrCacheMiss
-	} else {
-		var oldValue uint64
-		if !exists {
-			addedAt := time.Now()
-			item = cachedItem{addedAt: addedAt}
-			if initialExpires > 0 {
-				item.expires = addedAt.Add(initialExpires)
-			}
-			if initialValue != nil {
-				oldValue = *initialValue
-			}
-		} else {
-			var err error
-			if oldValue, err = strconv.ParseUint(string(item.value), 10, 64); err != nil {
-				return 0, err
-			}
-		}
-
-		var newValue uint64
-		if amount < 0 {
-			newValue = oldValue - uint64(-amount)
-		} else {
-			newValue = oldValue + uint64(amount)
-		}
-
-		item.value = []byte(fmt.Sprintf("%d", newValue))
-		mc.set(key, item)
-		return newValue, nil
-	}
-}
-
-func (mc *LocalMemcache) set(key string, cachedItem cachedItem) {
 	mc.mtx.Lock()
 	defer mc.mtx.Unlock()
+
+	var oldValue uint64
+
+	item, exists := mc.items[key]
+	if !exists {
+		if initialValue == nil {
+			return 0, ErrCacheMiss
+		}
+		oldValue = *initialValue
+		item.addedAt = time.Now()
+		if initialExpires > 0 {
+			item.expires = item.addedAt.Add(initialExpires)
+		}
+	} else {
+		var err error
+		if oldValue, err = strconv.ParseUint(string(item.value), 10, 64); err != nil {
+			return 0, err
+		}
+	}
+
+	var newValue uint64
+	if amount < 0 {
+		newValue = oldValue - uint64(-amount)
+	} else {
+		newValue = oldValue + uint64(amount)
+	}
+
+	item.value = []byte(strconv.FormatUint(newValue, 10))
+	mc.items[key] = item
+	return newValue, nil
+}
+
+func (mc *LocalMemcache) set(key string, cachedItem cachedItem, addOnly bool) error {
+	mc.mtx.Lock()
+	defer mc.mtx.Unlock()
+	if addOnly {
+		if _, exists := mc.items[key]; exists && (cachedItem.expires.IsZero() || !cachedItem.expires.Before(time.Now())) {
+			return CacheErrNotStored
+		}
+	}
 	mc.items[key] = cachedItem
+	return nil
 }
 
 func (mc *LocalMemcache) Set(item *CacheItem) error {
 	var expires time.Time
-
+	addedAt := time.Now()
 	if item.Expiration > 0 {
-		expires = time.Now().Add(time.Duration(item.Expiration))
-	} else {
-		expires = time.Time{}
+		expires = addedAt.Add(item.Expiration)
 	}
-	mc.set(item.Key, cachedItem{value: item.Value, expires: expires, addedAt: time.Now()})
-	return nil
+	return mc.set(item.Key, cachedItem{value: item.Value, expires: expires, addedAt: addedAt}, false)
 }
 
 func (mc *LocalMemcache) SetMulti(items []*CacheItem) error {
 	for _, item := range items {
-		mc.Set(item)
+		_ = mc.Set(item) // Set cannot error here, so ignore
 	}
-
 	return nil
 }
 
-func (mc *LocalMemcache) Namespace(ns string) Memcache {
+func (mc *LocalMemcache) Namespace(_ string) Memcache {
 	// this should do something maybe
 	return mc
 }
