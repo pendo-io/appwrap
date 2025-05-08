@@ -595,6 +595,7 @@ func (dsit *AppengineInterfacesTest) TestDeclarations(c *C) {
 }
 
 type loadSaverEntity struct {
+	k     *DatastoreKey
 	s     string
 	iList []int64
 	c     *C
@@ -610,7 +611,15 @@ func (s *loadSaverEntity) Load(props []DatastoreProperty) error {
 			s.iList = append(s.iList, prop.Value.(int64))
 		}
 	}
+	return nil
+}
 
+type keyLoadSaverEntity struct {
+	loadSaverEntity
+}
+
+func (s *keyLoadSaverEntity) LoadKey(k *DatastoreKey) error {
+	s.k = k
 	return nil
 }
 
@@ -635,4 +644,19 @@ func (dsit *AppengineInterfacesTest) TestPropertyLoadSaver(c *C) {
 
 	c.Assert(s.s, Equals, s2.s)
 	c.Assert(s.iList, DeepEquals, s2.iList)
+}
+
+func (dsit *AppengineInterfacesTest) TestKeyLoader(c *C) {
+	ds := dsit.newDatastore()
+	s := loadSaverEntity{s: "name", iList: []int64{10, 20, 30}, c: c}
+	k := ds.NewKey("loadSaver", "", 12345, nil)
+	_, err := ds.Put(k, &s)
+	c.Assert(err, IsNil)
+
+	s2 := keyLoadSaverEntity{loadSaverEntity: loadSaverEntity{c: c}}
+	c.Assert(ds.Get(k, &s2), IsNil)
+
+	c.Assert(s.s, Equals, s2.s)
+	c.Assert(s.iList, DeepEquals, s2.iList)
+	c.Assert(k, DeepEquals, s2.k)
 }

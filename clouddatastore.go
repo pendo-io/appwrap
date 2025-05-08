@@ -23,6 +23,7 @@ import (
 
 type DatastoreEntity = datastore.Entity
 type DatastoreKey = datastore.Key
+type DatastoreKeyLoader = datastore.KeyLoader
 type DatastoreProperty = datastore.Property
 type DatastorePropertyList = datastore.PropertyList
 type DatastorePropertyLoadSaver = datastore.PropertyLoadSaver
