@@ -211,16 +211,18 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 		props = append(props, AppwrapProperty{Name: "_debug_added_field", Value: true})
 	}
 
-	//fmt.Printf("%T <- %+v (%d)\n", dst, props, len(item.props))
-	if loadSaver, okay := dst.(DatastorePropertyLoadSaver); okay {
-		//fmt.Printf("\tload saver\n")
-		//fmt.Printf("FILLED %+v\n", dst)
-		// Load() may mess with the array; don't let it break our stored data
-		propsCopy := make([]AppwrapProperty, len(props))
-		copy(propsCopy, props)
-		return loadSaver.Load(ToDatastorePropertyList(propsCopy))
-	} else {
-		return LoadStruct(dst, ToDatastorePropertyList(props))
+	propsCopy := append([]AppwrapProperty(nil), props...) // Load() may mess with the array; don't let it break our stored data
+	dsProps := ToDatastorePropertyList(propsCopy)
+	switch dst := dst.(type) {
+	case DatastoreKeyLoader:
+		if err := dst.Load(dsProps); err != nil {
+			return err
+		}
+		return dst.LoadKey(item.key)
+	case DatastorePropertyLoadSaver:
+		return dst.Load(dsProps)
+	default:
+		return LoadStruct(dst, dsProps)
 	}
 }
 
