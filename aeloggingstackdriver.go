@@ -39,6 +39,14 @@ type statusWriter struct {
 	length int
 }
 
+// this Flush() could introduce a bug in code that uses it if that code depends on flush semantics, but returning an error to the client
+// and panic'ing are the two other, perhaps more unattractive, options
+func (w *statusWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
