@@ -39,6 +39,14 @@ type statusWriter struct {
 	length int
 }
 
+// Flush() doing nothing can be a bug for callers that need Flush() to actually flush. But we can either not implement flush (which is bad),
+// set an error to the writer (which is bad, though it's what other libraries do), or panic. so we're just going with this behavior
+func (w *statusWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
