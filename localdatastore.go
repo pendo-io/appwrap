@@ -215,10 +215,10 @@ func (item *dsItem) cp(dst interface{}, fields map[string]bool, addField bool) e
 	dsProps := ToDatastorePropertyList(propsCopy)
 	switch dst := dst.(type) {
 	case DatastoreKeyLoader:
-		if err := dst.Load(dsProps); err != nil {
+		if err := dst.LoadKey(item.key); err != nil {
 			return err
 		}
-		return dst.LoadKey(item.key)
+		return dst.Load(dsProps)
 	case DatastorePropertyLoadSaver:
 		return dst.Load(dsProps)
 	default:
