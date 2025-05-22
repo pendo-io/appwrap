@@ -619,6 +619,7 @@ type keyLoadSaverEntity struct {
 }
 
 func (s *keyLoadSaverEntity) LoadKey(k *DatastoreKey) error {
+	s.c.Assert(s.s, Equals, "") // ensure LoadKey is called before Load
 	s.k = k
 	return nil
 }
