@@ -15,6 +15,7 @@ type DatastoreQuery interface {
 	Ancestor(ancestor *DatastoreKey) DatastoreQuery
 	Distinct() DatastoreQuery
 	Filter(how string, what interface{}) DatastoreQuery
+	FilterField(field, op string, what interface{}) DatastoreQuery
 	KeysOnly() DatastoreQuery
 	Limit(i int) DatastoreQuery
 	Offset(i int) DatastoreQuery
