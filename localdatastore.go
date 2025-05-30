@@ -556,6 +556,7 @@ func (ds *LocalDatastore) NewQuery(kind string) DatastoreQuery {
 type filter struct {
 	eqs  []eqValueFilter
 	ineq ineqValueFilter
+	in   []inFilter
 }
 
 func (f filter) cmpSingle(field string, item *dsItem, vf valueFilter) bool {
@@ -578,17 +579,27 @@ func (f filter) cmp(field string, item *dsItem) bool {
 	if !f.cmpSingle(field, item, f.ineq) {
 		return false
 	}
+
 	for _, eq := range f.eqs {
 		if !f.cmpSingle(field, item, eq) {
 			return false
 		}
 	}
+
+	for _, in := range f.in {
+		if !f.cmpSingle(field, item, in) {
+			return false
+		}
+	}
+
 	return true
 }
 
 func (f *filter) add(op string, val interface{}) {
 	if op == "=" {
 		f.eqs = append(f.eqs, eqValueFilter{val: val})
+	} else if op == "in" || op == "not-in" {
+		f.in = append(f.in, inFilter{vals: val.([]interface{}), not: op == "not-in"})
 	} else {
 		f.ineq.ops = append(f.ineq.ops, op)
 		f.ineq.threshs = append(f.ineq.threshs, val)
@@ -599,6 +610,7 @@ func (f filter) clone() filter {
 	return filter{
 		eqs:  append([]eqValueFilter(nil), f.eqs...),
 		ineq: f.ineq.clone(),
+		in:   append([]inFilter(nil), f.in...),
 	}
 }
 
@@ -620,6 +632,8 @@ func (f ineqValueFilter) cmpValue(v interface{}) bool {
 	for i, thresh := range f.threshs {
 		c := cmp(v, thresh)
 		switch op := f.ops[i]; op {
+		case "!=":
+			matches = matches && (c != 0)
 		case "<":
 			matches = matches && (c == -1)
 		case ">":
@@ -640,6 +654,21 @@ func (f ineqValueFilter) clone() ineqValueFilter {
 		ops:     append([]string(nil), f.ops...),
 		threshs: append([]interface{}(nil), f.threshs...),
 	}
+}
+
+type inFilter struct {
+	vals []interface{}
+	not  bool
+}
+
+func (f inFilter) cmpValue(v interface{}) bool {
+	var found bool
+	for _, val := range f.vals {
+		c := cmp(v, val)
+		found = found || (c == 0)
+	}
+
+	return !f.not && found || f.not && !found
 }
 
 type memoryCursor *DatastoreKey
@@ -1008,6 +1037,22 @@ func (mq *memoryQuery) Filter(how string, what interface{}) DatastoreQuery {
 	// Extract field/op from how
 	howS := strings.SplitN(how, " ", 2)
 	field, op := howS[0], howS[1]
+
+	// Add op/what to the corresponding filter (clone the filter to prevent clobbering the old one)
+	f := n.filters[field].clone()
+	f.add(op, what)
+	n.filters[field] = f
+	return &n
+}
+
+func (mq *memoryQuery) FilterField(field, op string, what interface{}) DatastoreQuery {
+	n := *mq
+
+	// Copy filters map
+	n.filters = make(map[string]filter)
+	for f, filter := range mq.filters {
+		n.filters[f] = filter
+	}
 
 	// Add op/what to the corresponding filter (clone the filter to prevent clobbering the old one)
 	f := n.filters[field].clone()
