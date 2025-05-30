@@ -491,6 +491,20 @@ func (cdq CloudDatastoreQuery) Filter(how string, what interface{}) DatastoreQue
 	return q
 }
 
+func (cdq CloudDatastoreQuery) FilterField(field, op string, what interface{}) DatastoreQuery {
+	q := cdq
+
+	if reflect.ValueOf(what).Kind() == reflect.String {
+		switch what.(type) {
+		case string:
+		default:
+			what = reflect.ValueOf(what).String()
+		}
+	}
+	q.q = cdq.q.FilterField(field, op, what)
+	return q
+}
+
 func (cdq CloudDatastoreQuery) KeysOnly() DatastoreQuery {
 	q := cdq
 	q.q = cdq.q.KeysOnly()

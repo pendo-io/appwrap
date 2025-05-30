@@ -380,6 +380,25 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 	c.Assert(keys, HasLen, 2)
 }
 
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "in", []interface{}{1, 2})
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 2)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+	c.Assert(KeyIntID(keys[1]), Equals, int64(2))
+}
+
 func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
 	mem := dsit.newDatastore()
 
