@@ -154,12 +154,31 @@ func (dsit *AppengineInterfacesTest) TestFilter(c *C) {
 	c.Assert(filter{ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{0, 100}}}.cmp("colMulti", v), IsFalse)
 }
 
+func (dsit *AppengineInterfacesTest) TestFilter_In(c *C) {
+	mem := dsit.newDatastore()
+
+	v := &dsItem{
+		key: mem.NewKey("kind", "theKey", 0, nil),
+		props: []AppwrapProperty{
+			{Name: "col", Value: 123},
+		},
+	}
+
+	c.Assert(filter{in: []inFilter{{vals: []interface{}{123, 321}}}}.cmp("col", v), IsTrue)
+	c.Assert(filter{in: []inFilter{{vals: []interface{}{432, 321}}}}.cmp("col", v), IsFalse)
+
+	c.Assert(filter{in: []inFilter{{vals: []interface{}{123, 321}, not: true}}}.cmp("col", v), IsFalse)
+	c.Assert(filter{in: []inFilter{{vals: []interface{}{432, 321}, not: true}}}.cmp("col", v), IsTrue)
+}
+
 func (dsit *AppengineInterfacesTest) TestBuilderClobber(c *C) {
 	q := &memoryQuery{}
 
 	q1 := q.Filter("fieldA =", 111).Filter("fieldA =", 112).Filter("fieldB =", 222).Filter("fieldC >=", 333).Filter("fieldC <", 334).Filter("fieldD <", 444).
+		FilterField("fieldE", "in", []interface{}{123}).FilterField("fieldF", "not-in", []interface{}{444}).
 		Order("fieldA").Order("fieldB").Order("fieldC").Order("fieldD").(*memoryQuery)
 	q2 := q.Filter("fieldA2 =", 444).Filter("fieldA2 =", 443).Filter("fieldB2 =", 333).Filter("fieldC2 >=", 222).Filter("fieldC2 <", 221).Filter("fieldD2 <", 111).
+		FilterField("fieldE2", "in", []interface{}{554}).FilterField("fieldF2", "not-in", []interface{}{666}).
 		Order("fieldA2").Order("fieldB2").Order("fieldC2").Order("fieldD2").(*memoryQuery)
 
 	c.Assert(q1.filters, DeepEquals, map[string]filter{
@@ -167,6 +186,8 @@ func (dsit *AppengineInterfacesTest) TestBuilderClobber(c *C) {
 		"fieldB": {eqs: []eqValueFilter{{val: 222}}},
 		"fieldC": {ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{333, 334}}},
 		"fieldD": {ineq: ineqValueFilter{ops: []string{"<"}, threshs: []interface{}{444}}},
+		"fieldE": {in: []inFilter{{vals: []interface{}{123}}}},
+		"fieldF": {in: []inFilter{{vals: []interface{}{444}, not: true}}},
 	})
 	c.Assert(q1.order, DeepEquals, []string{"fieldA", "fieldB", "fieldC", "fieldD"})
 
@@ -175,6 +196,8 @@ func (dsit *AppengineInterfacesTest) TestBuilderClobber(c *C) {
 		"fieldB2": {eqs: []eqValueFilter{{val: 333}}},
 		"fieldC2": {ineq: ineqValueFilter{ops: []string{">=", "<"}, threshs: []interface{}{222, 221}}},
 		"fieldD2": {ineq: ineqValueFilter{ops: []string{"<"}, threshs: []interface{}{111}}},
+		"fieldE2": {in: []inFilter{{vals: []interface{}{554}}}},
+		"fieldF2": {in: []inFilter{{vals: []interface{}{666}, not: true}}},
 	})
 	c.Assert(q2.order, DeepEquals, []string{"fieldA2", "fieldB2", "fieldC2", "fieldD2"})
 }
