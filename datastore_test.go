@@ -380,6 +380,194 @@ func (dsit *AppengineInterfacesTest) TestMemDsListQuery(c *C) {
 	c.Assert(keys, HasLen, 2)
 }
 
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_In(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "in", []interface{}{1, 2})
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 2)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+	c.Assert(KeyIntID(keys[1]), Equals, int64(2))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_NotIn(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "not-in", []interface{}{1, 2})
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 1)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(3))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_Equal(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "=", 1)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 1)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_NotEqual(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "!=", 1)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 2)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(2))
+	c.Assert(KeyIntID(keys[1]), Equals, int64(3))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_LessThan(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "<", 2)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 1)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_LessThanOrEqual(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", "<=", 2)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 2)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+	c.Assert(KeyIntID(keys[1]), Equals, int64(2))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_GreaterThan(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", ">", 2)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 1)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(3))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_GreaterThanOrEqual(c *C) {
+	mem := dsit.newDatastore()
+
+	k1 := mem.NewKey("test", "", 1, nil)
+	k2 := mem.NewKey("test", "", 2, nil)
+	k3 := mem.NewKey("test", "", 3, nil)
+	_, err := mem.Put(k1, &customEntity{1})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k2, &customEntity{2})
+	c.Assert(err, IsNil)
+	_, err = mem.Put(k3, &customEntity{3})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("i", ">=", 2)
+	var results []customEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 2)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(2))
+	c.Assert(KeyIntID(keys[1]), Equals, int64(3))
+}
+
+func (dsit *AppengineInterfacesTest) TestMemDsFilterField_TypeDefStr(c *C) {
+	mem := dsit.newDatastore()
+
+	type customStr string
+	k1 := mem.NewKey("test", "", 1, nil)
+	_, err := mem.Put(k1, &simpleEntity{"abc"})
+	c.Assert(err, IsNil)
+
+	q := mem.NewQuery("test").FilterField("S", "=", customStr("abc"))
+	var results []simpleEntity
+	keys, err := q.GetAll(&results)
+	c.Assert(err, IsNil)
+	c.Assert(keys, HasLen, 1)
+	c.Assert(KeyIntID(keys[0]), Equals, int64(1))
+}
+
 func (dsit *AppengineInterfacesTest) TestTransaction(c *C) {
 	mem := dsit.newDatastore()
 
