@@ -35,10 +35,6 @@ func (ai AppengineInfoFlex) InstanceID() string {
 	return os.Getenv("GAE_INSTANCE")
 }
 
-func (ai AppengineInfoFlex) NodeName() string {
-	return os.Getenv("GAE_INSTANCE")
-}
-
 func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string, error) {
 	if module == "" {
 		module = ai.ModuleName()
@@ -62,7 +58,7 @@ func (ai AppengineInfoFlex) VersionID() string {
 }
 
 func (ai AppengineInfoFlex) Zone() string {
-	return getZone()
+	return getZone(ai.c)
 }
 
 func (ai AppengineInfoFlex) DataProjectNum() string {
@@ -72,6 +68,10 @@ func (ai AppengineInfoFlex) DataProjectNum() string {
 func (ai AppengineInfoFlex) NativeProjectNum() string {
 	return getProjectNumber(ai.NativeProjectID())
 }
+
+func (ai AppengineInfoFlex) NodeName() string { return "" }
+
+func (ai AppengineInfoFlex) ClusterName() string { return "" }
 
 func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
 

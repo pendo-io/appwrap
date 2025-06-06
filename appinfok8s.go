@@ -37,6 +37,11 @@ func (ai AppengineInfoK8s) NodeName() string {
 	return os.Getenv("K8S_NODE_NAME")
 }
 
+func (ai AppengineInfoK8s) ClusterName() string {
+	// https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity#instance_attributes
+	return getInstanceAttribute(ai.c, "cluster-name")
+}
+
 // ModuleHostname in K8s doesn't yet handle versions
 func (ai AppengineInfoK8s) ModuleHostname(version, module, app string) (string, error) {
 	if module == "" {
@@ -66,7 +71,7 @@ func (ai AppengineInfoK8s) VersionID() string {
 
 func (ai AppengineInfoK8s) Zone() string {
 	//This uses GCE metadata service, which is available on the nodes of this pod
-	return getZone()
+	return getZone(ai.c)
 }
 
 func (ai AppengineInfoK8s) DataProjectNum() string {

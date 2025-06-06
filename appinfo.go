@@ -32,6 +32,7 @@ type AppengineInfo interface {
 	NumInstances(moduleName, version string) (int, error)
 	VersionID() string
 	Zone() string
+	ClusterName() string
 }
 
 var (
@@ -42,6 +43,7 @@ var (
 	istioClientSet              *istio.Clientset
 	cloudResourceManagerService *cloudresourcemanager.Service
 	syncMap                     sync.Map
+	instanceAttributes          sync.Map
 )
 
 func init() {
@@ -66,12 +68,12 @@ func init() {
 	}
 }
 
-func getZone() string {
+func getZone(ctx context.Context) string {
 	zoneMtx.Lock()
 	defer zoneMtx.Unlock()
 
 	if zone == "" {
-		z, err := metadata.Zone()
+		z, err := metadata.ZoneWithContext(ctx)
 		if err != nil {
 			panic(err)
 		}
@@ -79,6 +81,17 @@ func getZone() string {
 	}
 
 	return zone
+}
+
+func getInstanceAttribute(ctx context.Context, attr string) string {
+	if instanceAttribute, ok := instanceAttributes.Load(attr); ok {
+		return instanceAttribute.(string)
+	} else if attribute, err := metadata.InstanceAttributeValueWithContext(ctx, attr); err == nil {
+		instanceAttributes.Store(attr, attribute)
+		return attribute
+	} else {
+		return ""
+	}
 }
 
 func getProjectNumber(projectID string) string {

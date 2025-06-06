@@ -72,9 +72,10 @@ func resourceLabels(aeInfo AppengineInfo) map[string]string {
 	if InKubernetes() {
 		return map[string]string{
 			"project_id":     aeInfo.DataProjectID(),
+			"location":       aeInfo.Zone(),
 			"namespace_name": aeInfo.DataProjectID(),
 			"pod_name":       aeInfo.InstanceID(),
-			"node_name":      aeInfo.NodeName(),
+			"cluster_name":   aeInfo.ClusterName(),
 		}
 	} else {
 		return map[string]string{
