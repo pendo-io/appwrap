@@ -320,6 +320,7 @@ func NewJsonLogger(writer io.Writer, addStandardLogLabels bool) Logging {
 		aeInfo := NewAppengineInfoFromContext(context.Background())
 		if err := logger.AddLabels(map[string]string{
 			"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+			"pendo_io_node_name":                     aeInfo.NodeName(),
 			"pendo_io_service":                       aeInfo.ModuleName(),
 			"pendo_io_version":                       aeInfo.VersionID(),
 		}); err != nil {
