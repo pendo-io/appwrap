@@ -20,6 +20,7 @@ type AppengineInfo interface {
 	DataProjectNum() string
 	NativeProjectNum() string
 	InstanceID() string
+	NodeName() string
 	ModuleHasTraffic(moduleName, moduleVersion string) (bool, error)
 	// ModuleHostname returns the HTTP hostname to route to the given version, module, and app (project).
 	// If version is "", the *live* version is used.

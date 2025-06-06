@@ -35,6 +35,10 @@ func (ai AppengineInfoFlex) InstanceID() string {
 	return os.Getenv("GAE_INSTANCE")
 }
 
+func (ai AppengineInfoFlex) NodeName() string {
+	return os.Getenv("GAE_INSTANCE")
+}
+
 func (ai AppengineInfoFlex) ModuleHostname(version, module, app string) (string, error) {
 	if module == "" {
 		module = ai.ModuleName()

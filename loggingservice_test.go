@@ -21,6 +21,10 @@ func (mock *AppengineInfoMock) InstanceID() string {
 	return mock.Called().String(0)
 }
 
+func (mock *AppengineInfoMock) NodeName() string {
+	return mock.Called().String(0)
+}
+
 func (mock *AppengineInfoMock) ModuleName() string {
 	return mock.Called().String(0)
 }

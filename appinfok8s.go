@@ -33,6 +33,10 @@ func (ai AppengineInfoK8s) InstanceID() string {
 	return os.Getenv("K8S_POD")
 }
 
+func (ai AppengineInfoK8s) NodeName() string {
+	return os.Getenv("K8S_NODE_NAME")
+}
+
 // ModuleHostname in K8s doesn't yet handle versions
 func (ai AppengineInfoK8s) ModuleHostname(version, module, app string) (string, error) {
 	if module == "" {
