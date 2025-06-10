@@ -58,7 +58,7 @@ func (ai AppengineInfoFlex) VersionID() string {
 }
 
 func (ai AppengineInfoFlex) Zone() string {
-	return getZone()
+	return getZone(ai.c)
 }
 
 func (ai AppengineInfoFlex) DataProjectNum() string {
@@ -68,6 +68,10 @@ func (ai AppengineInfoFlex) DataProjectNum() string {
 func (ai AppengineInfoFlex) NativeProjectNum() string {
 	return getProjectNumber(ai.NativeProjectID())
 }
+
+func (ai AppengineInfoFlex) NodeName() string { return "" }
+
+func (ai AppengineInfoFlex) ClusterName() string { return "" }
 
 func (ai AppengineInfoFlex) ModuleHasTraffic(moduleName, moduleVersion string) (bool, error) {
 

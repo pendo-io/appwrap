@@ -72,8 +72,10 @@ func resourceLabels(aeInfo AppengineInfo) map[string]string {
 	if InKubernetes() {
 		return map[string]string{
 			"project_id":     aeInfo.DataProjectID(),
+			"location":       aeInfo.Zone(),
 			"namespace_name": aeInfo.DataProjectID(),
 			"pod_name":       aeInfo.InstanceID(),
+			"cluster_name":   aeInfo.ClusterName(),
 		}
 	} else {
 		return map[string]string{
@@ -99,6 +101,7 @@ func getLogCtxVal(aeInfo AppengineInfo, hreq *http.Request, logger *logging.Logg
 
 	labels := map[string]string{
 		"appengine.googleapis.com/instance_name": aeInfo.InstanceID(),
+		"pendo_io_node_name":                     aeInfo.NodeName(),
 		"pendo_io_service":                       aeInfo.ModuleName(),
 		"pendo_io_version":                       aeInfo.VersionID(),
 		"pendo_io_request_host":                  hreq.Host,
