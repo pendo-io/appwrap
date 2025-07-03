@@ -1,6 +1,14 @@
 # appwrap
-Interfaces to abstract appengine datastore and memache for go, along with simple reimplementation for testing only. Enhancements
-are welcome.
+Interfaces to abstract appengine datastore and memache for Golang.
+
+## DEPRECATED
+
+This package is deprecated and no longer maintained. It was originally created to bridge the
+gap between Appengine Standard and MVM (Managed VMs), later Appengine Flex, environments. 
+If you use it, please consider migrating to using the official Google Cloud libraries for Go
+directly.
+
+## Original README
 
 This is designed to work with the new appengine interfaces available as "google.golang.org/appengine" but it should be easy
 to port to classic appengine.
